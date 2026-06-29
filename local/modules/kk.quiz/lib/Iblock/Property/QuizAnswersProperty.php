@@ -26,9 +26,11 @@ final class QuizAnswersProperty
 
     public static function getPropertyFieldHtml(array $property, array $value, array $htmlControlName): string
     {
+        $iblockId = (int)($property['IBLOCK_ID'] ?? 0);
+        $sectionId = self::getCurrentSectionId($property, $iblockId);
         $answers = self::normalizeRows(self::extractRawValue($value));
-        $questions = self::getElementOptions((int)($property['IBLOCK_ID'] ?? 0), 'QUESTION');
-        $results = self::getElementOptions((int)($property['IBLOCK_ID'] ?? 0), 'RESULT');
+        $questions = self::getElementOptions($iblockId, 'QUESTION', $sectionId);
+        $results = self::getElementOptions($iblockId, 'RESULT', $sectionId);
         $inputName = (string)($htmlControlName['VALUE'] ?? '');
         $tableId = 'kk-quiz-answers-' . md5($inputName);
 
@@ -67,7 +69,9 @@ final class QuizAnswersProperty
 
     public static function convertToDb(array $property, array $value): array
     {
-        $answers = self::normalizeRows(self::extractRawValue($value));
+        $iblockId = (int)($property['IBLOCK_ID'] ?? 0);
+        $sectionId = self::getCurrentSectionId($property, $iblockId);
+        $answers = self::normalizeRows(self::extractRawValue($value), $iblockId, $sectionId, true);
 
         $json = $answers === [] ? '' : json_encode($answers, JSON_UNESCAPED_UNICODE);
 
@@ -95,7 +99,7 @@ final class QuizAnswersProperty
         return $value['VALUE'] ?? $value;
     }
 
-    private static function normalizeRows(mixed $rawValue): array
+    private static function normalizeRows(mixed $rawValue, int $iblockId = 0, ?int $sectionId = null, bool $validateLinks = false): array
     {
         if (is_string($rawValue)) {
             $rawValue = trim($rawValue);
@@ -131,6 +135,16 @@ final class QuizAnswersProperty
                 continue;
             }
 
+            $nextQuestionId = self::toNullableInt($row['next_question_id'] ?? $row['NEXT_QUESTION_ID'] ?? null);
+            $resultId = self::toNullableInt($row['result_id'] ?? $row['RESULT_ID'] ?? null);
+            $scoreResultId = self::toNullableInt($row['score_result_id'] ?? $row['SCORE_RESULT_ID'] ?? null);
+
+            if ($validateLinks) {
+                $nextQuestionId = self::filterExistingElementId($nextQuestionId, $iblockId, 'QUESTION', $sectionId);
+                $resultId = self::filterExistingElementId($resultId, $iblockId, 'RESULT', $sectionId);
+                $scoreResultId = self::filterExistingElementId($scoreResultId, $iblockId, 'RESULT', $sectionId);
+            }
+
             $result[] = [
                 'active' => (($row['active'] ?? $row['ACTIVE'] ?? 'N') === 'Y') ? 'Y' : 'N',
                 'sort' => self::toInt($row['sort'] ?? $row['SORT'] ?? 100),
@@ -138,9 +152,9 @@ final class QuizAnswersProperty
                 'code' => self::sanitizeText($row['code'] ?? $row['CODE'] ?? ''),
                 'image_id' => self::toNullableInt($row['image_id'] ?? $row['IMAGE_ID'] ?? null),
                 'description' => self::sanitizeText($row['description'] ?? $row['DESCRIPTION'] ?? ''),
-                'next_question_id' => self::toNullableInt($row['next_question_id'] ?? $row['NEXT_QUESTION_ID'] ?? null),
-                'result_id' => self::toNullableInt($row['result_id'] ?? $row['RESULT_ID'] ?? null),
-                'score_result_id' => self::toNullableInt($row['score_result_id'] ?? $row['SCORE_RESULT_ID'] ?? null),
+                'next_question_id' => $nextQuestionId,
+                'result_id' => $resultId,
+                'score_result_id' => $scoreResultId,
                 'score_value' => self::toInt($row['score_value'] ?? $row['SCORE_VALUE'] ?? 0),
             ];
         }
@@ -183,20 +197,17 @@ final class QuizAnswersProperty
         ];
     }
 
-    private static function getElementOptions(int $iblockId, string $entityType): array
+    private static function getElementOptions(int $iblockId, string $entityType, ?int $sectionId): array
     {
         if ($iblockId <= 0 || !class_exists('CIBlockElement')) {
             return [];
         }
 
+        $filter = self::getElementFilter($iblockId, $entityType, $sectionId);
         $options = [];
         $elements = \CIBlockElement::GetList(
             ['SORT' => 'ASC', 'NAME' => 'ASC'],
-            [
-                'IBLOCK_ID' => $iblockId,
-                'ACTIVE' => 'Y',
-                'PROPERTY_KK_ENTITY_TYPE' => $entityType,
-            ],
+            $filter,
             false,
             false,
             ['ID', 'NAME']
@@ -207,6 +218,71 @@ final class QuizAnswersProperty
         }
 
         return $options;
+    }
+
+    private static function getCurrentSectionId(array $property, int $iblockId): ?int
+    {
+        $sectionId = self::toNullableInt($property['IBLOCK_SECTION_ID'] ?? null);
+        if ($sectionId !== null) {
+            return $sectionId;
+        }
+
+        $requestSectionId = self::toNullableInt($_REQUEST['IBLOCK_SECTION_ID'] ?? $_REQUEST['find_section_section'] ?? null);
+        if ($requestSectionId !== null) {
+            return $requestSectionId;
+        }
+
+        $elementId = self::getCurrentElementId($property);
+        if ($elementId === null || $iblockId <= 0 || !class_exists('CIBlockElement')) {
+            return null;
+        }
+
+        $elements = \CIBlockElement::GetList(
+            [],
+            ['ID' => $elementId, 'IBLOCK_ID' => $iblockId],
+            false,
+            false,
+            ['ID', 'IBLOCK_SECTION_ID']
+        );
+        $element = $elements->Fetch();
+
+        return is_array($element) ? self::toNullableInt($element['IBLOCK_SECTION_ID'] ?? null) : null;
+    }
+
+    private static function getCurrentElementId(array $property): ?int
+    {
+        return self::toNullableInt($property['ELEMENT_ID'] ?? $_REQUEST['ID'] ?? $_REQUEST['ELEMENT_ID'] ?? null);
+    }
+
+    private static function filterExistingElementId(?int $elementId, int $iblockId, string $entityType, ?int $sectionId): ?int
+    {
+        if ($elementId === null || $iblockId <= 0 || !class_exists('CIBlockElement')) {
+            return null;
+        }
+
+        $filter = self::getElementFilter($iblockId, $entityType, $sectionId);
+        $filter['ID'] = $elementId;
+
+        $elements = \CIBlockElement::GetList([], $filter, false, ['nTopCount' => 1], ['ID']);
+        $element = $elements->Fetch();
+
+        return is_array($element) ? $elementId : null;
+    }
+
+    private static function getElementFilter(int $iblockId, string $entityType, ?int $sectionId): array
+    {
+        $filter = [
+            'IBLOCK_ID' => $iblockId,
+            'ACTIVE' => 'Y',
+            'PROPERTY_KK_ENTITY_TYPE' => $entityType,
+        ];
+
+        if ($sectionId !== null) {
+            $filter['SECTION_ID'] = $sectionId;
+            $filter['INCLUDE_SUBSECTIONS'] = 'N';
+        }
+
+        return $filter;
     }
 
     private static function renderRow(string $inputName, int $index, array $answer, array $questions, array $results): string
@@ -233,11 +309,14 @@ final class QuizAnswersProperty
     {
         $imageId = (int)($answer['image_id'] ?? 0);
         $html = '<input type="number" name="' . htmlspecialcharsbx($prefix . '[image_id]') . '" value="' . ($imageId > 0 ? htmlspecialcharsbx((string)$imageId) : '') . '" style="width:90px;" placeholder="ID файла">';
+        $html .= '<br><small>Укажите ID файла из медиабиблиотеки/файлов Битрикса</small>';
 
         if ($imageId > 0 && class_exists('CFile')) {
             $path = \CFile::GetPath($imageId);
             if (is_string($path) && $path !== '') {
-                $html .= '<br><a href="' . htmlspecialcharsbx($path) . '" target="_blank" rel="noopener">Файл #' . htmlspecialcharsbx((string)$imageId) . '</a>';
+                $html .= '<br><a href="' . htmlspecialcharsbx($path) . '" target="_blank" rel="noopener">';
+                $html .= '<img src="' . htmlspecialcharsbx($path) . '" alt="" style="display:block; max-width:80px; max-height:60px; margin-top:4px;">';
+                $html .= 'Файл #' . htmlspecialcharsbx((string)$imageId) . '</a>';
             }
         }
 
