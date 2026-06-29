@@ -32,36 +32,26 @@ final class QuizAnswersProperty
         $questions = self::getElementOptions($iblockId, 'QUESTION', $sectionId);
         $results = self::getElementOptions($iblockId, 'RESULT', $sectionId);
         $inputName = (string)($htmlControlName['VALUE'] ?? '');
-        $tableId = 'kk-quiz-answers-' . md5($inputName);
+        $rootId = 'kk-quiz-answers-' . md5($inputName);
 
         if ($answers === []) {
             $answers[] = self::getDefaultRow();
         }
 
-        $html = '<div class="kk-quiz-answers" id="' . htmlspecialcharsbx($tableId) . '">';
+        $html = '<div class="kk-quiz-answers" id="' . htmlspecialcharsbx($rootId) . '">';
+        $html .= self::renderStyles($rootId);
         $html .= '<input type="hidden" name="' . htmlspecialcharsbx($inputName . '[rows_present]') . '" value="Y">';
-        $html .= '<table class="internal kk-quiz-answers__table" style="width:100%; min-width:1200px;">';
-        $html .= '<thead><tr>';
-        $html .= '<th>Активен</th>';
-        $html .= '<th>Сорт.</th>';
-        $html .= '<th>Картинка<br><small>ID файла</small></th>';
-        $html .= '<th>Текст ответа</th>';
-        $html .= '<th>Код</th>';
-        $html .= '<th>Описание</th>';
-        $html .= '<th>Следующий вопрос</th>';
-        $html .= '<th>Результат</th>';
-        $html .= '<th>Баллы к результату</th>';
-        $html .= '<th>Баллы</th>';
-        $html .= '<th>Удалить</th>';
-        $html .= '</tr></thead><tbody>';
+        $html .= '<div class="kk-quiz-answers__items">';
 
         foreach ($answers as $index => $answer) {
             $html .= self::renderRow($inputName, (int)$index, $answer, $questions, $results);
         }
 
-        $html .= '</tbody></table>';
+        $html .= '</div>';
+        $html .= '<div class="kk-quiz-answers__actions">';
         $html .= '<input type="button" class="adm-btn kk-quiz-answers__add" value="+ Добавить ответ">';
-        $html .= '<script>' . self::renderScript($tableId, $inputName, $questions, $results) . '</script>';
+        $html .= '</div>';
+        $html .= '<script>' . self::renderScript($rootId, $inputName, $questions, $results) . '</script>';
         $html .= '</div>';
 
         return $html;
@@ -288,19 +278,40 @@ final class QuizAnswersProperty
     private static function renderRow(string $inputName, int $index, array $answer, array $questions, array $results): string
     {
         $prefix = $inputName . '[rows][' . $index . ']';
-        $html = '<tr>';
-        $html .= '<td style="text-align:center;"><input type="checkbox" name="' . htmlspecialcharsbx($prefix . '[active]') . '" value="Y"' . ($answer['active'] === 'Y' ? ' checked' : '') . '></td>';
-        $html .= '<td><input type="number" name="' . htmlspecialcharsbx($prefix . '[sort]') . '" value="' . htmlspecialcharsbx((string)$answer['sort']) . '" style="width:70px;"></td>';
-        $html .= '<td>' . self::renderImageInput($prefix, $answer) . '</td>';
-        $html .= '<td><input type="text" name="' . htmlspecialcharsbx($prefix . '[text]') . '" value="' . htmlspecialcharsbx($answer['text']) . '" style="width:220px;"></td>';
-        $html .= '<td><input type="text" name="' . htmlspecialcharsbx($prefix . '[code]') . '" value="' . htmlspecialcharsbx($answer['code']) . '" style="width:120px;"></td>';
-        $html .= '<td><input type="text" name="' . htmlspecialcharsbx($prefix . '[description]') . '" value="' . htmlspecialcharsbx($answer['description']) . '" style="width:220px;"></td>';
-        $html .= '<td>' . self::renderSelect($prefix . '[next_question_id]', $answer['next_question_id'], $questions) . '</td>';
-        $html .= '<td>' . self::renderSelect($prefix . '[result_id]', $answer['result_id'], $results) . '</td>';
-        $html .= '<td>' . self::renderSelect($prefix . '[score_result_id]', $answer['score_result_id'], $results) . '</td>';
-        $html .= '<td><input type="number" name="' . htmlspecialcharsbx($prefix . '[score_value]') . '" value="' . htmlspecialcharsbx((string)$answer['score_value']) . '" style="width:80px;"></td>';
-        $html .= '<td style="text-align:center;"><input type="checkbox" data-kk-quiz-answer-delete="Y"></td>';
-        $html .= '</tr>';
+        $titleNumber = $index + 1;
+        $html = '<div class="kk-quiz-answers__item">';
+        $html .= '<div class="kk-quiz-answers__item-head">';
+        $html .= '<strong data-kk-quiz-answer-title="Y">Ответ #' . htmlspecialcharsbx((string)$titleNumber) . '</strong>';
+        $html .= '<button type="button" class="adm-btn kk-quiz-answers__delete" data-kk-quiz-answer-delete="Y">Удалить ответ</button>';
+        $html .= '</div>';
+
+        $html .= '<div class="kk-quiz-answers__section">';
+        $html .= '<div class="kk-quiz-answers__section-title">Основное</div>';
+        $html .= '<div class="kk-quiz-answers__grid">';
+        $html .= '<label class="kk-quiz-answers__field kk-quiz-answers__field--checkbox"><span>Активен</span><input type="checkbox" name="' . htmlspecialcharsbx($prefix . '[active]') . '" value="Y"' . ($answer['active'] === 'Y' ? ' checked' : '') . '></label>';
+        $html .= '<label class="kk-quiz-answers__field"><span>Сортировка</span><input type="number" name="' . htmlspecialcharsbx($prefix . '[sort]') . '" value="' . htmlspecialcharsbx((string)$answer['sort']) . '"></label>';
+        $html .= '<label class="kk-quiz-answers__field kk-quiz-answers__field--wide"><span>Текст ответа</span><input type="text" name="' . htmlspecialcharsbx($prefix . '[text]') . '" value="' . htmlspecialcharsbx($answer['text']) . '"></label>';
+        $html .= '<label class="kk-quiz-answers__field"><span>Код ответа</span><input type="text" name="' . htmlspecialcharsbx($prefix . '[code]') . '" value="' . htmlspecialcharsbx($answer['code']) . '"></label>';
+        $html .= '</div></div>';
+
+        $html .= '<div class="kk-quiz-answers__section">';
+        $html .= '<div class="kk-quiz-answers__section-title">Картинка</div>';
+        $html .= self::renderImageInput($prefix, $answer);
+        $html .= '</div>';
+
+        $html .= '<div class="kk-quiz-answers__section">';
+        $html .= '<div class="kk-quiz-answers__section-title">Логика</div>';
+        $html .= '<div class="kk-quiz-answers__grid">';
+        $html .= '<label class="kk-quiz-answers__field"><span>Следующий вопрос</span>' . self::renderSelect($prefix . '[next_question_id]', $answer['next_question_id'], $questions) . '</label>';
+        $html .= '<label class="kk-quiz-answers__field"><span>Финальный результат</span>' . self::renderSelect($prefix . '[result_id]', $answer['result_id'], $results) . '</label>';
+        $html .= '<label class="kk-quiz-answers__field"><span>Результат для начисления баллов</span>' . self::renderSelect($prefix . '[score_result_id]', $answer['score_result_id'], $results) . '</label>';
+        $html .= '<label class="kk-quiz-answers__field"><span>Баллы</span><input type="number" name="' . htmlspecialcharsbx($prefix . '[score_value]') . '" value="' . htmlspecialcharsbx((string)$answer['score_value']) . '"></label>';
+        $html .= '</div></div>';
+
+        $html .= '<div class="kk-quiz-answers__section">';
+        $html .= '<label class="kk-quiz-answers__field"><span>Короткое описание</span><input type="text" name="' . htmlspecialcharsbx($prefix . '[description]') . '" value="' . htmlspecialcharsbx($answer['description']) . '"></label>';
+        $html .= '</div>';
+        $html .= '</div>';
 
         return $html;
     }
@@ -308,15 +319,17 @@ final class QuizAnswersProperty
     private static function renderImageInput(string $prefix, array $answer): string
     {
         $imageId = (int)($answer['image_id'] ?? 0);
-        $html = '<input type="number" name="' . htmlspecialcharsbx($prefix . '[image_id]') . '" value="' . ($imageId > 0 ? htmlspecialcharsbx((string)$imageId) : '') . '" style="width:90px;" placeholder="ID файла">';
-        $html .= '<br><small>Укажите ID файла из медиабиблиотеки/файлов Битрикса</small>';
+        $html = '<label class="kk-quiz-answers__field kk-quiz-answers__image-field"><span>IMAGE_ID</span>';
+        $html .= '<input type="number" name="' . htmlspecialcharsbx($prefix . '[image_id]') . '" value="' . ($imageId > 0 ? htmlspecialcharsbx((string)$imageId) : '') . '" placeholder="ID файла">';
+        $html .= '<small>Укажите ID файла из медиабиблиотеки/файлов Битрикса</small>';
+        $html .= '</label>';
 
         if ($imageId > 0 && class_exists('CFile')) {
             $path = \CFile::GetPath($imageId);
             if (is_string($path) && $path !== '') {
-                $html .= '<br><a href="' . htmlspecialcharsbx($path) . '" target="_blank" rel="noopener">';
-                $html .= '<img src="' . htmlspecialcharsbx($path) . '" alt="" style="display:block; max-width:80px; max-height:60px; margin-top:4px;">';
-                $html .= 'Файл #' . htmlspecialcharsbx((string)$imageId) . '</a>';
+                $html .= '<a class="kk-quiz-answers__preview" href="' . htmlspecialcharsbx($path) . '" target="_blank" rel="noopener">';
+                $html .= '<img src="' . htmlspecialcharsbx($path) . '" alt="">';
+                $html .= '<span>Файл #' . htmlspecialcharsbx((string)$imageId) . '</span></a>';
             }
         }
 
@@ -325,7 +338,7 @@ final class QuizAnswersProperty
 
     private static function renderSelect(string $name, ?int $selectedValue, array $options): string
     {
-        $html = '<select name="' . htmlspecialcharsbx($name) . '" style="max-width:220px;">';
+        $html = '<select name="' . htmlspecialcharsbx($name) . '">';
         $html .= '<option value="">—</option>';
 
         foreach ($options as $id => $title) {
@@ -338,26 +351,59 @@ final class QuizAnswersProperty
         return $html;
     }
 
-    private static function renderScript(string $tableId, string $inputName, array $questions, array $results): string
+    private static function renderScript(string $rootId, string $inputName, array $questions, array $results): string
     {
         $template = self::renderRow($inputName, 0, self::getDefaultRow(), $questions, $results);
 
         return '(() => {'
-            . 'const root = document.getElementById(' . self::json($tableId) . ');'
+            . 'const root = document.getElementById(' . self::json($rootId) . ');'
             . 'if (!root) return;'
-            . 'const tbody = root.querySelector("tbody");'
+            . 'const items = root.querySelector(".kk-quiz-answers__items");'
             . 'const addButton = root.querySelector(".kk-quiz-answers__add");'
             . 'const template = ' . self::json($template) . ';'
-            . 'const getNextIndex = () => tbody.querySelectorAll("tr").length + Date.now();'
+            . 'const getNextIndex = () => items.querySelectorAll(".kk-quiz-answers__item").length + Date.now();'
+            . 'const renumber = () => {'
+            . 'items.querySelectorAll("[data-kk-quiz-answer-title]").forEach((title, index) => { title.textContent = `Ответ #${index + 1}`; });'
+            . '};'
             . 'addButton.addEventListener("click", () => {'
-            . 'tbody.insertAdjacentHTML("beforeend", template.split("[rows][0]").join(`[rows][${getNextIndex()}]`));'
+            . 'items.insertAdjacentHTML("beforeend", template.split("[rows][0]").join(`[rows][${getNextIndex()}]`));'
+            . 'renumber();'
             . '});'
-            . 'root.addEventListener("change", (event) => {'
+            . 'root.addEventListener("click", (event) => {'
             . 'if (event.target.matches("[data-kk-quiz-answer-delete]")) {'
-            . 'event.target.closest("tr").remove();'
+            . 'event.target.closest(".kk-quiz-answers__item").remove();'
+            . 'renumber();'
             . '}'
             . '});'
+            . 'renumber();'
             . '})();';
+    }
+
+    private static function renderStyles(string $rootId): string
+    {
+        $selector = '#' . $rootId;
+
+        return '<style>'
+            . $selector . '.kk-quiz-answers{max-width:980px;}'
+            . $selector . ' .kk-quiz-answers__items{display:flex;flex-direction:column;gap:12px;}'
+            . $selector . ' .kk-quiz-answers__item{box-sizing:border-box;border:1px solid #d7dfe5;border-radius:6px;background:#fff;padding:12px;max-width:100%;}'
+            . $selector . ' .kk-quiz-answers__item-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;}'
+            . $selector . ' .kk-quiz-answers__section{margin-top:10px;}'
+            . $selector . ' .kk-quiz-answers__section-title{font-weight:bold;margin-bottom:6px;color:#4b5b68;}'
+            . $selector . ' .kk-quiz-answers__grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;align-items:end;}'
+            . $selector . ' .kk-quiz-answers__field{display:flex;flex-direction:column;gap:4px;min-width:0;}'
+            . $selector . ' .kk-quiz-answers__field span{font-size:12px;color:#4b5b68;}'
+            . $selector . ' .kk-quiz-answers__field input[type="text"],'
+            . $selector . ' .kk-quiz-answers__field input[type="number"],'
+            . $selector . ' .kk-quiz-answers__field select{box-sizing:border-box;width:100%;max-width:100%;}'
+            . $selector . ' .kk-quiz-answers__field--checkbox{flex-direction:row;align-items:center;gap:8px;}'
+            . $selector . ' .kk-quiz-answers__field--wide{grid-column:span 2;}'
+            . $selector . ' .kk-quiz-answers__image-field small{line-height:1.3;color:#6a737b;}'
+            . $selector . ' .kk-quiz-answers__preview{display:inline-flex;align-items:center;gap:8px;margin-top:8px;}'
+            . $selector . ' .kk-quiz-answers__preview img{display:block;max-width:96px;max-height:72px;border:1px solid #d7dfe5;border-radius:4px;object-fit:contain;background:#f8fafc;}'
+            . $selector . ' .kk-quiz-answers__actions{margin-top:12px;}'
+            . '@media (max-width: 760px){' . $selector . ' .kk-quiz-answers__field--wide{grid-column:auto;}' . $selector . ' .kk-quiz-answers__item-head{align-items:flex-start;flex-direction:column;}' . '}'
+            . '</style>';
     }
 
     private static function json(string $value): string
