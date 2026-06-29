@@ -1,5 +1,6 @@
 <?php
 
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) {
@@ -27,10 +28,30 @@ class kk_quiz extends CModule
     public function DoInstall()
     {
         RegisterModule($this->MODULE_ID);
+
+        try {
+            Loader::includeModule($this->MODULE_ID);
+            \Kk\Quiz\Iblock\Installer::install();
+        } catch (\Exception $exception) {
+            UnRegisterModule($this->MODULE_ID);
+            global $APPLICATION;
+            if (is_object($APPLICATION)) {
+                $APPLICATION->ThrowException($exception->getMessage());
+            }
+            return false;
+        }
+
+        return true;
     }
 
     public function DoUninstall()
     {
+        if (Loader::includeModule($this->MODULE_ID)) {
+            \Kk\Quiz\Iblock\Installer::uninstall();
+        }
+
         UnRegisterModule($this->MODULE_ID);
+
+        return true;
     }
 }
