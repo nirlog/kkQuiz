@@ -12,5 +12,6 @@ Loader::registerAutoLoadClasses(
         'Kk\\Quiz\\Helper\\Module' => 'lib/Helper/Module.php',
         'Kk\\Quiz\\Iblock\\Installer' => 'lib/Iblock/Installer.php',
         'Kk\\Quiz\\Iblock\\Property\\QuizAnswersProperty' => 'lib/Iblock/Property/QuizAnswersProperty.php',
+        'Kk\\Quiz\\Admin\\ElementFormAssets' => 'lib/Admin/ElementFormAssets.php',
     ]
 );

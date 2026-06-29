@@ -7,6 +7,7 @@ namespace Kk\Quiz\Iblock;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\SystemException;
+use Kk\Quiz\Admin\ElementFormAssets;
 use Kk\Quiz\Iblock\Property\QuizAnswersProperty;
 
 final class Installer
@@ -51,6 +52,14 @@ final class Installer
             QuizAnswersProperty::class,
             'getUserTypeDescription'
         );
+
+        EventManager::getInstance()->registerEventHandler(
+            'main',
+            'OnProlog',
+            'kk.quiz',
+            ElementFormAssets::class,
+            'onProlog'
+        );
     }
 
     private static function unregisterEventHandlers(): void
@@ -61,6 +70,14 @@ final class Installer
             'kk.quiz',
             QuizAnswersProperty::class,
             'getUserTypeDescription'
+        );
+
+        EventManager::getInstance()->unRegisterEventHandler(
+            'main',
+            'OnProlog',
+            'kk.quiz',
+            ElementFormAssets::class,
+            'onProlog'
         );
     }
 
@@ -260,24 +277,24 @@ final class Installer
     private static function installQuizProperties(int $iblockId): void
     {
         $properties = [
-            ['CODE' => 'KK_ENTITY_TYPE', 'NAME' => 'Тип сущности', 'PROPERTY_TYPE' => 'L', 'VALUES' => ['QUESTION' => 'QUESTION', 'RESULT' => 'RESULT']],
-            ['CODE' => 'KK_CODE', 'NAME' => 'Код', 'PROPERTY_TYPE' => 'S'],
-            ['CODE' => 'KK_ADMIN_NOTE', 'NAME' => 'Комментарий администратора', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
-            ['CODE' => 'KK_QUESTION_TYPE', 'NAME' => 'Тип вопроса', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getQuestionTypeValues()],
-            ['CODE' => 'KK_DISPLAY_TEMPLATE', 'NAME' => 'Шаблон отображения', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getDisplayTemplateValues()],
-            ['CODE' => 'KK_IS_REQUIRED', 'NAME' => 'Обязательный вопрос', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
-            ['CODE' => 'KK_PLACEHOLDER', 'NAME' => 'Placeholder', 'PROPERTY_TYPE' => 'S'],
-            ['CODE' => 'KK_DEFAULT_NEXT_QUESTION', 'NAME' => 'Следующий вопрос по умолчанию', 'PROPERTY_TYPE' => 'E', 'LINK_IBLOCK_ID' => $iblockId],
-            ['CODE' => 'KK_ANSWERS', 'NAME' => 'Ответы квиза', 'PROPERTY_TYPE' => 'S', 'USER_TYPE' => QuizAnswersProperty::USER_TYPE, 'ROW_COUNT' => 10],
-            ['CODE' => 'KK_RESULT_MIN_SCORE', 'NAME' => 'Минимальный балл результата', 'PROPERTY_TYPE' => 'N'],
-            ['CODE' => 'KK_RESULT_MAX_SCORE', 'NAME' => 'Максимальный балл результата', 'PROPERTY_TYPE' => 'N'],
-            ['CODE' => 'KK_RESULT_PRIORITY', 'NAME' => 'Приоритет результата', 'PROPERTY_TYPE' => 'N'],
-            ['CODE' => 'KK_RESULT_CTA_TEXT', 'NAME' => 'Текст CTA', 'PROPERTY_TYPE' => 'S'],
-            ['CODE' => 'KK_RESULT_CTA_LINK', 'NAME' => 'Ссылка CTA', 'PROPERTY_TYPE' => 'S'],
-            ['CODE' => 'KK_RESULT_SHOW_FORM', 'NAME' => 'Показывать форму', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
-            ['CODE' => 'KK_RESULT_CATALOG_SECTION', 'NAME' => 'Раздел каталога', 'PROPERTY_TYPE' => 'G'],
-            ['CODE' => 'KK_RESULT_CATALOG_PRODUCTS', 'NAME' => 'Товары каталога', 'PROPERTY_TYPE' => 'E', 'MULTIPLE' => 'Y'],
-            ['CODE' => 'KK_RESULT_BADGE', 'NAME' => 'Бейдж результата', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_ENTITY_TYPE', 'NAME' => 'Тип сущности', 'SORT' => 100, 'PROPERTY_TYPE' => 'L', 'VALUES' => ['QUESTION' => 'QUESTION', 'RESULT' => 'RESULT']],
+            ['CODE' => 'KK_CODE', 'NAME' => 'Код', 'SORT' => 110, 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_ADMIN_NOTE', 'NAME' => 'Комментарий администратора', 'SORT' => 900, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
+            ['CODE' => 'KK_QUESTION_TYPE', 'NAME' => 'Тип вопроса', 'SORT' => 200, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getQuestionTypeValues()],
+            ['CODE' => 'KK_DISPLAY_TEMPLATE', 'NAME' => 'Шаблон отображения', 'SORT' => 220, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getDisplayTemplateValues()],
+            ['CODE' => 'KK_IS_REQUIRED', 'NAME' => 'Обязательный вопрос', 'SORT' => 230, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
+            ['CODE' => 'KK_PLACEHOLDER', 'NAME' => 'Placeholder', 'SORT' => 240, 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_DEFAULT_NEXT_QUESTION', 'NAME' => 'Следующий вопрос по умолчанию', 'SORT' => 250, 'PROPERTY_TYPE' => 'E', 'LINK_IBLOCK_ID' => $iblockId],
+            ['CODE' => 'KK_ANSWERS', 'NAME' => 'Ответы квиза', 'SORT' => 210, 'PROPERTY_TYPE' => 'S', 'USER_TYPE' => QuizAnswersProperty::USER_TYPE, 'ROW_COUNT' => 10],
+            ['CODE' => 'KK_RESULT_MIN_SCORE', 'NAME' => 'Минимальный балл результата', 'SORT' => 310, 'PROPERTY_TYPE' => 'N'],
+            ['CODE' => 'KK_RESULT_MAX_SCORE', 'NAME' => 'Максимальный балл результата', 'SORT' => 320, 'PROPERTY_TYPE' => 'N'],
+            ['CODE' => 'KK_RESULT_PRIORITY', 'NAME' => 'Приоритет результата', 'SORT' => 300, 'PROPERTY_TYPE' => 'N'],
+            ['CODE' => 'KK_RESULT_CTA_TEXT', 'NAME' => 'Текст CTA', 'SORT' => 340, 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_RESULT_CTA_LINK', 'NAME' => 'Ссылка CTA', 'SORT' => 350, 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_RESULT_SHOW_FORM', 'NAME' => 'Показывать форму', 'SORT' => 360, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
+            ['CODE' => 'KK_RESULT_CATALOG_SECTION', 'NAME' => 'Раздел каталога', 'SORT' => 370, 'PROPERTY_TYPE' => 'G'],
+            ['CODE' => 'KK_RESULT_CATALOG_PRODUCTS', 'NAME' => 'Товары каталога', 'SORT' => 380, 'PROPERTY_TYPE' => 'E', 'MULTIPLE' => 'Y'],
+            ['CODE' => 'KK_RESULT_BADGE', 'NAME' => 'Бейдж результата', 'SORT' => 330, 'PROPERTY_TYPE' => 'S'],
         ];
 
         self::addIblockProperties($iblockId, $properties);
@@ -351,16 +368,24 @@ final class Installer
 
     private static function updateExistingIblockProperty(int $propertyId, array $property): void
     {
-        if (($property['CODE'] ?? '') !== 'KK_ANSWERS') {
-            return;
+        $fields = [];
+
+        if (isset($property['SORT'])) {
+            $fields['SORT'] = $property['SORT'];
         }
 
-        $fields = [
-            'NAME' => $property['NAME'],
-            'PROPERTY_TYPE' => $property['PROPERTY_TYPE'],
-            'USER_TYPE' => $property['USER_TYPE'],
-            'ROW_COUNT' => $property['ROW_COUNT'],
-        ];
+        if (($property['CODE'] ?? '') === 'KK_ANSWERS') {
+            $fields = array_merge($fields, [
+                'NAME' => $property['NAME'],
+                'PROPERTY_TYPE' => $property['PROPERTY_TYPE'],
+                'USER_TYPE' => $property['USER_TYPE'],
+                'ROW_COUNT' => $property['ROW_COUNT'],
+            ]);
+        }
+
+        if ($fields === []) {
+            return;
+        }
 
         $iblockProperty = new \CIBlockProperty();
         if (!$iblockProperty->Update($propertyId, $fields)) {
