@@ -1,12 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kk\Quiz\Helper;
 
-class Module
+final class Module
 {
-    const ID = 'kk.quiz';
+    public const ID = 'kk.quiz';
 
-    public static function getModuleId()
+    public static function getModuleId(): string
     {
         return self::ID;
     }

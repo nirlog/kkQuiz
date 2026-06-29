@@ -1,17 +1,19 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kk\Quiz\Iblock;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\SystemException;
 
-class Installer
+final class Installer
 {
-    const IBLOCK_TYPE_ID = 'kk_quiz';
-    const QUIZZES_IBLOCK_CODE = 'kk_quizzes';
-    const LEADS_IBLOCK_CODE = 'kk_quiz_leads';
+    public const IBLOCK_TYPE_ID = 'kk_quiz';
+    public const QUIZZES_IBLOCK_CODE = 'kk_quizzes';
+    public const LEADS_IBLOCK_CODE = 'kk_quiz_leads';
 
-    public static function install()
+    public static function install(): void
     {
         if (!Loader::includeModule('iblock')) {
             throw new SystemException('Для установки инфоблоков модуля KK Quiz необходимо установить модуль iblock.');
@@ -27,12 +29,12 @@ class Installer
         self::installLeadProperties($leadsIblockId);
     }
 
-    public static function uninstall()
+    public static function uninstall(): void
     {
         // Инфоблоки и пользовательские данные намеренно не удаляются.
     }
 
-    protected static function installIblockType()
+    private static function installIblockType(): void
     {
         $type = \CIBlockType::GetByID(self::IBLOCK_TYPE_ID)->Fetch();
         if ($type) {
@@ -40,46 +42,46 @@ class Installer
         }
 
         $iblockType = new \CIBlockType();
-        $result = $iblockType->Add(array(
+        $result = $iblockType->Add([
             'ID' => self::IBLOCK_TYPE_ID,
             'SECTIONS' => 'Y',
             'IN_RSS' => 'N',
             'SORT' => 500,
-            'LANG' => array(
-                'ru' => array(
+            'LANG' => [
+                'ru' => [
                     'NAME' => 'KK Quiz',
                     'SECTION_NAME' => 'Квизы',
                     'ELEMENT_NAME' => 'Элементы квиза',
-                ),
-            ),
-        ));
+                ],
+            ],
+        ]);
 
         if (!$result) {
-            throw new SystemException($iblockType->LAST_ERROR);
+            throw new SystemException((string)$iblockType->LAST_ERROR);
         }
     }
 
-    protected static function installIblock($code, $name)
+    private static function installIblock(string $code, string $name): int
     {
-        $exists = \CIBlock::GetList(array(), array('TYPE' => self::IBLOCK_TYPE_ID, '=CODE' => $code))->Fetch();
+        $exists = \CIBlock::GetList([], ['TYPE' => self::IBLOCK_TYPE_ID, '=CODE' => $code])->Fetch();
         if ($exists) {
             return (int)$exists['ID'];
         }
 
         $siteIds = self::getSiteIds();
         $iblock = new \CIBlock();
-        $iblockId = $iblock->Add(array(
+        $iblockId = $iblock->Add([
             'ACTIVE' => 'Y',
             'NAME' => $name,
             'CODE' => $code,
             'IBLOCK_TYPE_ID' => self::IBLOCK_TYPE_ID,
             'SITE_ID' => $siteIds,
             'SORT' => 500,
-            'GROUP_ID' => array('2' => 'R'),
-            'FIELDS' => array(
-                'CODE' => array(
+            'GROUP_ID' => ['2' => 'R'],
+            'FIELDS' => [
+                'CODE' => [
                     'IS_REQUIRED' => 'N',
-                    'DEFAULT_VALUE' => array(
+                    'DEFAULT_VALUE' => [
                         'UNIQUE' => 'Y',
                         'TRANSLITERATION' => 'Y',
                         'TRANS_LEN' => 100,
@@ -87,22 +89,24 @@ class Installer
                         'TRANS_SPACE' => '_',
                         'TRANS_OTHER' => '_',
                         'TRANS_EAT' => 'Y',
-                    ),
-                ),
-            ),
-        ));
+                    ],
+                ],
+            ],
+        ]);
 
         if (!$iblockId) {
-            throw new SystemException($iblock->LAST_ERROR);
+            throw new SystemException((string)$iblock->LAST_ERROR);
         }
 
         return (int)$iblockId;
     }
 
-    protected static function getSiteIds()
+    private static function getSiteIds(): array
     {
-        $siteIds = array();
-        $sites = \CSite::GetList($by = 'sort', $order = 'asc', array('ACTIVE' => 'Y'));
+        $siteIds = [];
+        $by = 'sort';
+        $order = 'asc';
+        $sites = \CSite::GetList($by, $order, ['ACTIVE' => 'Y']);
         while ($site = $sites->Fetch()) {
             $siteIds[] = $site['LID'];
         }
@@ -114,47 +118,47 @@ class Installer
         return $siteIds;
     }
 
-    protected static function installQuizSectionUserFields($iblockId)
+    private static function installQuizSectionUserFields(int $iblockId): void
     {
         $entityId = 'IBLOCK_' . (int)$iblockId . '_SECTION';
 
-        $fields = array(
-            array('FIELD_NAME' => 'UF_KK_TITLE', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Заголовок'),
-            array('FIELD_NAME' => 'UF_KK_SUBTITLE', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Подзаголовок', 'SETTINGS' => array('ROWS' => 3)),
-            array('FIELD_NAME' => 'UF_KK_BUTTON_TEXT', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Текст кнопки'),
-            array('FIELD_NAME' => 'UF_KK_START_TEXT', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Стартовый текст', 'SETTINGS' => array('ROWS' => 6)),
-            array('FIELD_NAME' => 'UF_KK_SUCCESS_TEXT', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Текст успешного завершения', 'SETTINGS' => array('ROWS' => 6)),
-            array('FIELD_NAME' => 'UF_KK_EMAIL_TO', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Email получателя'),
-            array('FIELD_NAME' => 'UF_KK_FORM_FIELDS', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Поля формы', 'MULTIPLE' => 'Y', 'VALUES' => self::getFormFieldEnumValues()),
-            array('FIELD_NAME' => 'UF_KK_REQUIRED_FIELDS', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Обязательные поля формы', 'MULTIPLE' => 'Y', 'VALUES' => self::getFormFieldEnumValues()),
-            array('FIELD_NAME' => 'UF_KK_METRIKA_COUNTER_ID', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'ID счётчика Метрики'),
-            array('FIELD_NAME' => 'UF_KK_USE_METRIKA', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Использовать Метрику'),
-            array('FIELD_NAME' => 'UF_KK_USE_CATALOG', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Использовать каталог'),
-            array('FIELD_NAME' => 'UF_KK_CATALOG_IBLOCK_ID', 'USER_TYPE_ID' => 'integer', 'EDIT_FORM_LABEL' => 'ID инфоблока каталога'),
-            array('FIELD_NAME' => 'UF_KK_THEME', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Тема оформления', 'VALUES' => self::getThemeEnumValues()),
-            array('FIELD_NAME' => 'UF_KK_ALLOW_POPUP_URL', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Разрешить URL для попапа'),
-            array('FIELD_NAME' => 'UF_KK_PRIVACY_TEXT', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Текст политики'),
-            array('FIELD_NAME' => 'UF_KK_PRIVACY_URL', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Ссылка на политику'),
-            array('FIELD_NAME' => 'UF_KK_REQUIRE_AGREEMENT', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Требовать согласие'),
-        );
+        $fields = [
+            ['FIELD_NAME' => 'UF_KK_TITLE', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Заголовок'],
+            ['FIELD_NAME' => 'UF_KK_SUBTITLE', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Подзаголовок', 'SETTINGS' => ['ROWS' => 3]],
+            ['FIELD_NAME' => 'UF_KK_BUTTON_TEXT', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Текст кнопки'],
+            ['FIELD_NAME' => 'UF_KK_START_TEXT', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Стартовый текст', 'SETTINGS' => ['ROWS' => 6]],
+            ['FIELD_NAME' => 'UF_KK_SUCCESS_TEXT', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Текст успешного завершения', 'SETTINGS' => ['ROWS' => 6]],
+            ['FIELD_NAME' => 'UF_KK_EMAIL_TO', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Email получателя'],
+            ['FIELD_NAME' => 'UF_KK_FORM_FIELDS', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Поля формы', 'MULTIPLE' => 'Y', 'VALUES' => self::getFormFieldEnumValues()],
+            ['FIELD_NAME' => 'UF_KK_REQUIRED_FIELDS', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Обязательные поля формы', 'MULTIPLE' => 'Y', 'VALUES' => self::getFormFieldEnumValues()],
+            ['FIELD_NAME' => 'UF_KK_METRIKA_COUNTER_ID', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'ID счётчика Метрики'],
+            ['FIELD_NAME' => 'UF_KK_USE_METRIKA', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Использовать Метрику'],
+            ['FIELD_NAME' => 'UF_KK_USE_CATALOG', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Использовать каталог'],
+            ['FIELD_NAME' => 'UF_KK_CATALOG_IBLOCK_ID', 'USER_TYPE_ID' => 'integer', 'EDIT_FORM_LABEL' => 'ID инфоблока каталога'],
+            ['FIELD_NAME' => 'UF_KK_THEME', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Тема оформления', 'VALUES' => self::getThemeEnumValues()],
+            ['FIELD_NAME' => 'UF_KK_ALLOW_POPUP_URL', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Разрешить URL для попапа'],
+            ['FIELD_NAME' => 'UF_KK_PRIVACY_TEXT', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Текст политики'],
+            ['FIELD_NAME' => 'UF_KK_PRIVACY_URL', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Ссылка на политику'],
+            ['FIELD_NAME' => 'UF_KK_REQUIRE_AGREEMENT', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Требовать согласие'],
+        ];
 
         foreach ($fields as $field) {
             self::addUserField($entityId, $field);
         }
     }
 
-    protected static function addUserField($entityId, $field)
+    private static function addUserField(string $entityId, array $field): void
     {
         $fieldName = $field['FIELD_NAME'];
-        $exists = \CUserTypeEntity::GetList(array(), array('ENTITY_ID' => $entityId, 'FIELD_NAME' => $fieldName))->Fetch();
+        $exists = \CUserTypeEntity::GetList([], ['ENTITY_ID' => $entityId, 'FIELD_NAME' => $fieldName])->Fetch();
         if ($exists) {
             return;
         }
 
-        $values = isset($field['VALUES']) ? $field['VALUES'] : array();
+        $values = isset($field['VALUES']) ? $field['VALUES'] : [];
         unset($field['VALUES']);
 
-        $field = array_merge(array(
+        $field = array_merge([
             'ENTITY_ID' => $entityId,
             'MULTIPLE' => 'N',
             'MANDATORY' => 'N',
@@ -162,8 +166,8 @@ class Installer
             'SHOW_IN_LIST' => 'Y',
             'EDIT_IN_LIST' => 'Y',
             'IS_SEARCHABLE' => 'N',
-        ), $field);
-        $field['EDIT_FORM_LABEL'] = array('ru' => $field['EDIT_FORM_LABEL']);
+        ], $field);
+        $field['EDIT_FORM_LABEL'] = ['ru' => $field['EDIT_FORM_LABEL']];
         $field['LIST_COLUMN_LABEL'] = $field['EDIT_FORM_LABEL'];
         $field['LIST_FILTER_LABEL'] = $field['EDIT_FORM_LABEL'];
 
@@ -173,7 +177,7 @@ class Installer
             global $APPLICATION;
             $exception = is_object($APPLICATION) ? $APPLICATION->GetException() : null;
             $message = $exception ? $exception->GetString() : 'Не удалось создать пользовательское поле ' . $fieldName;
-            throw new SystemException($message);
+            throw new SystemException((string)$message);
         }
 
         if (!empty($values)) {
@@ -182,81 +186,82 @@ class Installer
         }
     }
 
-    protected static function installQuizProperties($iblockId)
+    private static function installQuizProperties(int $iblockId): void
     {
-        $properties = array(
-            array('CODE' => 'KK_ENTITY_TYPE', 'NAME' => 'Тип сущности', 'PROPERTY_TYPE' => 'L', 'VALUES' => array('QUESTION' => 'QUESTION', 'RESULT' => 'RESULT')),
-            array('CODE' => 'KK_CODE', 'NAME' => 'Код', 'PROPERTY_TYPE' => 'S'),
-            array('CODE' => 'KK_ADMIN_NOTE', 'NAME' => 'Комментарий администратора', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5),
-            array('CODE' => 'KK_QUESTION_TYPE', 'NAME' => 'Тип вопроса', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getQuestionTypeValues()),
-            array('CODE' => 'KK_DISPLAY_TEMPLATE', 'NAME' => 'Шаблон отображения', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getDisplayTemplateValues()),
-            array('CODE' => 'KK_IS_REQUIRED', 'NAME' => 'Обязательный вопрос', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()),
-            array('CODE' => 'KK_PLACEHOLDER', 'NAME' => 'Placeholder', 'PROPERTY_TYPE' => 'S'),
-            array('CODE' => 'KK_DEFAULT_NEXT_QUESTION', 'NAME' => 'Следующий вопрос по умолчанию', 'PROPERTY_TYPE' => 'E', 'LINK_IBLOCK_ID' => $iblockId),
-            array('CODE' => 'KK_RESULT_MIN_SCORE', 'NAME' => 'Минимальный балл результата', 'PROPERTY_TYPE' => 'N'),
-            array('CODE' => 'KK_RESULT_MAX_SCORE', 'NAME' => 'Максимальный балл результата', 'PROPERTY_TYPE' => 'N'),
-            array('CODE' => 'KK_RESULT_PRIORITY', 'NAME' => 'Приоритет результата', 'PROPERTY_TYPE' => 'N'),
-            array('CODE' => 'KK_RESULT_CTA_TEXT', 'NAME' => 'Текст CTA', 'PROPERTY_TYPE' => 'S'),
-            array('CODE' => 'KK_RESULT_CTA_LINK', 'NAME' => 'Ссылка CTA', 'PROPERTY_TYPE' => 'S'),
-            array('CODE' => 'KK_RESULT_SHOW_FORM', 'NAME' => 'Показывать форму', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()),
-            array('CODE' => 'KK_RESULT_CATALOG_SECTION', 'NAME' => 'Раздел каталога', 'PROPERTY_TYPE' => 'G'),
-            array('CODE' => 'KK_RESULT_CATALOG_PRODUCTS', 'NAME' => 'Товары каталога', 'PROPERTY_TYPE' => 'E', 'MULTIPLE' => 'Y'),
-            array('CODE' => 'KK_RESULT_BADGE', 'NAME' => 'Бейдж результата', 'PROPERTY_TYPE' => 'S'),
-        );
+        $properties = [
+            ['CODE' => 'KK_ENTITY_TYPE', 'NAME' => 'Тип сущности', 'PROPERTY_TYPE' => 'L', 'VALUES' => ['QUESTION' => 'QUESTION', 'RESULT' => 'RESULT']],
+            ['CODE' => 'KK_CODE', 'NAME' => 'Код', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_ADMIN_NOTE', 'NAME' => 'Комментарий администратора', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
+            ['CODE' => 'KK_QUESTION_TYPE', 'NAME' => 'Тип вопроса', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getQuestionTypeValues()],
+            ['CODE' => 'KK_DISPLAY_TEMPLATE', 'NAME' => 'Шаблон отображения', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getDisplayTemplateValues()],
+            ['CODE' => 'KK_IS_REQUIRED', 'NAME' => 'Обязательный вопрос', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
+            ['CODE' => 'KK_PLACEHOLDER', 'NAME' => 'Placeholder', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_DEFAULT_NEXT_QUESTION', 'NAME' => 'Следующий вопрос по умолчанию', 'PROPERTY_TYPE' => 'E', 'LINK_IBLOCK_ID' => $iblockId],
+            ['CODE' => 'KK_ANSWERS', 'NAME' => 'Ответы вопроса', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 10],
+            ['CODE' => 'KK_RESULT_MIN_SCORE', 'NAME' => 'Минимальный балл результата', 'PROPERTY_TYPE' => 'N'],
+            ['CODE' => 'KK_RESULT_MAX_SCORE', 'NAME' => 'Максимальный балл результата', 'PROPERTY_TYPE' => 'N'],
+            ['CODE' => 'KK_RESULT_PRIORITY', 'NAME' => 'Приоритет результата', 'PROPERTY_TYPE' => 'N'],
+            ['CODE' => 'KK_RESULT_CTA_TEXT', 'NAME' => 'Текст CTA', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_RESULT_CTA_LINK', 'NAME' => 'Ссылка CTA', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_RESULT_SHOW_FORM', 'NAME' => 'Показывать форму', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
+            ['CODE' => 'KK_RESULT_CATALOG_SECTION', 'NAME' => 'Раздел каталога', 'PROPERTY_TYPE' => 'G'],
+            ['CODE' => 'KK_RESULT_CATALOG_PRODUCTS', 'NAME' => 'Товары каталога', 'PROPERTY_TYPE' => 'E', 'MULTIPLE' => 'Y'],
+            ['CODE' => 'KK_RESULT_BADGE', 'NAME' => 'Бейдж результата', 'PROPERTY_TYPE' => 'S'],
+        ];
 
         self::addIblockProperties($iblockId, $properties);
     }
 
-    protected static function installLeadProperties($iblockId)
+    private static function installLeadProperties(int $iblockId): void
     {
-        $properties = array(
-            array('CODE' => 'KK_LEAD_QUIZ_SECTION_ID', 'NAME' => 'ID раздела квиза', 'PROPERTY_TYPE' => 'N'),
-            array('CODE' => 'KK_LEAD_QUIZ_CODE', 'NAME' => 'Код квиза', 'PROPERTY_TYPE' => 'S'),
-            array('CODE' => 'KK_LEAD_QUIZ_NAME', 'NAME' => 'Название квиза', 'PROPERTY_TYPE' => 'S'),
-            array('CODE' => 'KK_LEAD_RESULT_ID', 'NAME' => 'ID результата', 'PROPERTY_TYPE' => 'N'),
-            array('CODE' => 'KK_LEAD_RESULT_CODE', 'NAME' => 'Код результата', 'PROPERTY_TYPE' => 'S'),
-            array('CODE' => 'KK_LEAD_RESULT_TITLE', 'NAME' => 'Заголовок результата', 'PROPERTY_TYPE' => 'S'),
-            array('CODE' => 'KK_LEAD_CLIENT_NAME', 'NAME' => 'Имя клиента', 'PROPERTY_TYPE' => 'S'),
-            array('CODE' => 'KK_LEAD_CLIENT_PHONE', 'NAME' => 'Телефон клиента', 'PROPERTY_TYPE' => 'S'),
-            array('CODE' => 'KK_LEAD_CLIENT_EMAIL', 'NAME' => 'Email клиента', 'PROPERTY_TYPE' => 'S'),
-            array('CODE' => 'KK_LEAD_CLIENT_MESSENGER', 'NAME' => 'Мессенджер клиента', 'PROPERTY_TYPE' => 'S'),
-            array('CODE' => 'KK_LEAD_CLIENT_COMMENT', 'NAME' => 'Комментарий клиента', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5),
-            array('CODE' => 'KK_LEAD_PAGE_URL', 'NAME' => 'URL страницы', 'PROPERTY_TYPE' => 'S'),
-            array('CODE' => 'KK_LEAD_REFERER', 'NAME' => 'Referer', 'PROPERTY_TYPE' => 'S'),
-            array('CODE' => 'KK_LEAD_UTM_SOURCE', 'NAME' => 'UTM Source', 'PROPERTY_TYPE' => 'S'),
-            array('CODE' => 'KK_LEAD_UTM_MEDIUM', 'NAME' => 'UTM Medium', 'PROPERTY_TYPE' => 'S'),
-            array('CODE' => 'KK_LEAD_UTM_CAMPAIGN', 'NAME' => 'UTM Campaign', 'PROPERTY_TYPE' => 'S'),
-            array('CODE' => 'KK_LEAD_UTM_CONTENT', 'NAME' => 'UTM Content', 'PROPERTY_TYPE' => 'S'),
-            array('CODE' => 'KK_LEAD_UTM_TERM', 'NAME' => 'UTM Term', 'PROPERTY_TYPE' => 'S'),
-            array('CODE' => 'KK_LEAD_USER_AGENT', 'NAME' => 'User Agent', 'PROPERTY_TYPE' => 'S'),
-            array('CODE' => 'KK_LEAD_IP', 'NAME' => 'IP', 'PROPERTY_TYPE' => 'S'),
-            array('CODE' => 'KK_LEAD_SESSION_ID', 'NAME' => 'ID сессии', 'PROPERTY_TYPE' => 'S'),
-            array('CODE' => 'KK_LEAD_ANSWERS_DATA', 'NAME' => 'Данные ответов', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 10),
-            array('CODE' => 'KK_LEAD_EMAIL_SENT', 'NAME' => 'Email отправлен', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()),
-            array('CODE' => 'KK_LEAD_EMAIL_SENT_AT', 'NAME' => 'Дата отправки email', 'PROPERTY_TYPE' => 'S', 'USER_TYPE' => 'DateTime'),
-        );
+        $properties = [
+            ['CODE' => 'KK_LEAD_QUIZ_SECTION_ID', 'NAME' => 'ID раздела квиза', 'PROPERTY_TYPE' => 'N'],
+            ['CODE' => 'KK_LEAD_QUIZ_CODE', 'NAME' => 'Код квиза', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_QUIZ_NAME', 'NAME' => 'Название квиза', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_RESULT_ID', 'NAME' => 'ID результата', 'PROPERTY_TYPE' => 'N'],
+            ['CODE' => 'KK_LEAD_RESULT_CODE', 'NAME' => 'Код результата', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_RESULT_TITLE', 'NAME' => 'Заголовок результата', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_CLIENT_NAME', 'NAME' => 'Имя клиента', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_CLIENT_PHONE', 'NAME' => 'Телефон клиента', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_CLIENT_EMAIL', 'NAME' => 'Email клиента', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_CLIENT_MESSENGER', 'NAME' => 'Мессенджер клиента', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_CLIENT_COMMENT', 'NAME' => 'Комментарий клиента', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
+            ['CODE' => 'KK_LEAD_PAGE_URL', 'NAME' => 'URL страницы', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_REFERER', 'NAME' => 'Referer', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_UTM_SOURCE', 'NAME' => 'UTM Source', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_UTM_MEDIUM', 'NAME' => 'UTM Medium', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_UTM_CAMPAIGN', 'NAME' => 'UTM Campaign', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_UTM_CONTENT', 'NAME' => 'UTM Content', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_UTM_TERM', 'NAME' => 'UTM Term', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_USER_AGENT', 'NAME' => 'User Agent', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_IP', 'NAME' => 'IP', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_SESSION_ID', 'NAME' => 'ID сессии', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_ANSWERS_DATA', 'NAME' => 'Данные ответов', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 10],
+            ['CODE' => 'KK_LEAD_EMAIL_SENT', 'NAME' => 'Email отправлен', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
+            ['CODE' => 'KK_LEAD_EMAIL_SENT_AT', 'NAME' => 'Дата отправки email', 'PROPERTY_TYPE' => 'S', 'USER_TYPE' => 'DateTime'],
+        ];
 
         self::addIblockProperties($iblockId, $properties);
     }
 
-    protected static function addIblockProperties($iblockId, $properties)
+    private static function addIblockProperties(int $iblockId, array $properties): void
     {
         foreach ($properties as $property) {
-            $exists = \CIBlockProperty::GetList(array(), array('IBLOCK_ID' => $iblockId, '=CODE' => $property['CODE']))->Fetch();
+            $exists = \CIBlockProperty::GetList([], ['IBLOCK_ID' => $iblockId, '=CODE' => $property['CODE']])->Fetch();
             if ($exists) {
                 continue;
             }
 
-            $values = isset($property['VALUES']) ? $property['VALUES'] : array();
+            $values = isset($property['VALUES']) ? $property['VALUES'] : [];
             unset($property['VALUES']);
 
-            $property = array_merge(array(
+            $property = array_merge([
                 'IBLOCK_ID' => $iblockId,
                 'ACTIVE' => 'Y',
                 'SORT' => 500,
                 'MULTIPLE' => 'N',
                 'IS_REQUIRED' => 'N',
-            ), $property);
+            ], $property);
 
             if (!empty($values)) {
                 $property['LIST_TYPE'] = 'L';
@@ -266,35 +271,35 @@ class Installer
             $iblockProperty = new \CIBlockProperty();
             $propertyId = $iblockProperty->Add($property);
             if (!$propertyId) {
-                throw new SystemException($iblockProperty->LAST_ERROR);
+                throw new SystemException((string)$iblockProperty->LAST_ERROR);
             }
         }
     }
 
-    protected static function getFormFieldEnumValues()
+    private static function getFormFieldEnumValues(): array
     {
-        return array(
+        return [
             'name' => 'Имя',
             'phone' => 'Телефон',
             'email' => 'Email',
             'messenger' => 'Мессенджер',
             'comment' => 'Комментарий',
-        );
+        ];
     }
 
-    protected static function getThemeEnumValues()
+    private static function getThemeEnumValues(): array
     {
-        return array(
+        return [
             'default' => 'Стандартная',
             'light' => 'Светлая',
             'dark' => 'Тёмная',
             'compact' => 'Компактная',
-        );
+        ];
     }
 
-    protected static function getQuestionTypeValues()
+    private static function getQuestionTypeValues(): array
     {
-        return array(
+        return [
             'radio' => 'Один вариант ответа',
             'checkbox' => 'Несколько вариантов ответа',
             'select' => 'Выпадающий список',
@@ -302,56 +307,56 @@ class Installer
             'textarea' => 'Большое текстовое поле',
             'phone' => 'Телефон',
             'email' => 'Email',
-        );
+        ];
     }
 
-    protected static function getDisplayTemplateValues()
+    private static function getDisplayTemplateValues(): array
     {
-        return array(
+        return [
             'list' => 'Обычный список',
             'cards' => 'Карточки без изображений',
             'image_cards' => 'Карточки с изображениями',
             'select' => 'Выпадающий список',
             'input' => 'Поле ввода',
-        );
+        ];
     }
 
-    protected static function getYesNoValues()
+    private static function getYesNoValues(): array
     {
-        return array(
+        return [
             'Y' => 'Да',
             'N' => 'Нет',
-        );
+        ];
     }
 
-    protected static function formatPropertyEnumValues($values)
+    private static function formatPropertyEnumValues(array $values): array
     {
-        $formatted = array();
+        $formatted = [];
         $sort = 100;
         foreach ($values as $xmlId => $value) {
-            $formatted[] = array(
+            $formatted[] = [
                 'VALUE' => $value,
                 'XML_ID' => $xmlId,
                 'DEF' => 'N',
                 'SORT' => $sort,
-            );
+            ];
             $sort += 100;
         }
 
         return $formatted;
     }
 
-    protected static function formatUserFieldEnumValues($values)
+    private static function formatUserFieldEnumValues(array $values): array
     {
-        $formatted = array();
+        $formatted = [];
         $sort = 100;
         foreach ($values as $xmlId => $value) {
-            $formatted['n' . $sort] = array(
+            $formatted['n' . $sort] = [
                 'VALUE' => $value,
                 'XML_ID' => $xmlId,
                 'DEF' => 'N',
                 'SORT' => $sort,
-            );
+            ];
             $sort += 100;
         }
 

@@ -8,8 +8,8 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) {
 
 Loader::registerAutoLoadClasses(
     'kk.quiz',
-    array(
+    [
         'Kk\\Quiz\\Helper\\Module' => 'lib/Helper/Module.php',
         'Kk\\Quiz\\Iblock\\Installer' => 'lib/Iblock/Installer.php',
-    )
+    ]
 );

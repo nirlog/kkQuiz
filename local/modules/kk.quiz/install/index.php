@@ -32,7 +32,7 @@ class kk_quiz extends CModule
         try {
             Loader::includeModule($this->MODULE_ID);
             \Kk\Quiz\Iblock\Installer::install();
-        } catch (\Exception $exception) {
+        } catch (\Throwable $exception) {
             UnRegisterModule($this->MODULE_ID);
             global $APPLICATION;
             if (is_object($APPLICATION)) {
