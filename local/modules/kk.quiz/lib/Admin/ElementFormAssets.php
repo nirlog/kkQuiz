@@ -12,7 +12,6 @@ final class ElementFormAssets
 {
     private const COMMON_CODES = [
         'KK_ENTITY_TYPE',
-        'KK_CODE',
         'KK_ADMIN_NOTE',
     ];
 

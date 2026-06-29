@@ -31,6 +31,7 @@ final class Installer
 
         self::installQuizSectionUserFields($quizzesIblockId);
         self::installQuizProperties($quizzesIblockId);
+        self::deleteObsoleteQuizProperties($quizzesIblockId);
         self::installLeadProperties($leadsIblockId);
     }
 
@@ -278,7 +279,6 @@ final class Installer
     {
         $properties = [
             ['CODE' => 'KK_ENTITY_TYPE', 'NAME' => 'Тип сущности', 'SORT' => 100, 'PROPERTY_TYPE' => 'L', 'VALUES' => ['QUESTION' => 'QUESTION', 'RESULT' => 'RESULT']],
-            ['CODE' => 'KK_CODE', 'NAME' => 'Код', 'SORT' => 110, 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_ADMIN_NOTE', 'NAME' => 'Комментарий администратора', 'SORT' => 900, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
             ['CODE' => 'KK_QUESTION_TYPE', 'NAME' => 'Тип вопроса', 'SORT' => 200, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getQuestionTypeValues()],
             ['CODE' => 'KK_DISPLAY_TEMPLATE', 'NAME' => 'Шаблон отображения', 'SORT' => 220, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getDisplayTemplateValues()],
@@ -298,6 +298,22 @@ final class Installer
         ];
 
         self::addIblockProperties($iblockId, $properties);
+    }
+
+    private static function deleteObsoleteQuizProperties(int $iblockId): void
+    {
+        $obsoleteCodes = [
+            'KK_' . 'CODE',
+        ];
+
+        foreach ($obsoleteCodes as $code) {
+            $property = \CIBlockProperty::GetList([], ['IBLOCK_ID' => $iblockId, 'CODE' => $code])->Fetch();
+            if (!$property) {
+                continue;
+            }
+
+            \CIBlockProperty::Delete((int)$property['ID']);
+        }
     }
 
     private static function installLeadProperties(int $iblockId): void
