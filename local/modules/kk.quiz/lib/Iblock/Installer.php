@@ -47,13 +47,7 @@ final class Installer
             'SECTIONS' => 'Y',
             'IN_RSS' => 'N',
             'SORT' => 500,
-            'LANG' => [
-                'ru' => [
-                    'NAME' => 'KK Quiz',
-                    'SECTION_NAME' => 'Квизы',
-                    'ELEMENT_NAME' => 'Элементы квиза',
-                ],
-            ],
+            'LANG' => self::getIblockTypeLang(),
         ]);
 
         if (!$result) {
@@ -61,9 +55,56 @@ final class Installer
         }
     }
 
+    private static function getIblockTypeLang(): array
+    {
+        $lang = [];
+        $by = 'sort';
+        $order = 'asc';
+        $languages = \CLanguage::GetList($by, $order, ['ACTIVE' => 'Y']);
+
+        if (!is_object($languages)) {
+            return [
+                'ru' => [
+                    'NAME' => 'KK Quiz',
+                    'SECTION_NAME' => 'Квизы',
+                    'ELEMENT_NAME' => 'Элементы квиза',
+                ],
+            ];
+        }
+
+        while ($language = $languages->Fetch()) {
+            $languageId = (string)($language['LID'] ?? '');
+            if ($languageId === '') {
+                continue;
+            }
+
+            $lang[$languageId] = $languageId === 'ru'
+                ? [
+                    'NAME' => 'KK Quiz',
+                    'SECTION_NAME' => 'Квизы',
+                    'ELEMENT_NAME' => 'Элементы квиза',
+                ]
+                : [
+                    'NAME' => 'KK Quiz',
+                    'SECTION_NAME' => 'Quizzes',
+                    'ELEMENT_NAME' => 'Quiz items',
+                ];
+        }
+
+        if (empty($lang)) {
+            $lang['ru'] = [
+                'NAME' => 'KK Quiz',
+                'SECTION_NAME' => 'Квизы',
+                'ELEMENT_NAME' => 'Элементы квиза',
+            ];
+        }
+
+        return $lang;
+    }
+
     private static function installIblock(string $code, string $name): int
     {
-        $exists = \CIBlock::GetList([], ['TYPE' => self::IBLOCK_TYPE_ID, '=CODE' => $code])->Fetch();
+        $exists = \CIBlock::GetList([], ['TYPE' => self::IBLOCK_TYPE_ID, 'CODE' => $code])->Fetch();
         if ($exists) {
             return (int)$exists['ID'];
         }
@@ -197,7 +238,6 @@ final class Installer
             ['CODE' => 'KK_IS_REQUIRED', 'NAME' => 'Обязательный вопрос', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
             ['CODE' => 'KK_PLACEHOLDER', 'NAME' => 'Placeholder', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_DEFAULT_NEXT_QUESTION', 'NAME' => 'Следующий вопрос по умолчанию', 'PROPERTY_TYPE' => 'E', 'LINK_IBLOCK_ID' => $iblockId],
-            ['CODE' => 'KK_ANSWERS', 'NAME' => 'Ответы вопроса', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 10],
             ['CODE' => 'KK_RESULT_MIN_SCORE', 'NAME' => 'Минимальный балл результата', 'PROPERTY_TYPE' => 'N'],
             ['CODE' => 'KK_RESULT_MAX_SCORE', 'NAME' => 'Максимальный балл результата', 'PROPERTY_TYPE' => 'N'],
             ['CODE' => 'KK_RESULT_PRIORITY', 'NAME' => 'Приоритет результата', 'PROPERTY_TYPE' => 'N'],
@@ -247,7 +287,7 @@ final class Installer
     private static function addIblockProperties(int $iblockId, array $properties): void
     {
         foreach ($properties as $property) {
-            $exists = \CIBlockProperty::GetList([], ['IBLOCK_ID' => $iblockId, '=CODE' => $property['CODE']])->Fetch();
+            $exists = \CIBlockProperty::GetList([], ['IBLOCK_ID' => $iblockId, 'CODE' => $property['CODE']])->Fetch();
             if ($exists) {
                 continue;
             }
