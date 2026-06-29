@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Kk\Quiz\Iblock;
 
+use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\SystemException;
+use Kk\Quiz\Iblock\Property\QuizAnswersProperty;
 
 final class Installer
 {
@@ -19,6 +21,8 @@ final class Installer
             throw new SystemException('Для установки инфоблоков модуля KK Quiz необходимо установить модуль iblock.');
         }
 
+        self::registerEventHandlers();
+
         self::installIblockType();
 
         $quizzesIblockId = self::installIblock(self::QUIZZES_IBLOCK_CODE, 'Квизы');
@@ -31,7 +35,33 @@ final class Installer
 
     public static function uninstall(): void
     {
+        self::unregisterEventHandlers();
+
         // Инфоблоки и пользовательские данные намеренно не удаляются.
+    }
+
+    private static function registerEventHandlers(): void
+    {
+        self::unregisterEventHandlers();
+
+        EventManager::getInstance()->registerEventHandler(
+            'iblock',
+            'OnIBlockPropertyBuildList',
+            'kk.quiz',
+            QuizAnswersProperty::class,
+            'getUserTypeDescription'
+        );
+    }
+
+    private static function unregisterEventHandlers(): void
+    {
+        EventManager::getInstance()->unRegisterEventHandler(
+            'iblock',
+            'OnIBlockPropertyBuildList',
+            'kk.quiz',
+            QuizAnswersProperty::class,
+            'getUserTypeDescription'
+        );
     }
 
     private static function installIblockType(): void
@@ -238,6 +268,7 @@ final class Installer
             ['CODE' => 'KK_IS_REQUIRED', 'NAME' => 'Обязательный вопрос', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
             ['CODE' => 'KK_PLACEHOLDER', 'NAME' => 'Placeholder', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_DEFAULT_NEXT_QUESTION', 'NAME' => 'Следующий вопрос по умолчанию', 'PROPERTY_TYPE' => 'E', 'LINK_IBLOCK_ID' => $iblockId],
+            ['CODE' => 'KK_ANSWERS', 'NAME' => 'Ответы квиза', 'PROPERTY_TYPE' => 'S', 'USER_TYPE' => QuizAnswersProperty::USER_TYPE, 'ROW_COUNT' => 10],
             ['CODE' => 'KK_RESULT_MIN_SCORE', 'NAME' => 'Минимальный балл результата', 'PROPERTY_TYPE' => 'N'],
             ['CODE' => 'KK_RESULT_MAX_SCORE', 'NAME' => 'Максимальный балл результата', 'PROPERTY_TYPE' => 'N'],
             ['CODE' => 'KK_RESULT_PRIORITY', 'NAME' => 'Приоритет результата', 'PROPERTY_TYPE' => 'N'],
@@ -289,6 +320,7 @@ final class Installer
         foreach ($properties as $property) {
             $exists = \CIBlockProperty::GetList([], ['IBLOCK_ID' => $iblockId, 'CODE' => $property['CODE']])->Fetch();
             if ($exists) {
+                self::updateExistingIblockProperty((int)$exists['ID'], $property);
                 continue;
             }
 
@@ -313,6 +345,26 @@ final class Installer
             if (!$propertyId) {
                 throw new SystemException((string)$iblockProperty->LAST_ERROR);
             }
+        }
+    }
+
+
+    private static function updateExistingIblockProperty(int $propertyId, array $property): void
+    {
+        if (($property['CODE'] ?? '') !== 'KK_ANSWERS') {
+            return;
+        }
+
+        $fields = [
+            'NAME' => $property['NAME'],
+            'PROPERTY_TYPE' => $property['PROPERTY_TYPE'],
+            'USER_TYPE' => $property['USER_TYPE'],
+            'ROW_COUNT' => $property['ROW_COUNT'],
+        ];
+
+        $iblockProperty = new \CIBlockProperty();
+        if (!$iblockProperty->Update($propertyId, $fields)) {
+            throw new SystemException((string)$iblockProperty->LAST_ERROR);
         }
     }
 
