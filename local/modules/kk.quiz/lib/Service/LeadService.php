@@ -69,9 +69,96 @@ final class LeadService
             return ['success' => false, 'errors' => array_values(array_unique($errors))];
         }
 
-        $leadId = $this->leadRepository->add($this->buildLead($payload, $quiz, $result, $cleanFields));
+        $quiz['email_to'] = $this->quizService->getQuizEmailTo($quizCode);
+
+        $lead = $this->buildLead($payload, $quiz, $result, $cleanFields);
+        $leadId = $this->leadRepository->add($lead);
+        if ($this->sendEmail($quiz, $lead, $leadId)) {
+            $this->leadRepository->markEmailSent($leadId);
+        }
 
         return ['success' => true, 'lead_id' => $leadId];
+    }
+
+
+    private function sendEmail(array $quiz, array $lead, int $leadId): bool
+    {
+        $emailTo = $this->normalizeEmailTo($quiz['email_to'] ?? '');
+        if ($emailTo === '' || !class_exists('CEvent')) {
+            return false;
+        }
+
+        $fields = [
+            'EMAIL_TO' => $emailTo,
+            'LEAD_ID' => $leadId,
+            'QUIZ_NAME' => $this->cleanEmailField($lead['quiz_name'] ?? ''),
+            'QUIZ_CODE' => $this->cleanEmailField($lead['quiz_code'] ?? ''),
+            'RESULT_TITLE' => $this->cleanEmailField($lead['result_title'] ?? ''),
+            'CLIENT_NAME' => $this->cleanEmailField($lead['client_name'] ?? ''),
+            'CLIENT_PHONE' => $this->cleanEmailField($lead['client_phone'] ?? ''),
+            'CLIENT_EMAIL' => $this->cleanEmailField($lead['client_email'] ?? ''),
+            'CLIENT_MESSENGER' => $this->cleanEmailField($lead['client_messenger'] ?? ''),
+            'CLIENT_COMMENT' => $this->cleanEmailField($lead['client_comment'] ?? ''),
+            'ANSWERS_TEXT' => $this->cleanEmailField($lead['detail_text'] ?? '', 10000),
+            'PAGE_URL' => $this->cleanEmailField($lead['page_url'] ?? ''),
+            'UTM_TEXT' => $this->buildUtmText($lead),
+        ];
+
+        try {
+            $siteId = defined('SITE_ID') && is_string(SITE_ID) && SITE_ID !== '' ? SITE_ID : 's1';
+            if (method_exists('CEvent', 'SendImmediate')) {
+                return (bool)\CEvent::SendImmediate('KK_QUIZ_LEAD', $siteId, $fields);
+            }
+
+            return (bool)\CEvent::Send('KK_QUIZ_LEAD', $siteId, $fields);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function normalizeEmailTo(mixed $value): string
+    {
+        $value = $this->cleanString($value);
+        if ($value === '') {
+            return '';
+        }
+
+        $emails = preg_split('/[,;]+/', $value) ?: [];
+        $validEmails = [];
+        foreach ($emails as $email) {
+            $email = trim($email);
+            if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $validEmails[] = $email;
+            }
+        }
+
+        return implode(', ', array_unique($validEmails));
+    }
+
+    private function buildUtmText(array $lead): string
+    {
+        $labels = [
+            'utm_source' => 'utm_source',
+            'utm_medium' => 'utm_medium',
+            'utm_campaign' => 'utm_campaign',
+            'utm_content' => 'utm_content',
+            'utm_term' => 'utm_term',
+        ];
+
+        $lines = [];
+        foreach ($labels as $key => $label) {
+            $value = $this->cleanEmailField($lead[$key] ?? '');
+            if ($value !== '') {
+                $lines[] = $label . ': ' . $value;
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function cleanEmailField(mixed $value, int $limit = 2000): string
+    {
+        return mb_substr($this->cleanString($value), 0, $limit);
     }
 
     private function validateRequiredFields(array $quiz, array $fields): array

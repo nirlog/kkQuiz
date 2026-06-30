@@ -44,6 +44,24 @@ final class LeadRepository
         return $id;
     }
 
+
+    public function markEmailSent(int $leadId): void
+    {
+        if ($leadId <= 0 || !Loader::includeModule('iblock')) {
+            return;
+        }
+
+        $iblockId = $this->getLeadsIblockId();
+        if ($iblockId === null) {
+            return;
+        }
+
+        \CIBlockElement::SetPropertyValuesEx($leadId, $iblockId, [
+            'KK_LEAD_EMAIL_SENT' => $this->getYesNoEnumId($iblockId, 'KK_LEAD_EMAIL_SENT', 'Y') ?? 'Y',
+            'KK_LEAD_EMAIL_SENT_AT' => date('d.m.Y H:i:s'),
+        ]);
+    }
+
     private function getLeadsIblockId(): ?int
     {
         $iblock = \CIBlock::GetList([], [
@@ -83,6 +101,18 @@ final class LeadRepository
             'email_sent' => 'KK_LEAD_EMAIL_SENT',
             'email_sent_at' => 'KK_LEAD_EMAIL_SENT_AT',
         ];
+    }
+
+
+    private function getYesNoEnumId(int $iblockId, string $propertyCode, string $xmlId): ?int
+    {
+        $enum = \CIBlockPropertyEnum::GetList([], [
+            'IBLOCK_ID' => $iblockId,
+            'CODE' => $propertyCode,
+            'XML_ID' => $xmlId,
+        ])->Fetch();
+
+        return is_array($enum) ? (int)$enum['ID'] : null;
     }
 
     private function buildName(array $lead): string
