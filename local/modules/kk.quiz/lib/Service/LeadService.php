@@ -48,6 +48,9 @@ final class LeadService
         if ($quiz === null) {
             $errors[] = 'Квиз не найден или неактивен';
         }
+        if ($quiz !== null && ($quiz['privacy']['required'] ?? false) === true && !$this->isAgreementAccepted($payload['agreement_accepted'] ?? null)) {
+            $errors[] = 'Необходимо согласие с политикой обработки персональных данных.';
+        }
 
         $fields = is_array($payload['fields'] ?? null) ? $payload['fields'] : [];
         $cleanFields = $this->cleanFields($fields);
@@ -161,6 +164,24 @@ final class LeadService
         return mb_substr($this->cleanString($value), 0, $limit);
     }
 
+
+    private function isAgreementAccepted(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_string($value)) {
+            return in_array(strtoupper(trim($value)), ['Y', 'YES', 'TRUE', '1'], true);
+        }
+
+        if (is_int($value)) {
+            return $value === 1;
+        }
+
+        return false;
+    }
+
     private function validateRequiredFields(array $quiz, array $fields): array
     {
         $errors = [];
@@ -202,6 +223,8 @@ final class LeadService
             'session_id' => session_id(),
             'detail_text' => $this->buildAnswersText($quiz, $payload['answers'] ?? []),
             'answers_data' => Json::encode($payload['answers'] ?? [], JSON_UNESCAPED_UNICODE),
+            'agreement_accepted' => $this->isAgreementAccepted($payload['agreement_accepted'] ?? null) ? 'Y' : 'N',
+            'privacy_url' => (string)($quiz['privacy']['url'] ?? ''),
             'email_sent' => 'N',
             'email_sent_at' => '',
         ];

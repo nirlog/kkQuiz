@@ -156,6 +156,41 @@
         nodes.result.hidden = true;
     };
 
+
+    const buildAgreementField = (quiz) => {
+        if (!quiz.privacy || quiz.privacy.required !== true) {
+            return null;
+        }
+
+        const wrapper = document.createElement('label');
+        wrapper.className = 'kk-quiz__agreement';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.name = 'agreement';
+        checkbox.value = 'Y';
+        checkbox.required = true;
+
+        const text = document.createElement('span');
+        text.textContent = quiz.privacy.text || 'Я согласен с политикой обработки персональных данных';
+
+        wrapper.appendChild(checkbox);
+        wrapper.appendChild(text);
+
+        const url = String(quiz.privacy.url || '').trim();
+        if (url !== '') {
+            const link = document.createElement('a');
+            link.href = url;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = 'Подробнее';
+            wrapper.appendChild(document.createTextNode(' '));
+            wrapper.appendChild(link);
+        }
+
+        return wrapper;
+    };
+
     const showFinalForm = (nodes, quiz, state, currentResult) => {
         hideAll(nodes);
         clear(nodes.form);
@@ -191,6 +226,11 @@
             form.appendChild(label);
         });
 
+        const agreementField = buildAgreementField(quiz);
+        if (agreementField) {
+            form.appendChild(agreementField);
+        }
+
         const submit = create('button', 'kk-quiz__button', 'Получить подборку');
         submit.type = 'submit';
         form.appendChild(submit);
@@ -202,6 +242,16 @@
             event.preventDefault();
             message.hidden = true;
             message.textContent = '';
+
+            const agreementInput = form.querySelector('input[name="agreement"]');
+            const agreementAccepted = !agreementInput || agreementInput.checked;
+            if (!agreementAccepted) {
+                message.className = 'kk-quiz__error';
+                message.textContent = 'Необходимо согласие с политикой обработки персональных данных.';
+                message.hidden = false;
+                return;
+            }
+
             submit.disabled = true;
 
             const formData = new FormData(form);
@@ -219,7 +269,8 @@
                 page_url: window.location.href,
                 referer: document.referrer,
                 utm: getUtm(),
-                website: honeypot.value
+                website: honeypot.value,
+                agreement_accepted: agreementAccepted
             };
 
             fetch(getAjaxUrl(nodes.root), {

@@ -453,6 +453,8 @@ final class Installer
             ['CODE' => 'KK_LEAD_IP', 'NAME' => 'IP', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_SESSION_ID', 'NAME' => 'ID сессии', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_ANSWERS_DATA', 'NAME' => 'Данные ответов', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 10],
+            ['CODE' => 'KK_LEAD_AGREEMENT_ACCEPTED', 'NAME' => 'Согласие с политикой', 'PROPERTY_TYPE' => 'L', 'LIST_TYPE' => 'C', 'VALUES' => self::getYesNoValues()],
+            ['CODE' => 'KK_LEAD_PRIVACY_URL', 'NAME' => 'URL политики', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_EMAIL_SENT', 'NAME' => 'Email отправлен', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
             ['CODE' => 'KK_LEAD_EMAIL_SENT_AT', 'NAME' => 'Дата отправки email', 'PROPERTY_TYPE' => 'S', 'USER_TYPE' => 'DateTime'],
         ];
@@ -571,6 +573,8 @@ final class Installer
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_IP'), 'IP'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_SESSION_ID'), 'ID сессии'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_ANSWERS_DATA'), 'Данные ответов JSON'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_AGREEMENT_ACCEPTED'), 'Согласие с политикой'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_PRIVACY_URL'), 'URL политики'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_EMAIL_SENT'), 'Email отправлен'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_EMAIL_SENT_AT'), 'Дата отправки email'],
                 ],

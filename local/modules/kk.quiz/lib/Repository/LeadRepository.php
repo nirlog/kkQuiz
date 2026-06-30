@@ -98,6 +98,8 @@ final class LeadRepository
             'ip' => 'KK_LEAD_IP',
             'session_id' => 'KK_LEAD_SESSION_ID',
             'answers_data' => 'KK_LEAD_ANSWERS_DATA',
+            'agreement_accepted' => 'KK_LEAD_AGREEMENT_ACCEPTED',
+            'privacy_url' => 'KK_LEAD_PRIVACY_URL',
             'email_sent' => 'KK_LEAD_EMAIL_SENT',
             'email_sent_at' => 'KK_LEAD_EMAIL_SENT_AT',
         ];
