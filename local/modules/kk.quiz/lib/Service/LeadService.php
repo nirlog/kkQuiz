@@ -113,10 +113,85 @@ final class LeadService
             'user_agent' => $this->cleanString($request->getUserAgent()),
             'ip' => $this->cleanString($request->getRemoteAddress()),
             'session_id' => session_id(),
+            'detail_text' => $this->buildAnswersText($quiz, $payload['answers'] ?? []),
             'answers_data' => Json::encode($payload['answers'] ?? [], JSON_UNESCAPED_UNICODE),
             'email_sent' => 'N',
             'email_sent_at' => '',
         ];
+    }
+
+
+    private function buildAnswersText(array $quiz, mixed $answers): string
+    {
+        if (!is_array($answers)) {
+            return '';
+        }
+
+        $questionMap = [];
+        foreach ((array)($quiz['questions'] ?? []) as $question) {
+            $questionId = (int)($question['id'] ?? 0);
+            if ($questionId > 0) {
+                $questionMap[$questionId] = $question;
+            }
+        }
+
+        $blocks = [];
+        foreach ($answers as $questionId => $answerValue) {
+            $questionId = (int)$questionId;
+            $question = $questionMap[$questionId] ?? null;
+            if (!is_array($question)) {
+                continue;
+            }
+
+            $questionName = $this->cleanString($question['name'] ?? '');
+            if ($questionName === '') {
+                continue;
+            }
+
+            $answerTexts = $this->extractAnswerTexts($answerValue);
+            if ($answerTexts === []) {
+                continue;
+            }
+
+            if (count($answerTexts) === 1) {
+                $blocks[] = $questionName . "\nОтвет: " . $answerTexts[0];
+                continue;
+            }
+
+            $blocks[] = $questionName . "\nОтветы:\n- " . implode("\n- ", $answerTexts);
+        }
+
+        return mb_substr(implode("\n\n", $blocks), 0, 10000);
+    }
+
+    private function extractAnswerTexts(mixed $answerValue): array
+    {
+        if (is_string($answerValue) || is_numeric($answerValue)) {
+            $text = $this->cleanString($answerValue);
+
+            return $text !== '' ? [$text] : [];
+        }
+
+        if (!is_array($answerValue)) {
+            return [];
+        }
+
+        if (array_key_exists('text', $answerValue) || array_key_exists('TEXT', $answerValue)) {
+            $text = $this->cleanString($answerValue['text'] ?? $answerValue['TEXT'] ?? '');
+
+            return $text !== '' ? [$text] : [];
+        }
+
+        $texts = [];
+        foreach ($answerValue as $item) {
+            foreach ($this->extractAnswerTexts($item) as $text) {
+                if ($text !== '') {
+                    $texts[] = $text;
+                }
+            }
+        }
+
+        return array_values(array_unique($texts));
     }
 
     private function cleanFields(array $fields): array

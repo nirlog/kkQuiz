@@ -32,6 +32,8 @@ final class LeadRepository
             'IBLOCK_ID' => $iblockId,
             'ACTIVE' => 'Y',
             'NAME' => $this->buildName($lead),
+            'DETAIL_TEXT' => (string)($lead['detail_text'] ?? ''),
+            'DETAIL_TEXT_TYPE' => 'text',
             'PROPERTY_VALUES' => $properties,
         ]);
 
