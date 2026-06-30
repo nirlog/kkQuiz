@@ -121,12 +121,17 @@
             return;
         }
 
+        const goal = String(goalName || '').trim();
+        if (goal === '') {
+            return;
+        }
+
         if (typeof window.ym !== 'function') {
             return;
         }
 
         try {
-            window.ym(Number(counterId), 'reachGoal', goalName, params);
+            window.ym(Number(counterId), 'reachGoal', goal, params);
         } catch (error) {
             // Ошибка Метрики не должна ломать отправку формы.
         }
@@ -231,7 +236,7 @@
                         message.className = 'kk-quiz__success';
                         message.textContent = 'Спасибо! Заявка отправлена. Мы скоро свяжемся с вами.';
                         message.hidden = false;
-                        sendMetrikaGoal(quiz, 'kk_quiz_lead', {
+                        sendMetrikaGoal(quiz, quiz.metrika.goal || 'kk_quiz_lead', {
                             quiz_code: quiz.code || '',
                             result_id: currentResult ? currentResult.id : '',
                             result_code: currentResult ? currentResult.code : '',

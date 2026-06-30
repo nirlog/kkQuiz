@@ -40,6 +40,7 @@ final class QuizService
             'metrika' => [
                 'enabled' => $quiz['use_metrika'],
                 'counter_id' => $quiz['metrika_counter_id'],
+                'goal' => $quiz['metrika_goal'] !== '' ? $quiz['metrika_goal'] : 'kk_quiz_lead',
             ],
             'catalog' => [
                 'enabled' => $quiz['use_catalog'],
