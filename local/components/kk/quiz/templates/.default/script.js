@@ -110,6 +110,28 @@
         return data;
     };
 
+
+    const sendMetrikaGoal = (quiz, goalName, params = {}) => {
+        if (!quiz || !quiz.metrika || quiz.metrika.enabled !== true) {
+            return;
+        }
+
+        const counterId = String(quiz.metrika.counter_id || '').trim();
+        if (counterId === '') {
+            return;
+        }
+
+        if (typeof window.ym !== 'function') {
+            return;
+        }
+
+        try {
+            window.ym(Number(counterId), 'reachGoal', goalName, params);
+        } catch (error) {
+            // Ошибка Метрики не должна ломать отправку формы.
+        }
+    };
+
     const buildState = () => ({
         answers: {},
         fields: {}
@@ -209,6 +231,12 @@
                         message.className = 'kk-quiz__success';
                         message.textContent = 'Спасибо! Заявка отправлена. Мы скоро свяжемся с вами.';
                         message.hidden = false;
+                        sendMetrikaGoal(quiz, 'kk_quiz_lead', {
+                            quiz_code: quiz.code || '',
+                            result_id: currentResult ? currentResult.id : '',
+                            result_code: currentResult ? currentResult.code : '',
+                            lead_id: result.lead_id || ''
+                        });
                         return;
                     }
 
