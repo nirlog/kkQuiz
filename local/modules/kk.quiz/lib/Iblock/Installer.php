@@ -34,6 +34,7 @@ final class Installer
         self::deleteObsoleteQuizProperties($quizzesIblockId);
         self::installLeadProperties($leadsIblockId);
         self::configureLeadElementAdminForm($leadsIblockId);
+        self::installMailEvents();
     }
 
     public static function uninstall(): void
@@ -206,6 +207,115 @@ final class Installer
         }
 
         return $siteIds;
+    }
+
+
+    private static function installMailEvents(): void
+    {
+        self::installMailEventType();
+        self::installMailEventMessage();
+    }
+
+    private static function installMailEventType(): void
+    {
+        $eventName = 'KK_QUIZ_LEAD';
+        $languages = [];
+        $by = 'sort';
+        $order = 'asc';
+        $rsLanguages = \CLanguage::GetList($by, $order, ['ACTIVE' => 'Y']);
+
+        while ($language = $rsLanguages->Fetch()) {
+            $lid = (string)($language['LID'] ?? '');
+            if ($lid !== '') {
+                $languages[] = $lid;
+            }
+        }
+
+        if ($languages === []) {
+            $languages = ['ru'];
+        }
+
+        foreach ($languages as $lid) {
+            $exists = \CEventType::GetList([
+                'TYPE_ID' => $eventName,
+                'LID' => $lid,
+            ])->Fetch();
+
+            if ($exists) {
+                continue;
+            }
+
+            $eventType = new \CEventType();
+            $eventType->Add([
+                'LID' => $lid,
+                'EVENT_NAME' => $eventName,
+                'NAME' => $lid === 'ru' ? 'KK Quiz: новая заявка' : 'KK Quiz: new lead',
+                'DESCRIPTION' => implode("\n", [
+                    '#EMAIL_TO# - Email получателя',
+                    '#LEAD_ID# - ID заявки',
+                    '#QUIZ_NAME# - Название квиза',
+                    '#QUIZ_CODE# - Код квиза',
+                    '#RESULT_TITLE# - Результат',
+                    '#CLIENT_NAME# - Имя клиента',
+                    '#CLIENT_PHONE# - Телефон клиента',
+                    '#CLIENT_EMAIL# - Email клиента',
+                    '#CLIENT_MESSENGER# - Мессенджер клиента',
+                    '#CLIENT_COMMENT# - Комментарий клиента',
+                    '#ANSWERS_TEXT# - Ответы текстом',
+                    '#PAGE_URL# - URL страницы',
+                    '#UTM_TEXT# - UTM-метки',
+                ]),
+            ]);
+        }
+    }
+
+    private static function installMailEventMessage(): void
+    {
+        $eventName = 'KK_QUIZ_LEAD';
+        $by = 'id';
+        $order = 'asc';
+        $exists = \CEventMessage::GetList($by, $order, [
+            'TYPE_ID' => $eventName,
+        ])->Fetch();
+
+        if ($exists) {
+            return;
+        }
+
+        $message = new \CEventMessage();
+        $message->Add([
+            'ACTIVE' => 'Y',
+            'EVENT_NAME' => $eventName,
+            'LID' => self::getSiteIds(),
+            'EMAIL_FROM' => '#DEFAULT_EMAIL_FROM#',
+            'EMAIL_TO' => '#EMAIL_TO#',
+            'SUBJECT' => 'Новая заявка квиза: #QUIZ_NAME#',
+            'BODY_TYPE' => 'text',
+            'MESSAGE' => implode("\n", [
+                'Поступила новая заявка квиза.',
+                '',
+                'ID заявки: #LEAD_ID#',
+                'Квиз: #QUIZ_NAME#',
+                'Код квиза: #QUIZ_CODE#',
+                'Результат: #RESULT_TITLE#',
+                '',
+                'Данные клиента:',
+                'Имя: #CLIENT_NAME#',
+                'Телефон: #CLIENT_PHONE#',
+                'Email: #CLIENT_EMAIL#',
+                'Мессенджер: #CLIENT_MESSENGER#',
+                'Комментарий: #CLIENT_COMMENT#',
+                '',
+                'Ответы:',
+                '#ANSWERS_TEXT#',
+                '',
+                'Страница:',
+                '#PAGE_URL#',
+                '',
+                'UTM:',
+                '#UTM_TEXT#',
+            ]),
+        ]);
     }
 
     private static function installQuizSectionUserFields(int $iblockId): void
