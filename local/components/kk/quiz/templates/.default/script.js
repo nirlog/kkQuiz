@@ -62,7 +62,53 @@
         return '/bitrix/services/main/ajax.php?' + params.toString();
     };
 
-    const normalizeAjaxResponse = (data) => data && typeof data === 'object' && data.data ? data.data : data;
+    const getErrorMessage = (error) => {
+        if (typeof error === 'string') {
+            return error;
+        }
+
+        if (error && typeof error === 'object') {
+            if (typeof error.message === 'string' && error.message !== '') {
+                return error.message;
+            }
+
+            if (typeof error.title === 'string' && error.title !== '') {
+                return error.title;
+            }
+
+            if (typeof error.text === 'string' && error.text !== '') {
+                return error.text;
+            }
+        }
+
+        return 'Не удалось отправить заявку. Попробуйте позже.';
+    };
+
+    const normalizeAjaxResponse = (data) => {
+        if (!data || typeof data !== 'object') {
+            return data;
+        }
+
+        if (data.data && typeof data.data === 'object') {
+            if (Array.isArray(data.errors) && data.errors.length > 0 && !data.data.errors) {
+                return {
+                    success: false,
+                    errors: data.errors.map(getErrorMessage)
+                };
+            }
+
+            return data.data;
+        }
+
+        if (Array.isArray(data.errors) && data.errors.length > 0) {
+            return {
+                success: false,
+                errors: data.errors.map(getErrorMessage)
+            };
+        }
+
+        return data;
+    };
 
     const buildState = () => ({
         answers: {},
@@ -174,7 +220,7 @@
                     const list = document.createElement('ul');
                     errors.forEach((error) => {
                         const item = document.createElement('li');
-                        item.textContent = String(error);
+                        item.textContent = getErrorMessage(error);
                         list.appendChild(item);
                     });
                     message.appendChild(list);
