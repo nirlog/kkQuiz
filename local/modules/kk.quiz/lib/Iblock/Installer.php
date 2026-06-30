@@ -33,6 +33,7 @@ final class Installer
         self::installQuizProperties($quizzesIblockId);
         self::deleteObsoleteQuizProperties($quizzesIblockId);
         self::installLeadProperties($leadsIblockId);
+        self::configureLeadElementAdminForm($leadsIblockId);
     }
 
     public static function uninstall(): void
@@ -407,6 +408,122 @@ final class Installer
         if (!$iblockProperty->Update($propertyId, $fields)) {
             throw new SystemException((string)$iblockProperty->LAST_ERROR);
         }
+    }
+
+
+    private static function configureLeadElementAdminForm(int $iblockId): void
+    {
+        if ($iblockId <= 0 || !class_exists('CUserOptions')) {
+            return;
+        }
+
+        $propertyIds = self::getIblockPropertyIdsByCode($iblockId);
+        $tabs = [
+            [
+                'id' => 'edit1',
+                'name' => 'Заявка',
+                'fields' => [
+                    ['NAME', 'Название'],
+                    ['DETAIL_TEXT', 'Ответы'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_CLIENT_NAME'), 'Имя клиента'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_CLIENT_PHONE'), 'Телефон клиента'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_CLIENT_EMAIL'), 'Email клиента'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_CLIENT_MESSENGER'), 'Мессенджер клиента'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_CLIENT_COMMENT'), 'Комментарий клиента'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_QUIZ_NAME'), 'Название квиза'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_RESULT_TITLE'), 'Результат'],
+                ],
+            ],
+            [
+                'id' => 'edit2',
+                'name' => 'Метрика',
+                'fields' => [
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_PAGE_URL'), 'URL страницы'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_REFERER'), 'Referer'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_UTM_SOURCE'), 'UTM Source'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_UTM_MEDIUM'), 'UTM Medium'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_UTM_CAMPAIGN'), 'UTM Campaign'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_UTM_CONTENT'), 'UTM Content'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_UTM_TERM'), 'UTM Term'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_USER_AGENT'), 'User Agent'],
+                ],
+            ],
+            [
+                'id' => 'edit3',
+                'name' => 'Технические данные',
+                'fields' => [
+                    ['ACTIVE', 'Активность'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_QUIZ_SECTION_ID'), 'ID раздела квиза'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_QUIZ_CODE'), 'Код квиза'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_RESULT_ID'), 'ID результата'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_RESULT_CODE'), 'Код результата'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_IP'), 'IP'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_SESSION_ID'), 'ID сессии'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_ANSWERS_DATA'), 'Данные ответов JSON'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_EMAIL_SENT'), 'Email отправлен'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_EMAIL_SENT_AT'), 'Дата отправки email'],
+                ],
+            ],
+        ];
+
+        $tabsString = self::buildAdminFormTabsString($tabs);
+        if ($tabsString === '') {
+            return;
+        }
+
+        \CUserOptions::SetOption(
+            'form',
+            'form_element_' . $iblockId,
+            ['tabs' => $tabsString],
+            true
+        );
+    }
+
+    private static function getIblockPropertyIdsByCode(int $iblockId): array
+    {
+        $ids = [];
+        $properties = \CIBlockProperty::GetList([], ['IBLOCK_ID' => $iblockId]);
+        while ($property = $properties->Fetch()) {
+            $code = (string)($property['CODE'] ?? '');
+            $id = (int)($property['ID'] ?? 0);
+            if ($code !== '' && $id > 0) {
+                $ids[$code] = $id;
+            }
+        }
+
+        return $ids;
+    }
+
+    private static function getPropertyFormField(array $propertyIds, string $code): ?string
+    {
+        $id = (int)($propertyIds[$code] ?? 0);
+
+        return $id > 0 ? 'PROPERTY_' . $id : null;
+    }
+
+    private static function buildAdminFormTabsString(array $tabs): string
+    {
+        $parts = [];
+        foreach ($tabs as $tab) {
+            $fields = [];
+            foreach ((array)($tab['fields'] ?? []) as $field) {
+                $fieldId = $field[0] ?? null;
+                $fieldTitle = $field[1] ?? '';
+                if (!is_string($fieldId) || $fieldId === '') {
+                    continue;
+                }
+
+                $fields[] = $fieldId . '--#--' . $fieldTitle;
+            }
+
+            if ($fields === []) {
+                continue;
+            }
+
+            $parts[] = $tab['id'] . '--#--' . $tab['name'] . '--,--' . implode('--,--', $fields);
+        }
+
+        return implode('--;--', $parts);
     }
 
     private static function getFormFieldEnumValues(): array
