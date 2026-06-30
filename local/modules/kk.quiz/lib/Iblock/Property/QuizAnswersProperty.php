@@ -207,18 +207,40 @@ final class QuizAnswersProperty
             return [];
         }
 
-        $filter = self::getElementFilter($iblockId, $entityType, $sectionId);
+        $filter = [
+            'IBLOCK_ID' => $iblockId,
+            'ACTIVE' => 'Y',
+        ];
+
+        if ($sectionId !== null) {
+            $filter['SECTION_ID'] = $sectionId;
+            $filter['INCLUDE_SUBSECTIONS'] = 'N';
+        }
+
         $options = [];
         $elements = \CIBlockElement::GetList(
             ['SORT' => 'ASC', 'NAME' => 'ASC'],
             $filter,
             false,
             false,
-            ['ID', 'NAME']
+            ['ID', 'NAME', 'IBLOCK_ID']
         );
 
-        while ($element = $elements->Fetch()) {
-            $options[(int)$element['ID']] = '[' . (int)$element['ID'] . '] ' . (string)$element['NAME'];
+        while ($elementObject = $elements->GetNextElement()) {
+            $fields = $elementObject->GetFields();
+            $properties = $elementObject->GetProperties();
+            $elementEntityType = self::getPropertyEnumXmlId(is_array($properties) ? $properties : [], 'KK_ENTITY_TYPE');
+
+            if ($elementEntityType !== $entityType) {
+                continue;
+            }
+
+            $elementId = (int)($fields['ID'] ?? 0);
+            if ($elementId <= 0) {
+                continue;
+            }
+
+            $options[$elementId] = '[' . $elementId . '] ' . (string)($fields['NAME'] ?? '');
         }
 
         return $options;
@@ -226,14 +248,16 @@ final class QuizAnswersProperty
 
     private static function getCurrentSectionId(array $property, int $iblockId): ?int
     {
-        $sectionId = self::toNullableInt($property['IBLOCK_SECTION_ID'] ?? null);
+        $sectionId = self::extractPositiveInt($property['IBLOCK_SECTION_ID'] ?? null);
         if ($sectionId !== null) {
             return $sectionId;
         }
 
-        $requestSectionId = self::toNullableInt($_REQUEST['IBLOCK_SECTION_ID'] ?? $_REQUEST['find_section_section'] ?? null);
-        if ($requestSectionId !== null) {
-            return $requestSectionId;
+        foreach (['IBLOCK_SECTION_ID', 'find_section_section', 'IBLOCK_SECTION'] as $requestKey) {
+            $requestSectionId = self::extractPositiveInt($_REQUEST[$requestKey] ?? null);
+            if ($requestSectionId !== null) {
+                return $requestSectionId;
+            }
         }
 
         $elementId = self::getCurrentElementId($property);
@@ -250,7 +274,7 @@ final class QuizAnswersProperty
         );
         $element = $elements->Fetch();
 
-        return is_array($element) ? self::toNullableInt($element['IBLOCK_SECTION_ID'] ?? null) : null;
+        return is_array($element) ? self::extractPositiveInt($element['IBLOCK_SECTION_ID'] ?? null) : null;
     }
 
     private static function getCurrentElementId(array $property): ?int
@@ -264,21 +288,10 @@ final class QuizAnswersProperty
             return null;
         }
 
-        $filter = self::getElementFilter($iblockId, $entityType, $sectionId);
-        $filter['ID'] = $elementId;
-
-        $elements = \CIBlockElement::GetList([], $filter, false, ['nTopCount' => 1], ['ID']);
-        $element = $elements->Fetch();
-
-        return is_array($element) ? $elementId : null;
-    }
-
-    private static function getElementFilter(int $iblockId, string $entityType, ?int $sectionId): array
-    {
         $filter = [
+            'ID' => $elementId,
             'IBLOCK_ID' => $iblockId,
             'ACTIVE' => 'Y',
-            'PROPERTY_KK_ENTITY_TYPE' => $entityType,
         ];
 
         if ($sectionId !== null) {
@@ -286,7 +299,75 @@ final class QuizAnswersProperty
             $filter['INCLUDE_SUBSECTIONS'] = 'N';
         }
 
-        return $filter;
+        $elements = \CIBlockElement::GetList([], $filter, false, ['nTopCount' => 1], ['ID', 'IBLOCK_ID']);
+        $elementObject = $elements->GetNextElement();
+        if (!$elementObject) {
+            return null;
+        }
+
+        $properties = $elementObject->GetProperties();
+        $elementEntityType = self::getPropertyEnumXmlId(is_array($properties) ? $properties : [], 'KK_ENTITY_TYPE');
+
+        return $elementEntityType === $entityType ? $elementId : null;
+    }
+
+    private static function getPropertyEnumXmlId(array $properties, string $code): string
+    {
+        $property = $properties[$code] ?? null;
+        if (!is_array($property)) {
+            return '';
+        }
+
+        $xmlId = $property['VALUE_XML_ID'] ?? null;
+        if (is_array($xmlId)) {
+            $xmlId = reset($xmlId);
+        }
+
+        if (is_scalar($xmlId) && (string)$xmlId !== '') {
+            return (string)$xmlId;
+        }
+
+        $enumId = $property['VALUE_ENUM_ID'] ?? null;
+        if (is_array($enumId)) {
+            $enumId = reset($enumId);
+        }
+
+        $enumId = self::extractPositiveInt($enumId);
+        if ($enumId !== null && class_exists('CIBlockPropertyEnum')) {
+            $enum = \CIBlockPropertyEnum::GetByID($enumId);
+            if (is_array($enum) && (string)($enum['XML_ID'] ?? '') !== '') {
+                return (string)$enum['XML_ID'];
+            }
+        }
+
+        $value = $property['VALUE'] ?? null;
+        if (is_array($value)) {
+            $value = reset($value);
+        }
+
+        return is_scalar($value) ? (string)$value : '';
+    }
+
+    private static function extractPositiveInt(mixed $value): ?int
+    {
+        if (is_array($value)) {
+            foreach ($value as $item) {
+                $extracted = self::extractPositiveInt($item);
+                if ($extracted !== null) {
+                    return $extracted;
+                }
+            }
+
+            return null;
+        }
+
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $value = (int)$value;
+
+        return $value > 0 ? $value : null;
     }
 
     private static function renderRow(string $inputName, int $propertyId, int $index, string $rowKey, array $answer, array $questions, array $results): string
