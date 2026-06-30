@@ -3,9 +3,7 @@
 return [
     'controllers' => [
         'value' => [
-            'namespaces' => [
-                '\\Kk\\Quiz\\Controller' => 'api',
-            ],
+            'defaultNamespace' => '\\Kk\\Quiz\\Controller',
         ],
         'readonly' => true,
     ],
