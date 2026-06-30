@@ -45,6 +45,71 @@
 
     const findById = (items, id) => toArray(items).find((item) => toId(item.id) === toId(id)) || null;
 
+    const getUtm = () => {
+        const params = new URLSearchParams(window.location.search);
+        return ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'].reduce((result, key) => {
+            result[key] = params.get(key) || '';
+            return result;
+        }, {});
+    };
+
+    const getAjaxUrl = (root) => {
+        const sessid = root.getAttribute('data-kk-quiz-sessid') || (window.BX && BX.bitrix_sessid ? BX.bitrix_sessid() : '');
+        const params = new URLSearchParams({ action: 'kk:quiz.api.submitLead' });
+        if (sessid) {
+            params.set('sessid', sessid);
+        }
+        return '/bitrix/services/main/ajax.php?' + params.toString();
+    };
+
+    const getErrorMessage = (error) => {
+        if (typeof error === 'string') {
+            return error;
+        }
+
+        if (error && typeof error === 'object') {
+            if (typeof error.message === 'string' && error.message !== '') {
+                return error.message;
+            }
+
+            if (typeof error.title === 'string' && error.title !== '') {
+                return error.title;
+            }
+
+            if (typeof error.text === 'string' && error.text !== '') {
+                return error.text;
+            }
+        }
+
+        return 'Не удалось отправить заявку. Попробуйте позже.';
+    };
+
+    const normalizeAjaxResponse = (data) => {
+        if (!data || typeof data !== 'object') {
+            return data;
+        }
+
+        if (data.data && typeof data.data === 'object') {
+            if (Array.isArray(data.errors) && data.errors.length > 0 && !data.data.errors) {
+                return {
+                    success: false,
+                    errors: data.errors.map(getErrorMessage)
+                };
+            }
+
+            return data.data;
+        }
+
+        if (Array.isArray(data.errors) && data.errors.length > 0) {
+            return {
+                success: false,
+                errors: data.errors.map(getErrorMessage)
+            };
+        }
+
+        return data;
+    };
+
     const buildState = () => ({
         answers: {},
         fields: {}
@@ -64,7 +129,7 @@
         nodes.result.hidden = true;
     };
 
-    const showFinalForm = (nodes, quiz, state) => {
+    const showFinalForm = (nodes, quiz, state, currentResult) => {
         hideAll(nodes);
         clear(nodes.form);
         nodes.form.hidden = false;
@@ -74,6 +139,13 @@
         const fields = toArray(quiz.form_fields).filter((field) => Object.prototype.hasOwnProperty.call(FIELD_LABELS, field));
         const requiredFields = toArray(quiz.required_fields);
         const form = create('form', 'kk-quiz__form-fields');
+        const honeypot = document.createElement('input');
+        honeypot.type = 'text';
+        honeypot.name = 'website';
+        honeypot.tabIndex = -1;
+        honeypot.autocomplete = 'off';
+        honeypot.hidden = true;
+        form.appendChild(honeypot);
 
         (fields.length > 0 ? fields : ['name', 'phone', 'email']).forEach((field) => {
             const label = create('label', 'kk-quiz__field');
@@ -96,12 +168,72 @@
         submit.type = 'submit';
         form.appendChild(submit);
 
-        const message = create('div', 'kk-quiz__success', 'Спасибо! На следующем этапе заявка будет сохраняться.');
+        const message = create('div', 'kk-quiz__success');
         message.hidden = true;
 
         form.addEventListener('submit', (event) => {
             event.preventDefault();
-            message.hidden = false;
+            message.hidden = true;
+            message.textContent = '';
+            submit.disabled = true;
+
+            const formData = new FormData(form);
+            fields.forEach((field) => {
+                state.fields[field] = String(formData.get(field) || '');
+            });
+
+            const payload = {
+                quiz_code: quiz.code,
+                result_id: currentResult ? currentResult.id : null,
+                result_code: currentResult ? currentResult.code : '',
+                result_title: currentResult ? currentResult.name : '',
+                fields: Object.assign({}, state.fields),
+                answers: state.answers,
+                page_url: window.location.href,
+                referer: document.referrer,
+                utm: getUtm(),
+                website: honeypot.value
+            };
+
+            fetch(getAjaxUrl(nodes.root), {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ payload })
+            })
+                .then((response) => response.json())
+                .then((data) => {
+                    const result = normalizeAjaxResponse(data);
+                    if (result && result.success === true) {
+                        form.hidden = true;
+                        message.className = 'kk-quiz__success';
+                        message.textContent = 'Спасибо! Заявка отправлена. Мы скоро свяжемся с вами.';
+                        message.hidden = false;
+                        return;
+                    }
+
+                    const errors = result && Array.isArray(result.errors) && result.errors.length > 0
+                        ? result.errors
+                        : ['Не удалось отправить заявку. Попробуйте позже.'];
+                    message.className = 'kk-quiz__error';
+                    message.innerHTML = '';
+                    const list = document.createElement('ul');
+                    errors.forEach((error) => {
+                        const item = document.createElement('li');
+                        item.textContent = getErrorMessage(error);
+                        list.appendChild(item);
+                    });
+                    message.appendChild(list);
+                    message.hidden = false;
+                })
+                .catch(() => {
+                    message.className = 'kk-quiz__error';
+                    message.textContent = 'Не удалось отправить заявку. Попробуйте позже.';
+                    message.hidden = false;
+                })
+                .finally(() => {
+                    submit.disabled = false;
+                });
         });
 
         nodes.form.appendChild(form);
@@ -111,7 +243,7 @@
     const showResult = (nodes, quiz, state, resultId) => {
         const result = findById(quiz.results, resultId);
         if (!result) {
-            showFinalForm(nodes, quiz, state);
+            showFinalForm(nodes, quiz, state, null);
             return;
         }
 
@@ -146,7 +278,7 @@
             nodes.result.appendChild(formWrap);
             const originalForm = nodes.form;
             nodes.form = formWrap;
-            showFinalForm(nodes, quiz, state);
+            showFinalForm(nodes, quiz, state, result);
             nodes.result.hidden = false;
             nodes.form = originalForm;
         }
@@ -164,7 +296,7 @@
             return;
         }
 
-        showFinalForm(nodes, quiz, state);
+        showFinalForm(nodes, quiz, state, null);
     };
 
     const renderAnswerMedia = (button, answer) => {
@@ -187,7 +319,7 @@
     function showQuestion(nodes, quiz, state, questionId) {
         const question = findById(quiz.questions, questionId);
         if (!question) {
-            showFinalForm(nodes, quiz, state);
+            showFinalForm(nodes, quiz, state, null);
             return;
         }
 
@@ -307,7 +439,8 @@
             start: root.querySelector('[data-kk-quiz-start]'),
             question: root.querySelector('[data-kk-quiz-question]'),
             form: root.querySelector('[data-kk-quiz-form]'),
-            result: root.querySelector('[data-kk-quiz-result]')
+            result: root.querySelector('[data-kk-quiz-result]'),
+            root: root
         };
 
         if (!nodes.start || !nodes.question || !nodes.form || !nodes.result) {
@@ -323,7 +456,7 @@
                     showQuestion(nodes, quiz, state, firstQuestionId);
                     return;
                 }
-                showFinalForm(nodes, quiz, state);
+                showFinalForm(nodes, quiz, state, null);
             });
         }
     });

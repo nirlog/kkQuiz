@@ -56,6 +56,14 @@ final class QuizService
         ];
     }
 
+
+    public function getQuizEmailTo(string $code): string
+    {
+        $quiz = $this->quizRepository->getQuizByCode($code);
+
+        return is_array($quiz) ? (string)($quiz['email_to'] ?? '') : '';
+    }
+
     private function getFirstQuestionId(array $questions): ?int
     {
         if ($questions === []) {
