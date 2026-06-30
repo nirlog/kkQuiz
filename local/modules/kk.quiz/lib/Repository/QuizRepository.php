@@ -90,6 +90,7 @@ final class QuizRepository
                 'UF_KK_FORM_FIELDS',
                 'UF_KK_REQUIRED_FIELDS',
                 'UF_KK_METRIKA_COUNTER_ID',
+                'UF_KK_METRIKA_GOAL',
                 'UF_KK_USE_METRIKA',
                 'UF_KK_USE_CATALOG',
                 'UF_KK_CATALOG_IBLOCK_ID',
@@ -124,6 +125,7 @@ final class QuizRepository
             'form_fields' => $this->normalizeUserFieldEnumList($section['UF_KK_FORM_FIELDS'] ?? []),
             'required_fields' => $this->normalizeUserFieldEnumList($section['UF_KK_REQUIRED_FIELDS'] ?? []),
             'metrika_counter_id' => (string)($section['UF_KK_METRIKA_COUNTER_ID'] ?? ''),
+            'metrika_goal' => $this->normalizeMetrikaGoal($section['UF_KK_METRIKA_GOAL'] ?? ''),
             'use_metrika' => $this->toBool($section['UF_KK_USE_METRIKA'] ?? null),
             'use_catalog' => $this->toBool($section['UF_KK_USE_CATALOG'] ?? null),
             'catalog_iblock_id' => $this->toNullableInt($section['UF_KK_CATALOG_IBLOCK_ID'] ?? null),
@@ -325,6 +327,17 @@ final class QuizRepository
         $xmlId = (string)($enum['XML_ID'] ?? '');
 
         return $xmlId !== '' ? $xmlId : (string)($enum['VALUE'] ?? '');
+    }
+
+
+    private function normalizeMetrikaGoal(mixed $value): string
+    {
+        $value = is_scalar($value) ? trim((string)$value) : '';
+        if ($value === '') {
+            return '';
+        }
+
+        return preg_match('/^[a-zA-Z0-9_-]+$/', $value) === 1 ? $value : '';
     }
 
     private function normalizeAnswers(mixed $value): array
