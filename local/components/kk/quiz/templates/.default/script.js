@@ -260,7 +260,8 @@
         clear(nodes.form);
         nodes.form.hidden = false;
 
-        nodes.form.appendChild(create('h3', 'kk-quiz__form-title', 'Получить подборку'));
+        const formButtonText = String(quiz.button_text || '').trim() || 'Получить подборку';
+        nodes.form.appendChild(create('h3', 'kk-quiz__form-title', formButtonText));
 
         const fields = toArray(quiz.form_fields).filter((field) => Object.prototype.hasOwnProperty.call(FIELD_LABELS, field));
         const requiredFields = toArray(quiz.required_fields);
@@ -329,7 +330,7 @@
             form.appendChild(agreementField);
         }
 
-        const submit = create('button', 'kk-quiz__button', 'Получить подборку');
+        const submit = create('button', 'kk-quiz__button', formButtonText);
         submit.type = 'submit';
         form.appendChild(submit);
 
