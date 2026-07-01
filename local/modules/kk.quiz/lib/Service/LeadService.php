@@ -57,8 +57,13 @@ final class LeadService
         if ($quiz !== null) {
             $errors = array_merge($errors, $this->validateRequiredFields($quiz, $cleanFields));
         }
-        if ($cleanFields['phone'] !== '' && !$this->isValidPhone($cleanFields['phone'])) {
-            $errors[] = 'Укажите корректный телефон';
+        if ($cleanFields['phone'] !== '') {
+            $normalizedPhone = $this->normalizePhone($cleanFields['phone']);
+            if ($normalizedPhone === '') {
+                $errors[] = 'Укажите корректный телефон';
+            } else {
+                $cleanFields['phone'] = $normalizedPhone;
+            }
         }
         if ($cleanFields['email'] !== '' && !filter_var($cleanFields['email'], FILTER_VALIDATE_EMAIL)) {
             $errors[] = 'Укажите корректный email';
@@ -360,10 +365,34 @@ final class LeadService
         return mb_substr($this->cleanString($value), 0, 1000);
     }
 
-    private function isValidPhone(string $phone): bool
+    private function normalizePhone(mixed $value): string
     {
-        $digits = preg_replace('/\D+/', '', $phone) ?? '';
+        $raw = $this->cleanString($value);
+        if ($raw === '') {
+            return '';
+        }
 
-        return strlen($digits) >= 10 && strlen($digits) <= 15;
+        $digits = preg_replace('/\D+/', '', $raw) ?? '';
+        if ($digits === '') {
+            return '';
+        }
+
+        if (strlen($digits) === 10) {
+            return '+7' . $digits;
+        }
+
+        if (strlen($digits) === 11 && $digits[0] === '8') {
+            return '+7' . substr($digits, 1);
+        }
+
+        if (strlen($digits) === 11 && $digits[0] === '7') {
+            return '+' . $digits;
+        }
+
+        if (strlen($digits) >= 10 && strlen($digits) <= 15) {
+            return '+' . $digits;
+        }
+
+        return '';
     }
 }
