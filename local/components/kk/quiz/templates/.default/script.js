@@ -264,6 +264,7 @@
 
         const fields = toArray(quiz.form_fields).filter((field) => Object.prototype.hasOwnProperty.call(FIELD_LABELS, field));
         const requiredFields = toArray(quiz.required_fields);
+        const visibleFields = fields.length > 0 ? fields : ['name', 'phone', 'email'];
         const form = create('form', 'kk-quiz__form-fields');
         const honeypot = document.createElement('input');
         honeypot.type = 'text';
@@ -273,7 +274,7 @@
         honeypot.hidden = true;
         form.appendChild(honeypot);
 
-        (fields.length > 0 ? fields : ['name', 'phone', 'email']).forEach((field) => {
+        visibleFields.forEach((field) => {
             const label = create('label', 'kk-quiz__field');
             label.appendChild(create('span', 'kk-quiz__field-label', FIELD_LABELS[field]));
 
@@ -352,7 +353,7 @@
             submit.disabled = true;
 
             const formData = new FormData(form);
-            fields.forEach((field) => {
+            visibleFields.forEach((field) => {
                 state.fields[field] = String(formData.get(field) || '');
             });
 
