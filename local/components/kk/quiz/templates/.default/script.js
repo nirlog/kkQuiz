@@ -87,6 +87,16 @@
         return digits.slice(0, 15);
     };
 
+
+    const removeLastPhoneDigit = (value) => {
+        const digits = String(value || '').replace(/\D+/g, '');
+        if (digits === '') {
+            return '';
+        }
+
+        return formatPhoneInput(digits.slice(0, -1));
+    };
+
     const getQuestionType = (question) => {
         const type = String(question.question_type || 'radio').toLowerCase();
         return [...OPTION_TYPES, 'checkbox', ...INPUT_TYPES].includes(type) ? type : 'radio';
@@ -276,6 +286,29 @@
                 input.inputMode = 'tel';
                 input.autocomplete = 'tel';
                 input.placeholder = '+7 (999) 123-45-67';
+                input.addEventListener('keydown', (event) => {
+                    if (event.key !== 'Backspace') {
+                        return;
+                    }
+
+                    const selectionStart = input.selectionStart || 0;
+                    const selectionEnd = input.selectionEnd || 0;
+                    if (selectionStart !== selectionEnd) {
+                        return;
+                    }
+
+                    if (selectionStart !== input.value.length) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    input.value = removeLastPhoneDigit(input.value);
+                    state.fields[field] = input.value;
+
+                    requestAnimationFrame(() => {
+                        input.setSelectionRange(input.value.length, input.value.length);
+                    });
+                });
                 input.addEventListener('input', () => {
                     input.value = formatPhoneInput(input.value);
                     state.fields[field] = input.value;
