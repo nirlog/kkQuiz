@@ -32,6 +32,7 @@ final class QuizService
             'title' => $quiz['title'],
             'subtitle' => $quiz['subtitle'],
             'button_text' => $quiz['button_text'],
+            'form_button_text' => $quiz['form_button_text'],
             'start_text' => $quiz['start_text'],
             'success_text' => $quiz['success_text'],
             'theme' => $quiz['theme'] !== '' ? $quiz['theme'] : 'default',

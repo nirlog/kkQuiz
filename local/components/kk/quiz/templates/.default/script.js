@@ -260,8 +260,8 @@
         clear(nodes.form);
         nodes.form.hidden = false;
 
-        const formButtonText = String(quiz.button_text || '').trim() || 'Получить подборку';
-        nodes.form.appendChild(create('h3', 'kk-quiz__form-title', formButtonText));
+        const formButtonText = String(quiz.form_button_text || '').trim() || 'Получить подборку';
+        nodes.form.appendChild(create('h3', 'kk-quiz__form-title', 'Получить подборку'));
 
         const fields = toArray(quiz.form_fields).filter((field) => Object.prototype.hasOwnProperty.call(FIELD_LABELS, field));
         const requiredFields = toArray(quiz.required_fields);
