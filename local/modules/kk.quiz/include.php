@@ -14,6 +14,9 @@ Loader::registerAutoLoadClasses(
         'Kk\\Quiz\\Iblock\\Property\\QuizAnswersProperty' => 'lib/Iblock/Property/QuizAnswersProperty.php',
         'Kk\\Quiz\\Admin\\ElementFormAssets' => 'lib/Admin/ElementFormAssets.php',
         'Kk\\Quiz\\Repository\\QuizRepository' => 'lib/Repository/QuizRepository.php',
+        'Kk\\Quiz\\Repository\\LeadRepository' => 'lib/Repository/LeadRepository.php',
         'Kk\\Quiz\\Service\\QuizService' => 'lib/Service/QuizService.php',
+        'Kk\\Quiz\\Service\\LeadService' => 'lib/Service/LeadService.php',
+        'Kk\\Quiz\\Controller\\Api' => 'lib/Controller/Api.php',
     ]
 );

@@ -195,6 +195,26 @@
     resize: vertical;
 }
 
+
+.kk-quiz__agreement {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 12px 0;
+    font-size: 13px;
+    line-height: 1.4;
+    grid-column: 1 / -1;
+}
+
+.kk-quiz__agreement input {
+    margin-top: 2px;
+    flex: 0 0 auto;
+}
+
+.kk-quiz__agreement a {
+    text-decoration: underline;
+}
+
 .kk-quiz__success {
     padding: 14px 16px;
     border-radius: 12px;
