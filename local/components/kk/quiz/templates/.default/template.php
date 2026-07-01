@@ -14,7 +14,7 @@ $subtitle = $quiz !== null ? (string)($quiz['subtitle'] ?? '') : '';
 $startText = $quiz !== null ? (string)($quiz['start_text'] ?? '') : '';
 $buttonText = $quiz !== null && (string)($quiz['button_text'] ?? '') !== '' ? (string)$quiz['button_text'] : 'Начать';
 ?>
-<div class="kk-quiz kk-quiz--<?= htmlspecialcharsbx($displayMode) ?>" data-kk-quiz>
+<div class="kk-quiz kk-quiz--<?= htmlspecialcharsbx($displayMode) ?>" data-kk-quiz data-kk-quiz-sessid="<?= htmlspecialcharsbx(bitrix_sessid()) ?>">
     <?php if ($error !== ''): ?>
         <div class="kk-quiz__error" data-kk-quiz-error><?= htmlspecialcharsbx($error) ?></div>
     <?php elseif ($quiz !== null): ?>
