@@ -33,6 +33,60 @@
     const toArray = (value) => Array.isArray(value) ? value : [];
     const toId = (value) => Number.parseInt(value, 10) || null;
 
+
+    const formatPhoneInput = (value) => {
+        const raw = String(value || '');
+        const trimmed = raw.trim();
+        const digits = raw.replace(/\D+/g, '');
+
+        if (digits === '') {
+            return '';
+        }
+
+        const startsWithPlus = trimmed.startsWith('+');
+        const isRussian = digits[0] === '7'
+            || digits[0] === '8'
+            || (!startsWithPlus && digits[0] === '9');
+
+        if (isRussian) {
+            let number = digits;
+            if (number.length > 0 && (number[0] === '7' || number[0] === '8')) {
+                number = number.slice(1);
+            }
+
+            number = number.slice(0, 10);
+            let result = '+7';
+
+            if (number.length > 0) {
+                result += ' (' + number.slice(0, 3);
+            }
+
+            if (number.length >= 3) {
+                result += ')';
+            }
+
+            if (number.length > 3) {
+                result += ' ' + number.slice(3, 6);
+            }
+
+            if (number.length > 6) {
+                result += '-' + number.slice(6, 8);
+            }
+
+            if (number.length > 8) {
+                result += '-' + number.slice(8, 10);
+            }
+
+            return result;
+        }
+
+        if (startsWithPlus) {
+            return '+' + digits.slice(0, 15);
+        }
+
+        return digits.slice(0, 15);
+    };
+
     const getQuestionType = (question) => {
         const type = String(question.question_type || 'radio').toLowerCase();
         return [...OPTION_TYPES, 'checkbox', ...INPUT_TYPES].includes(type) ? type : 'radio';
@@ -218,9 +272,19 @@
             input.name = field;
             input.required = requiredFields.includes(field);
             input.type = field === 'email' ? 'email' : field === 'phone' ? 'tel' : 'text';
-            input.addEventListener('input', () => {
-                state.fields[field] = input.value;
-            });
+            if (field === 'phone') {
+                input.inputMode = 'tel';
+                input.autocomplete = 'tel';
+                input.placeholder = '+7 (999) 123-45-67';
+                input.addEventListener('input', () => {
+                    input.value = formatPhoneInput(input.value);
+                    state.fields[field] = input.value;
+                });
+            } else {
+                input.addEventListener('input', () => {
+                    state.fields[field] = input.value;
+                });
+            }
 
             label.appendChild(input);
             form.appendChild(label);
