@@ -272,6 +272,7 @@
         const fields = toArray(quiz.form_fields).filter((field) => Object.prototype.hasOwnProperty.call(FIELD_LABELS, field));
         const requiredFields = toArray(quiz.required_fields);
         const visibleFields = fields.length > 0 ? fields : ['name', 'phone', 'email'];
+        const visibleRequiredFields = requiredFields.filter((field) => visibleFields.includes(field));
         const form = create('form', 'kk-quiz__form-fields');
         const honeypot = document.createElement('input');
         honeypot.type = 'text';
@@ -288,7 +289,7 @@
             const input = field === 'comment' ? document.createElement('textarea') : document.createElement('input');
             input.className = 'kk-quiz__input';
             input.name = field;
-            input.required = requiredFields.includes(field);
+            input.required = visibleRequiredFields.includes(field);
             input.type = field === 'email' ? 'email' : field === 'phone' ? 'tel' : 'text';
             if (field === 'phone') {
                 input.inputMode = 'tel';

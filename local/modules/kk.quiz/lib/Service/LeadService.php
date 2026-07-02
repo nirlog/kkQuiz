@@ -190,13 +190,36 @@ final class LeadService
     private function validateRequiredFields(array $quiz, array $fields): array
     {
         $errors = [];
+        $visibleFields = $this->getVisibleFormFields($quiz);
+
         foreach ((array)($quiz['required_fields'] ?? []) as $field) {
-            if (isset(self::FIELD_LABELS[$field]) && ($fields[$field] ?? '') === '') {
+            if (
+                is_string($field)
+                && in_array($field, $visibleFields, true)
+                && isset(self::FIELD_LABELS[$field])
+                && ($fields[$field] ?? '') === ''
+            ) {
                 $errors[] = 'Заполните ' . self::FIELD_LABELS[$field];
             }
         }
 
         return $errors;
+    }
+
+    private function getVisibleFormFields(array $quiz): array
+    {
+        $allowedFields = array_keys(self::FIELD_LABELS);
+        $formFields = [];
+
+        foreach ((array)($quiz['form_fields'] ?? []) as $field) {
+            if (is_string($field) && in_array($field, $allowedFields, true)) {
+                $formFields[] = $field;
+            }
+        }
+
+        $formFields = array_values(array_unique($formFields));
+
+        return $formFields !== [] ? $formFields : ['name', 'phone', 'email'];
     }
 
     private function buildLead(array $payload, array $quiz, ?array $result, array $fields): array
