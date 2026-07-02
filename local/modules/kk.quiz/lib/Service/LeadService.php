@@ -266,7 +266,10 @@ final class LeadService
             'ip' => $this->cleanString($request->getRemoteAddress()),
             'session_id' => session_id(),
             'detail_text' => $this->buildAnswersText($quiz, $payload['answers'] ?? []),
-            'answers_data' => Json::encode($payload['answers'] ?? [], JSON_UNESCAPED_UNICODE),
+            'answers_data' => Json::encode(
+                $this->normalizeAnswersData($quiz, $payload['answers'] ?? []),
+                JSON_UNESCAPED_UNICODE
+            ),
             'agreement_accepted' => $this->isAgreementAccepted($payload['agreement_accepted'] ?? null) ? 'Y' : 'N',
             'privacy_url' => (string)($quiz['privacy']['url'] ?? ''),
             'email_sent' => 'N',
@@ -274,6 +277,132 @@ final class LeadService
         ];
     }
 
+
+
+    private function normalizeAnswersData(array $quiz, mixed $answers): array
+    {
+        if (!is_array($answers)) {
+            return [];
+        }
+
+        $questionMap = [];
+        foreach ((array)($quiz['questions'] ?? []) as $question) {
+            $questionId = (int)($question['id'] ?? 0);
+            if ($questionId > 0 && is_array($question)) {
+                $questionMap[$questionId] = $question;
+            }
+        }
+
+        $result = [];
+        foreach ($answers as $questionId => $answerValue) {
+            $questionId = (int)$questionId;
+            $question = $questionMap[$questionId] ?? null;
+            if (!is_array($question)) {
+                continue;
+            }
+
+            $normalizedValue = $this->normalizeAnswerValue($question, $answerValue);
+            if ($normalizedValue === null || $normalizedValue === [] || $normalizedValue === '') {
+                continue;
+            }
+
+            $result[(string)$questionId] = $normalizedValue;
+        }
+
+        return $result;
+    }
+
+    private function normalizeAnswerValue(array $question, mixed $answerValue): mixed
+    {
+        if ($this->isInputQuestion($question)) {
+            return $this->normalizeInputAnswerValue($answerValue);
+        }
+
+        if (!is_array($answerValue)) {
+            return null;
+        }
+
+        if (array_is_list($answerValue)) {
+            $items = [];
+            foreach ($answerValue as $selectedItem) {
+                $normalizedItem = $this->normalizeSelectedAnswerItem($question, $selectedItem);
+                if ($normalizedItem !== null) {
+                    $items[] = $normalizedItem;
+                }
+            }
+
+            return $items;
+        }
+
+        return $this->normalizeSelectedAnswerItem($question, $answerValue);
+    }
+
+    private function normalizeInputAnswerValue(mixed $answerValue): ?array
+    {
+        if (is_string($answerValue) || is_numeric($answerValue)) {
+            $value = $this->cleanString($answerValue);
+
+            return $value !== '' ? ['value' => $value] : null;
+        }
+
+        if (is_array($answerValue) && array_key_exists('value', $answerValue)) {
+            $value = $this->cleanString($answerValue['value']);
+
+            return $value !== '' ? ['value' => $value] : null;
+        }
+
+        return null;
+    }
+
+    private function normalizeSelectedAnswerItem(array $question, mixed $selectedItem): ?array
+    {
+        $answer = $this->findConfiguredAnswer($question, $selectedItem);
+        if ($answer === null) {
+            return null;
+        }
+
+        $normalized = [];
+        $code = $this->cleanString($answer['code'] ?? $answer['CODE'] ?? '');
+        if ($code !== '') {
+            $normalized['code'] = $code;
+        }
+
+        $sort = $answer['sort'] ?? $answer['SORT'] ?? null;
+        if (is_numeric($sort)) {
+            $normalized['sort'] = (int)$sort;
+        }
+
+        $index = $this->findConfiguredAnswerIndex($question, $answer);
+        if ($index !== null) {
+            $normalized['index'] = $index;
+        }
+
+        return $normalized !== [] ? $normalized : null;
+    }
+
+    private function findConfiguredAnswerIndex(array $question, array $targetAnswer): ?int
+    {
+        $answers = array_values((array)($question['answers'] ?? []));
+        foreach ($answers as $index => $answer) {
+            if (!is_array($answer)) {
+                continue;
+            }
+
+            $targetCode = $this->cleanString($targetAnswer['code'] ?? $targetAnswer['CODE'] ?? '');
+            $answerCode = $this->cleanString($answer['code'] ?? $answer['CODE'] ?? '');
+            if ($targetCode !== '' && $answerCode !== '' && $targetCode === $answerCode) {
+                return (int)$index;
+            }
+
+            $targetSort = $targetAnswer['sort'] ?? $targetAnswer['SORT'] ?? null;
+            $answerSort = $answer['sort'] ?? $answer['SORT'] ?? null;
+            if (is_numeric($targetSort) && is_numeric($answerSort) && (int)$targetSort === (int)$answerSort) {
+                return (int)$index;
+            }
+        }
+
+        return null;
+    }
 
     private function buildAnswersText(array $quiz, mixed $answers): string
     {
