@@ -42,6 +42,14 @@
     font-size: 26px;
 }
 
+
+.kk-quiz__form-subtitle {
+    margin: -6px 0 18px;
+    color: var(--kk-quiz-muted-color, #64748b);
+    font-size: 15px;
+    line-height: 1.5;
+}
+
 .kk-quiz__subtitle,
 .kk-quiz__start-text,
 .kk-quiz__question-hint,
@@ -193,6 +201,26 @@
 .kk-quiz textarea.kk-quiz__input {
     min-height: 108px;
     resize: vertical;
+}
+
+
+.kk-quiz__agreement {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 12px 0;
+    font-size: 13px;
+    line-height: 1.4;
+    grid-column: 1 / -1;
+}
+
+.kk-quiz__agreement input {
+    margin-top: 2px;
+    flex: 0 0 auto;
+}
+
+.kk-quiz__agreement a {
+    text-decoration: underline;
 }
 
 .kk-quiz__success {
