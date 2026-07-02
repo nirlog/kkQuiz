@@ -42,6 +42,14 @@
     font-size: 26px;
 }
 
+
+.kk-quiz__form-subtitle {
+    margin: -6px 0 18px;
+    color: var(--kk-quiz-muted-color, #64748b);
+    font-size: 15px;
+    line-height: 1.5;
+}
+
 .kk-quiz__subtitle,
 .kk-quiz__start-text,
 .kk-quiz__question-hint,

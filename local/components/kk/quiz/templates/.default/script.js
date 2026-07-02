@@ -262,8 +262,12 @@
 
         const formButtonText = String(quiz.form_button_text || '').trim() || 'Получить подборку';
         const formTitle = String(quiz.form_title || '').trim() || 'Получить подборку';
+        const formSubtitle = String(quiz.form_subtitle || '').trim();
         const successText = String(quiz.success_text || '').trim() || 'Спасибо! Заявка отправлена. Мы скоро свяжемся с вами.';
         nodes.form.appendChild(create('h3', 'kk-quiz__form-title', formTitle));
+        if (formSubtitle !== '') {
+            nodes.form.appendChild(create('div', 'kk-quiz__form-subtitle', formSubtitle));
+        }
 
         const fields = toArray(quiz.form_fields).filter((field) => Object.prototype.hasOwnProperty.call(FIELD_LABELS, field));
         const requiredFields = toArray(quiz.required_fields);
