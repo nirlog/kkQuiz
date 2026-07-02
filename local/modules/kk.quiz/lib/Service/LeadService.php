@@ -18,6 +18,7 @@ final class LeadService
         'messenger' => 'мессенджер',
         'comment' => 'комментарий',
     ];
+    private const INPUT_QUESTION_TYPES = ['text', 'textarea', 'phone', 'email'];
     private const RATE_LIMIT_TTL = 60;
     private const RATE_LIMIT_MAX = 3;
 
@@ -301,7 +302,7 @@ final class LeadService
                 continue;
             }
 
-            $answerTexts = $this->extractAnswerTexts($answerValue);
+            $answerTexts = $this->resolveAnswerTexts($question, $answerValue);
             if ($answerTexts === []) {
                 continue;
             }
@@ -317,7 +318,42 @@ final class LeadService
         return mb_substr(implode("\n\n", $blocks), 0, 10000);
     }
 
-    private function extractAnswerTexts(mixed $answerValue): array
+    private function resolveAnswerTexts(array $question, mixed $answerValue): array
+    {
+        if ($this->isInputQuestion($question)) {
+            return $this->extractInputAnswerTexts($answerValue);
+        }
+
+        if (!is_array($answerValue)) {
+            return [];
+        }
+
+        $selectedItems = array_is_list($answerValue) ? $answerValue : [$answerValue];
+        $texts = [];
+
+        foreach ($selectedItems as $selectedItem) {
+            $answer = $this->findConfiguredAnswer($question, $selectedItem);
+            if ($answer === null) {
+                continue;
+            }
+
+            $text = $this->cleanString($answer['text'] ?? $answer['TEXT'] ?? '');
+            if ($text !== '') {
+                $texts[] = $text;
+            }
+        }
+
+        return array_values(array_unique($texts));
+    }
+
+    private function isInputQuestion(array $question): bool
+    {
+        $type = strtolower((string)($question['question_type'] ?? ''));
+
+        return in_array($type, self::INPUT_QUESTION_TYPES, true);
+    }
+
+    private function extractInputAnswerTexts(mixed $answerValue): array
     {
         if (is_string($answerValue) || is_numeric($answerValue)) {
             $text = $this->cleanString($answerValue);
@@ -325,26 +361,50 @@ final class LeadService
             return $text !== '' ? [$text] : [];
         }
 
-        if (!is_array($answerValue)) {
-            return [];
-        }
-
-        if (array_key_exists('text', $answerValue) || array_key_exists('TEXT', $answerValue)) {
-            $text = $this->cleanString($answerValue['text'] ?? $answerValue['TEXT'] ?? '');
+        if (is_array($answerValue) && array_key_exists('value', $answerValue)) {
+            $text = $this->cleanString($answerValue['value']);
 
             return $text !== '' ? [$text] : [];
         }
 
-        $texts = [];
-        foreach ($answerValue as $item) {
-            foreach ($this->extractAnswerTexts($item) as $text) {
-                if ($text !== '') {
-                    $texts[] = $text;
+        return [];
+    }
+
+    private function findConfiguredAnswer(array $question, mixed $selectedItem): ?array
+    {
+        $answers = array_values((array)($question['answers'] ?? []));
+        if ($answers === []) {
+            return null;
+        }
+
+        $selected = is_array($selectedItem) ? $selectedItem : ['code' => $selectedItem];
+        $code = $this->cleanString($selected['code'] ?? $selected['CODE'] ?? '');
+        if ($code !== '') {
+            foreach ($answers as $answer) {
+                if (is_array($answer) && $this->cleanString($answer['code'] ?? $answer['CODE'] ?? '') === $code) {
+                    return $answer;
                 }
             }
         }
 
-        return array_values(array_unique($texts));
+        $index = $selected['index'] ?? $selected['INDEX'] ?? null;
+        if (is_numeric($index)) {
+            $index = (int)$index;
+            if (isset($answers[$index]) && is_array($answers[$index])) {
+                return $answers[$index];
+            }
+        }
+
+        $sort = $selected['sort'] ?? $selected['SORT'] ?? null;
+        if (is_numeric($sort)) {
+            foreach ($answers as $answer) {
+                if (is_array($answer) && (int)($answer['sort'] ?? $answer['SORT'] ?? 0) === (int)$sort) {
+                    return $answer;
+                }
+            }
+        }
+
+        return null;
     }
 
     private function cleanFields(array $fields): array

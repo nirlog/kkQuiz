@@ -34,6 +34,13 @@
     const toId = (value) => Number.parseInt(value, 10) || null;
 
 
+
+    const buildAnswerPayload = (answer, index) => ({
+        code: String(answer.code || ''),
+        sort: Number(answer.sort || 0),
+        index: Number(index)
+    });
+
     const formatPhoneInput = (value) => {
         const raw = String(value || '');
         const trimmed = raw.trim();
@@ -540,13 +547,13 @@
 
     const renderSingleChoice = (nodes, quiz, state, question, template) => {
         const answers = create('div', 'kk-quiz__answers kk-quiz__answers--' + template);
-        toArray(question.answers).forEach((answer) => {
+        toArray(question.answers).forEach((answer, index) => {
             const button = create('button', 'kk-quiz__answer kk-quiz__answer--' + template);
             button.type = 'button';
             renderAnswerMedia(button, answer);
             renderAnswerText(button, answer);
             button.addEventListener('click', () => {
-                state.answers[question.id] = answer;
+                state.answers[question.id] = buildAnswerPayload(answer, index);
                 button.classList.add('kk-quiz__answer--active');
                 goNext(nodes, quiz, state, question, answer);
             });
@@ -582,7 +589,7 @@
         const next = create('button', 'kk-quiz__button kk-quiz__button--next', 'Далее');
         next.type = 'button';
         next.addEventListener('click', () => {
-            state.answers[question.id] = [...selected].map((index) => question.answers[index]);
+            state.answers[question.id] = [...selected].map((index) => buildAnswerPayload(question.answers[index], index));
             goNext(nodes, quiz, state, question, null);
         });
 
