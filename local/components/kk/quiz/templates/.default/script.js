@@ -261,8 +261,9 @@
         nodes.form.hidden = false;
 
         const formButtonText = String(quiz.form_button_text || '').trim() || 'Получить подборку';
+        const formTitle = String(quiz.form_title || '').trim() || 'Получить подборку';
         const successText = String(quiz.success_text || '').trim() || 'Спасибо! Заявка отправлена. Мы скоро свяжемся с вами.';
-        nodes.form.appendChild(create('h3', 'kk-quiz__form-title', 'Получить подборку'));
+        nodes.form.appendChild(create('h3', 'kk-quiz__form-title', formTitle));
 
         const fields = toArray(quiz.form_fields).filter((field) => Object.prototype.hasOwnProperty.call(FIELD_LABELS, field));
         const requiredFields = toArray(quiz.required_fields);
