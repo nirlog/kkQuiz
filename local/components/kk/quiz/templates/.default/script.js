@@ -261,6 +261,7 @@
         nodes.form.hidden = false;
 
         const formButtonText = String(quiz.form_button_text || '').trim() || 'Получить подборку';
+        const successText = String(quiz.success_text || '').trim() || 'Спасибо! Заявка отправлена. Мы скоро свяжемся с вами.';
         nodes.form.appendChild(create('h3', 'kk-quiz__form-title', 'Получить подборку'));
 
         const fields = toArray(quiz.form_fields).filter((field) => Object.prototype.hasOwnProperty.call(FIELD_LABELS, field));
@@ -384,7 +385,7 @@
                     if (result && result.success === true) {
                         form.hidden = true;
                         message.className = 'kk-quiz__success';
-                        message.textContent = 'Спасибо! Заявка отправлена. Мы скоро свяжемся с вами.';
+                        message.textContent = successText;
                         message.hidden = false;
                         sendMetrikaGoal(quiz, quiz.metrika.goal || 'kk_quiz_lead', {
                             quiz_code: quiz.code || '',
