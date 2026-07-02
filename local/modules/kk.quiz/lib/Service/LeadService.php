@@ -71,9 +71,20 @@ final class LeadService
             $errors[] = 'Укажите корректный email';
         }
 
-        $result = $quiz !== null ? $this->findResult($quiz, (int)($payload['result_id'] ?? 0), (string)($payload['result_code'] ?? '')) : null;
-        if ($quiz !== null && (((int)($payload['result_id'] ?? 0) > 0) || (string)($payload['result_code'] ?? '') !== '') && $result === null) {
-            $errors[] = 'Некорректный результат квиза';
+        $result = null;
+        $hasRequestedResult = ((int)($payload['result_id'] ?? 0) > 0) || (string)($payload['result_code'] ?? '') !== '';
+        if ($quiz !== null && $hasRequestedResult) {
+            $result = $this->findResult(
+                $quiz,
+                (int)($payload['result_id'] ?? 0),
+                (string)($payload['result_code'] ?? '')
+            );
+
+            if ($result === null) {
+                $errors[] = 'Некорректный результат квиза';
+            } elseif (!$this->isResultReachableByAnswers($quiz, $payload['answers'] ?? [], $result)) {
+                $errors[] = 'Результат квиза не соответствует выбранным ответам';
+            }
         }
         if ($errors !== []) {
             return ['success' => false, 'errors' => array_values(array_unique($errors))];
@@ -473,6 +484,68 @@ final class LeadService
         }
 
         return array_values(array_unique($texts));
+    }
+
+
+    private function isResultReachableByAnswers(array $quiz, mixed $answers, array $result): bool
+    {
+        if (!is_array($answers)) {
+            return false;
+        }
+
+        $targetResultId = (int)($result['id'] ?? 0);
+        $targetResultCode = $this->cleanString($result['code'] ?? '');
+        if ($targetResultId <= 0 && $targetResultCode === '') {
+            return false;
+        }
+
+        $questionMap = [];
+        foreach ((array)($quiz['questions'] ?? []) as $question) {
+            $questionId = (int)($question['id'] ?? 0);
+            if ($questionId > 0 && is_array($question)) {
+                $questionMap[$questionId] = $question;
+            }
+        }
+
+        foreach ($answers as $questionId => $answerValue) {
+            $questionId = (int)$questionId;
+            $question = $questionMap[$questionId] ?? null;
+            if (!is_array($question) || $this->isInputQuestion($question)) {
+                continue;
+            }
+
+            $selectedItems = is_array($answerValue) && array_is_list($answerValue)
+                ? $answerValue
+                : [$answerValue];
+
+            foreach ($selectedItems as $selectedItem) {
+                $answer = $this->findConfiguredAnswer($question, $selectedItem);
+                if ($answer === null) {
+                    continue;
+                }
+
+                if ($this->answerPointsToResult($answer, $targetResultId, $targetResultCode)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function answerPointsToResult(array $answer, int $targetResultId, string $targetResultCode): bool
+    {
+        $answerResultId = (int)($answer['result_id'] ?? $answer['RESULT_ID'] ?? 0);
+        if ($targetResultId > 0 && $answerResultId === $targetResultId) {
+            return true;
+        }
+
+        $answerResultCode = $this->cleanString($answer['result_code'] ?? $answer['RESULT_CODE'] ?? '');
+        if ($targetResultCode !== '' && $answerResultCode !== '' && $answerResultCode === $targetResultCode) {
+            return true;
+        }
+
+        return false;
     }
 
     private function isInputQuestion(array $question): bool
