@@ -55,6 +55,7 @@ final class LeadService
         $fields = is_array($payload['fields'] ?? null) ? $payload['fields'] : [];
         $cleanFields = $this->cleanFields($fields);
         if ($quiz !== null) {
+            $cleanFields = $this->filterFieldsByVisibleFormFields($quiz, $cleanFields);
             $errors = array_merge($errors, $this->validateRequiredFields($quiz, $cleanFields));
         }
         if ($cleanFields['phone'] !== '') {
@@ -204,6 +205,20 @@ final class LeadService
         }
 
         return $errors;
+    }
+
+
+    private function filterFieldsByVisibleFormFields(array $quiz, array $fields): array
+    {
+        $visibleFields = $this->getVisibleFormFields($quiz);
+
+        foreach (array_keys(self::FIELD_LABELS) as $field) {
+            if (!in_array($field, $visibleFields, true)) {
+                $fields[$field] = '';
+            }
+        }
+
+        return $fields;
     }
 
     private function getVisibleFormFields(array $quiz): array

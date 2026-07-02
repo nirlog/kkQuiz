@@ -361,8 +361,10 @@
             submit.disabled = true;
 
             const formData = new FormData(form);
+            const payloadFields = {};
             visibleFields.forEach((field) => {
-                state.fields[field] = String(formData.get(field) || '');
+                payloadFields[field] = String(formData.get(field) || '');
+                state.fields[field] = payloadFields[field];
             });
 
             const payload = {
@@ -370,7 +372,7 @@
                 result_id: currentResult ? currentResult.id : null,
                 result_code: currentResult ? currentResult.code : '',
                 result_title: currentResult ? currentResult.name : '',
-                fields: Object.assign({}, state.fields),
+                fields: payloadFields,
                 answers: state.answers,
                 page_url: window.location.href,
                 referer: document.referrer,
