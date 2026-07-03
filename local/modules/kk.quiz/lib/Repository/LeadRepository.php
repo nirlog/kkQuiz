@@ -35,6 +35,14 @@ final class LeadRepository
             ) ?? $properties['KK_LEAD_STATUS'];
         }
 
+        if (isset($properties['KK_LEAD_TELEGRAM_SENT'])) {
+            $properties['KK_LEAD_TELEGRAM_SENT'] = $this->getEnumId(
+                $iblockId,
+                'KK_LEAD_TELEGRAM_SENT',
+                (string)$properties['KK_LEAD_TELEGRAM_SENT']
+            ) ?? $properties['KK_LEAD_TELEGRAM_SENT'];
+        }
+
         $element = new \CIBlockElement();
         $id = (int)$element->Add([
             'IBLOCK_ID' => $iblockId,
@@ -67,6 +75,47 @@ final class LeadRepository
         \CIBlockElement::SetPropertyValuesEx($leadId, $iblockId, [
             'KK_LEAD_EMAIL_SENT' => $this->getEnumId($iblockId, 'KK_LEAD_EMAIL_SENT', 'Y') ?? 'Y',
             'KK_LEAD_EMAIL_SENT_AT' => date('d.m.Y H:i:s'),
+        ]);
+    }
+
+
+    public function markTelegramSent(int $leadId): void
+    {
+        if ($leadId <= 0 || !Loader::includeModule('iblock')) {
+            return;
+        }
+
+        $iblockId = $this->getLeadsIblockId();
+        if ($iblockId === null) {
+            return;
+        }
+
+        \CIBlockElement::SetPropertyValuesEx($leadId, $iblockId, [
+            'KK_LEAD_TELEGRAM_SENT' => $this->getEnumId($iblockId, 'KK_LEAD_TELEGRAM_SENT', 'Y') ?? 'Y',
+            'KK_LEAD_TELEGRAM_SENT_AT' => date('d.m.Y H:i:s'),
+            'KK_LEAD_TELEGRAM_ERROR' => '',
+        ]);
+    }
+
+    public function markTelegramFailed(int $leadId, string $error): void
+    {
+        if ($leadId <= 0 || !Loader::includeModule('iblock')) {
+            return;
+        }
+
+        $iblockId = $this->getLeadsIblockId();
+        if ($iblockId === null) {
+            return;
+        }
+
+        $error = trim(strip_tags($error));
+        $error = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $error) ?? $error;
+        $error = mb_substr(trim($error), 0, 1000);
+
+        \CIBlockElement::SetPropertyValuesEx($leadId, $iblockId, [
+            'KK_LEAD_TELEGRAM_SENT' => $this->getEnumId($iblockId, 'KK_LEAD_TELEGRAM_SENT', 'N') ?? 'N',
+            'KK_LEAD_TELEGRAM_SENT_AT' => '',
+            'KK_LEAD_TELEGRAM_ERROR' => $error,
         ]);
     }
 
@@ -112,6 +161,9 @@ final class LeadRepository
             'privacy_url' => 'KK_LEAD_PRIVACY_URL',
             'email_sent' => 'KK_LEAD_EMAIL_SENT',
             'email_sent_at' => 'KK_LEAD_EMAIL_SENT_AT',
+            'telegram_sent' => 'KK_LEAD_TELEGRAM_SENT',
+            'telegram_sent_at' => 'KK_LEAD_TELEGRAM_SENT_AT',
+            'telegram_error' => 'KK_LEAD_TELEGRAM_ERROR',
         ];
     }
 

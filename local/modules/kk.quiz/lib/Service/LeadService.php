@@ -184,6 +184,8 @@ final class LeadService
 
         $message = $this->buildTelegramLeadMessage($lead, $leadId);
         if ($message === '') {
+            $this->leadRepository->markTelegramFailed($leadId, 'Пустой текст Telegram-сообщения');
+
             return false;
         }
 
@@ -193,8 +195,19 @@ final class LeadService
                 $message
             );
 
-            return ($result['success'] ?? false) === true;
+            if (($result['success'] ?? false) === true) {
+                $this->leadRepository->markTelegramSent($leadId);
+
+                return true;
+            }
+
+            $error = (string)($result['message'] ?? 'Telegram-сообщение не отправлено');
+            $this->leadRepository->markTelegramFailed($leadId, $error);
+
+            return false;
         } catch (\Throwable) {
+            $this->leadRepository->markTelegramFailed($leadId, 'Ошибка отправки Telegram-сообщения');
+
             return false;
         }
     }
@@ -466,6 +479,9 @@ final class LeadService
             'privacy_url' => (string)($quiz['privacy']['url'] ?? ''),
             'email_sent' => 'N',
             'email_sent_at' => '',
+            'telegram_sent' => 'N',
+            'telegram_sent_at' => '',
+            'telegram_error' => '',
         ];
     }
 

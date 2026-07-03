@@ -528,6 +528,9 @@ final class Installer
             ['CODE' => 'KK_LEAD_PRIVACY_URL', 'NAME' => 'URL политики', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_EMAIL_SENT', 'NAME' => 'Email отправлен', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
             ['CODE' => 'KK_LEAD_EMAIL_SENT_AT', 'NAME' => 'Дата отправки email', 'PROPERTY_TYPE' => 'S', 'USER_TYPE' => 'DateTime'],
+            ['CODE' => 'KK_LEAD_TELEGRAM_SENT', 'NAME' => 'Telegram отправлен', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
+            ['CODE' => 'KK_LEAD_TELEGRAM_SENT_AT', 'NAME' => 'Дата отправки Telegram', 'PROPERTY_TYPE' => 'S', 'USER_TYPE' => 'DateTime'],
+            ['CODE' => 'KK_LEAD_TELEGRAM_ERROR', 'NAME' => 'Ошибка Telegram', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
         ];
 
         self::addIblockProperties($iblockId, $properties);
@@ -650,6 +653,9 @@ final class Installer
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_PRIVACY_URL'), 'URL политики'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_EMAIL_SENT'), 'Email отправлен'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_EMAIL_SENT_AT'), 'Дата отправки email'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_TELEGRAM_SENT'), 'Telegram отправлен'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_TELEGRAM_SENT_AT'), 'Дата отправки Telegram'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_TELEGRAM_ERROR'), 'Ошибка Telegram'],
                 ],
             ],
         ];
