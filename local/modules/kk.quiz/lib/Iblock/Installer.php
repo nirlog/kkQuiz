@@ -440,11 +440,13 @@ final class Installer
             ['CODE' => 'KK_LEAD_RESULT_ID', 'NAME' => 'ID результата', 'PROPERTY_TYPE' => 'N'],
             ['CODE' => 'KK_LEAD_RESULT_CODE', 'NAME' => 'Код результата', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_RESULT_TITLE', 'NAME' => 'Заголовок результата', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_STATUS', 'NAME' => 'Статус обработки', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getLeadStatusEnumValues()],
             ['CODE' => 'KK_LEAD_CLIENT_NAME', 'NAME' => 'Имя клиента', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_CLIENT_PHONE', 'NAME' => 'Телефон клиента', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_CLIENT_EMAIL', 'NAME' => 'Email клиента', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_CLIENT_MESSENGER', 'NAME' => 'Мессенджер клиента', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_CLIENT_COMMENT', 'NAME' => 'Комментарий клиента', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
+            ['CODE' => 'KK_LEAD_MANAGER_NOTE', 'NAME' => 'Комментарий менеджера', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
             ['CODE' => 'KK_LEAD_PAGE_URL', 'NAME' => 'URL страницы', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_REFERER', 'NAME' => 'Referer', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_UTM_SOURCE', 'NAME' => 'UTM Source', 'PROPERTY_TYPE' => 'S'],
@@ -540,12 +542,14 @@ final class Installer
                 'name' => 'Заявка',
                 'fields' => [
                     ['NAME', 'Название'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_STATUS'), 'Статус обработки'],
                     ['DETAIL_TEXT', 'Ответы'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_CLIENT_NAME'), 'Имя клиента'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_CLIENT_PHONE'), 'Телефон клиента'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_CLIENT_EMAIL'), 'Email клиента'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_CLIENT_MESSENGER'), 'Мессенджер клиента'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_CLIENT_COMMENT'), 'Комментарий клиента'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_MANAGER_NOTE'), 'Комментарий менеджера'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_QUIZ_NAME'), 'Название квиза'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_RESULT_TITLE'), 'Результат'],
                 ],
@@ -686,6 +690,17 @@ final class Installer
             'image_cards' => 'Карточки с изображениями',
             'select' => 'Выпадающий список',
             'input' => 'Поле ввода',
+        ];
+    }
+
+
+    private static function getLeadStatusEnumValues(): array
+    {
+        return [
+            'new' => 'Новая',
+            'in_progress' => 'В работе',
+            'done' => 'Обработана',
+            'spam' => 'Спам / мусор',
         ];
     }
 

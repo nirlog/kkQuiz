@@ -27,6 +27,14 @@ final class LeadRepository
             }
         }
 
+        if (isset($properties['KK_LEAD_STATUS'])) {
+            $properties['KK_LEAD_STATUS'] = $this->getEnumId(
+                $iblockId,
+                'KK_LEAD_STATUS',
+                (string)$properties['KK_LEAD_STATUS']
+            ) ?? $properties['KK_LEAD_STATUS'];
+        }
+
         $element = new \CIBlockElement();
         $id = (int)$element->Add([
             'IBLOCK_ID' => $iblockId,
@@ -57,7 +65,7 @@ final class LeadRepository
         }
 
         \CIBlockElement::SetPropertyValuesEx($leadId, $iblockId, [
-            'KK_LEAD_EMAIL_SENT' => $this->getYesNoEnumId($iblockId, 'KK_LEAD_EMAIL_SENT', 'Y') ?? 'Y',
+            'KK_LEAD_EMAIL_SENT' => $this->getEnumId($iblockId, 'KK_LEAD_EMAIL_SENT', 'Y') ?? 'Y',
             'KK_LEAD_EMAIL_SENT_AT' => date('d.m.Y H:i:s'),
         ]);
     }
@@ -80,6 +88,8 @@ final class LeadRepository
             'quiz_code' => 'KK_LEAD_QUIZ_CODE',
             'quiz_name' => 'KK_LEAD_QUIZ_NAME',
             'result_id' => 'KK_LEAD_RESULT_ID',
+            'status' => 'KK_LEAD_STATUS',
+            'manager_note' => 'KK_LEAD_MANAGER_NOTE',
             'result_code' => 'KK_LEAD_RESULT_CODE',
             'result_title' => 'KK_LEAD_RESULT_TITLE',
             'client_name' => 'KK_LEAD_CLIENT_NAME',
@@ -106,7 +116,7 @@ final class LeadRepository
     }
 
 
-    private function getYesNoEnumId(int $iblockId, string $propertyCode, string $xmlId): ?int
+    private function getEnumId(int $iblockId, string $propertyCode, string $xmlId): ?int
     {
         $enum = \CIBlockPropertyEnum::GetList([], [
             'IBLOCK_ID' => $iblockId,

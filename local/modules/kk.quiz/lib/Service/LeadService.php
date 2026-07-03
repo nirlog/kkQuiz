@@ -259,6 +259,8 @@ final class LeadService
             'quiz_code' => (string)$quiz['code'],
             'quiz_name' => (string)$quiz['name'],
             'result_id' => $result !== null ? (int)$result['id'] : '',
+            'status' => 'new',
+            'manager_note' => '',
             'result_code' => $result !== null ? (string)$result['code'] : '',
             'result_title' => $result !== null ? (string)$result['name'] : '',
             'client_name' => $fields['name'],
