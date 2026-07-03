@@ -25,11 +25,16 @@ final class LeadService
 
     private QuizService $quizService;
     private LeadRepository $leadRepository;
+    private TelegramNotificationService $telegramNotificationService;
 
-    public function __construct(?QuizService $quizService = null, ?LeadRepository $leadRepository = null)
-    {
+    public function __construct(
+        ?QuizService $quizService = null,
+        ?LeadRepository $leadRepository = null,
+        ?TelegramNotificationService $telegramNotificationService = null
+    ) {
         $this->quizService = $quizService ?? new QuizService();
         $this->leadRepository = $leadRepository ?? new LeadRepository();
+        $this->telegramNotificationService = $telegramNotificationService ?? new TelegramNotificationService();
     }
 
     public function submit(array $payload): array
@@ -99,6 +104,8 @@ final class LeadService
             $this->leadRepository->markEmailSent($leadId);
         }
 
+        $this->sendTelegram($lead, $leadId);
+
         return ['success' => true, 'lead_id' => $leadId];
     }
 
@@ -167,6 +174,81 @@ final class LeadService
             $leadId,
             rawurlencode(defined('LANGUAGE_ID') ? (string)LANGUAGE_ID : 'ru')
         );
+    }
+
+    private function sendTelegram(array $lead, int $leadId): bool
+    {
+        if (!ModuleSettingsService::getBool('telegram_enabled')) {
+            return false;
+        }
+
+        $message = $this->buildTelegramLeadMessage($lead, $leadId);
+        if ($message === '') {
+            return false;
+        }
+
+        try {
+            $result = $this->telegramNotificationService->sendMessage(
+                ModuleSettingsService::getAll(),
+                $message
+            );
+
+            return ($result['success'] ?? false) === true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function buildTelegramLeadMessage(array $lead, int $leadId): string
+    {
+        $lines = [
+            'Новая заявка квиза #' . $leadId,
+            '',
+            'Квиз: ' . $this->cleanTelegramLine($lead['quiz_name'] ?? ''),
+            'Результат: ' . $this->cleanTelegramLine($lead['result_title'] ?? ''),
+            '',
+            'Клиент:',
+            'Имя: ' . $this->cleanTelegramLine($lead['client_name'] ?? ''),
+            'Телефон: ' . $this->cleanTelegramLine($lead['client_phone'] ?? ''),
+            'Email: ' . $this->cleanTelegramLine($lead['client_email'] ?? ''),
+            'Мессенджер: ' . $this->cleanTelegramLine($lead['client_messenger'] ?? ''),
+            '',
+            'Комментарий:',
+            $this->cleanTelegramLine($lead['client_comment'] ?? ''),
+            '',
+            'Ответы:',
+            $this->cleanTelegramText($lead['detail_text'] ?? ''),
+            '',
+            'Страница:',
+            $this->cleanTelegramLine($lead['page_url'] ?? ''),
+            '',
+            'UTM:',
+            $this->cleanTelegramLine($this->buildUtmText($lead)),
+            '',
+            'Заявка в админке:',
+            $this->cleanTelegramLine($this->buildLeadAdminUrl($leadId)),
+        ];
+
+        $message = trim(implode("\n", $lines));
+        if (mb_strlen($message) > 3900) {
+            $message = mb_substr($message, 0, 3900) . '...';
+        }
+
+        return $message;
+    }
+
+    private function cleanTelegramLine(mixed $value): string
+    {
+        $value = $this->cleanString($value);
+
+        return $value !== '' ? $value : '—';
+    }
+
+    private function cleanTelegramText(mixed $value): string
+    {
+        $value = $this->cleanString($value);
+
+        return $value !== '' ? $value : '—';
     }
 
     private function normalizeEmailTo(mixed $value): string
