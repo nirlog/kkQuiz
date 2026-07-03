@@ -280,6 +280,8 @@ final class Installer
         ])->Fetch();
 
         if ($exists) {
+            self::updateLeadMailMessageIfDefault((int)$exists['ID']);
+
             return;
         }
 
@@ -292,7 +294,59 @@ final class Installer
             'EMAIL_TO' => '#EMAIL_TO#',
             'SUBJECT' => 'Новая заявка квиза: #QUIZ_NAME#',
             'BODY_TYPE' => 'text',
-            'MESSAGE' => implode("\n", [
+            'MESSAGE' => self::getLeadMailMessageTemplate(),
+        ]);
+    }
+
+
+    private static function getLeadMailMessageTemplate(): string
+    {
+        return implode("\n", [
+            'Новая заявка квиза ##LEAD_ID#',
+            '',
+            'Квиз: #QUIZ_NAME#',
+            'Код квиза: #QUIZ_CODE#',
+            'Результат: #RESULT_TITLE#',
+            '',
+            'Клиент:',
+            'Имя: #CLIENT_NAME#',
+            'Телефон: #CLIENT_PHONE#',
+            'Email: #CLIENT_EMAIL#',
+            'Мессенджер: #CLIENT_MESSENGER#',
+            '',
+            'Комментарий:',
+            '#CLIENT_COMMENT#',
+            '',
+            'Ответы:',
+            '#ANSWERS_TEXT#',
+            '',
+            'Страница:',
+            '#PAGE_URL#',
+            '',
+            'UTM:',
+            '#UTM_TEXT#',
+            '',
+            'Заявка в админке:',
+            '#LEAD_ADMIN_URL#',
+        ]);
+    }
+
+    private static function updateLeadMailMessageIfDefault(int $messageId): void
+    {
+        if ($messageId <= 0) {
+            return;
+        }
+
+        $by = 'id';
+        $order = 'asc';
+        $message = \CEventMessage::GetList($by, $order, ['ID' => $messageId])->Fetch();
+        if (!is_array($message)) {
+            return;
+        }
+
+        $currentMessage = trim((string)($message['MESSAGE'] ?? ''));
+        $oldDefaultMessages = [
+            trim(implode("\n", [
                 'Поступила новая заявка квиза.',
                 '',
                 'ID заявки: #LEAD_ID#',
@@ -316,7 +370,17 @@ final class Installer
                 '',
                 'UTM:',
                 '#UTM_TEXT#',
-            ]),
+            ])),
+        ];
+
+        if (!in_array($currentMessage, $oldDefaultMessages, true)) {
+            return;
+        }
+
+        $eventMessage = new \CEventMessage();
+        $eventMessage->Update($messageId, [
+            'BODY_TYPE' => 'text',
+            'MESSAGE' => self::getLeadMailMessageTemplate(),
         ]);
     }
 
