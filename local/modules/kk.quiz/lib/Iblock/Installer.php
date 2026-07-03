@@ -33,6 +33,8 @@ final class Installer
         self::installQuizProperties($quizzesIblockId);
         self::deleteObsoleteQuizProperties($quizzesIblockId);
         self::installLeadProperties($leadsIblockId);
+        self::configureLeadElementAdminForm($leadsIblockId);
+        self::installMailEvents();
     }
 
     public static function uninstall(): void
@@ -207,6 +209,117 @@ final class Installer
         return $siteIds;
     }
 
+
+    private static function installMailEvents(): void
+    {
+        self::installMailEventType();
+        self::installMailEventMessage();
+    }
+
+    private static function installMailEventType(): void
+    {
+        $eventName = 'KK_QUIZ_LEAD';
+        $languages = [];
+        $by = 'sort';
+        $order = 'asc';
+        $rsLanguages = \CLanguage::GetList($by, $order, ['ACTIVE' => 'Y']);
+
+        while ($language = $rsLanguages->Fetch()) {
+            $lid = (string)($language['LID'] ?? '');
+            if ($lid !== '') {
+                $languages[] = $lid;
+            }
+        }
+
+        if ($languages === []) {
+            $languages = ['ru'];
+        }
+
+        foreach ($languages as $lid) {
+            $exists = \CEventType::GetList([
+                'TYPE_ID' => $eventName,
+                'LID' => $lid,
+            ])->Fetch();
+
+            if ($exists) {
+                continue;
+            }
+
+            $eventType = new \CEventType();
+            $eventType->Add([
+                'LID' => $lid,
+                'EVENT_NAME' => $eventName,
+                'NAME' => $lid === 'ru' ? 'KK Quiz: новая заявка' : 'KK Quiz: new lead',
+                'DESCRIPTION' => implode("\n", [
+                    '#EMAIL_TO# - Email получателя',
+                    '#LEAD_ID# - ID заявки',
+                    '#LEAD_ADMIN_URL# - URL заявки в админке',
+                    '#QUIZ_NAME# - Название квиза',
+                    '#QUIZ_CODE# - Код квиза',
+                    '#RESULT_TITLE# - Результат',
+                    '#CLIENT_NAME# - Имя клиента',
+                    '#CLIENT_PHONE# - Телефон клиента',
+                    '#CLIENT_EMAIL# - Email клиента',
+                    '#CLIENT_MESSENGER# - Мессенджер клиента',
+                    '#CLIENT_COMMENT# - Комментарий клиента',
+                    '#ANSWERS_TEXT# - Ответы текстом',
+                    '#PAGE_URL# - URL страницы',
+                    '#UTM_TEXT# - UTM-метки',
+                ]),
+            ]);
+        }
+    }
+
+    private static function installMailEventMessage(): void
+    {
+        $eventName = 'KK_QUIZ_LEAD';
+        $by = 'id';
+        $order = 'asc';
+        $exists = \CEventMessage::GetList($by, $order, [
+            'TYPE_ID' => $eventName,
+        ])->Fetch();
+
+        if ($exists) {
+            return;
+        }
+
+        $message = new \CEventMessage();
+        $message->Add([
+            'ACTIVE' => 'Y',
+            'EVENT_NAME' => $eventName,
+            'LID' => self::getSiteIds(),
+            'EMAIL_FROM' => '#DEFAULT_EMAIL_FROM#',
+            'EMAIL_TO' => '#EMAIL_TO#',
+            'SUBJECT' => 'Новая заявка квиза: #QUIZ_NAME#',
+            'BODY_TYPE' => 'text',
+            'MESSAGE' => implode("\n", [
+                'Поступила новая заявка квиза.',
+                '',
+                'ID заявки: #LEAD_ID#',
+                'Ссылка в админке: #LEAD_ADMIN_URL#',
+                'Квиз: #QUIZ_NAME#',
+                'Код квиза: #QUIZ_CODE#',
+                'Результат: #RESULT_TITLE#',
+                '',
+                'Данные клиента:',
+                'Имя: #CLIENT_NAME#',
+                'Телефон: #CLIENT_PHONE#',
+                'Email: #CLIENT_EMAIL#',
+                'Мессенджер: #CLIENT_MESSENGER#',
+                'Комментарий: #CLIENT_COMMENT#',
+                '',
+                'Ответы:',
+                '#ANSWERS_TEXT#',
+                '',
+                'Страница:',
+                '#PAGE_URL#',
+                '',
+                'UTM:',
+                '#UTM_TEXT#',
+            ]),
+        ]);
+    }
+
     private static function installQuizSectionUserFields(int $iblockId): void
     {
         $entityId = 'IBLOCK_' . (int)$iblockId . '_SECTION';
@@ -215,12 +328,16 @@ final class Installer
             ['FIELD_NAME' => 'UF_KK_TITLE', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Заголовок'],
             ['FIELD_NAME' => 'UF_KK_SUBTITLE', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Подзаголовок', 'SETTINGS' => ['ROWS' => 3]],
             ['FIELD_NAME' => 'UF_KK_BUTTON_TEXT', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Текст кнопки'],
+            ['FIELD_NAME' => 'UF_KK_FORM_BUTTON_TEXT', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Текст кнопки финальной формы'],
+            ['FIELD_NAME' => 'UF_KK_FORM_TITLE', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Заголовок финальной формы'],
+            ['FIELD_NAME' => 'UF_KK_FORM_SUBTITLE', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Подзаголовок финальной формы', 'SETTINGS' => ['ROWS' => 3]],
             ['FIELD_NAME' => 'UF_KK_START_TEXT', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Стартовый текст', 'SETTINGS' => ['ROWS' => 6]],
             ['FIELD_NAME' => 'UF_KK_SUCCESS_TEXT', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Текст успешного завершения', 'SETTINGS' => ['ROWS' => 6]],
             ['FIELD_NAME' => 'UF_KK_EMAIL_TO', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Email получателя'],
             ['FIELD_NAME' => 'UF_KK_FORM_FIELDS', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Поля формы', 'MULTIPLE' => 'Y', 'VALUES' => self::getFormFieldEnumValues()],
             ['FIELD_NAME' => 'UF_KK_REQUIRED_FIELDS', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Обязательные поля формы', 'MULTIPLE' => 'Y', 'VALUES' => self::getFormFieldEnumValues()],
             ['FIELD_NAME' => 'UF_KK_METRIKA_COUNTER_ID', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'ID счётчика Метрики'],
+            ['FIELD_NAME' => 'UF_KK_METRIKA_GOAL', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Цель Метрики'],
             ['FIELD_NAME' => 'UF_KK_USE_METRIKA', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Использовать Метрику'],
             ['FIELD_NAME' => 'UF_KK_USE_CATALOG', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Использовать каталог'],
             ['FIELD_NAME' => 'UF_KK_CATALOG_IBLOCK_ID', 'USER_TYPE_ID' => 'integer', 'EDIT_FORM_LABEL' => 'ID инфоблока каталога'],
@@ -325,11 +442,13 @@ final class Installer
             ['CODE' => 'KK_LEAD_RESULT_ID', 'NAME' => 'ID результата', 'PROPERTY_TYPE' => 'N'],
             ['CODE' => 'KK_LEAD_RESULT_CODE', 'NAME' => 'Код результата', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_RESULT_TITLE', 'NAME' => 'Заголовок результата', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_STATUS', 'NAME' => 'Статус обработки', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getLeadStatusEnumValues()],
             ['CODE' => 'KK_LEAD_CLIENT_NAME', 'NAME' => 'Имя клиента', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_CLIENT_PHONE', 'NAME' => 'Телефон клиента', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_CLIENT_EMAIL', 'NAME' => 'Email клиента', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_CLIENT_MESSENGER', 'NAME' => 'Мессенджер клиента', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_CLIENT_COMMENT', 'NAME' => 'Комментарий клиента', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
+            ['CODE' => 'KK_LEAD_MANAGER_NOTE', 'NAME' => 'Комментарий менеджера', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
             ['CODE' => 'KK_LEAD_PAGE_URL', 'NAME' => 'URL страницы', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_REFERER', 'NAME' => 'Referer', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_UTM_SOURCE', 'NAME' => 'UTM Source', 'PROPERTY_TYPE' => 'S'],
@@ -341,6 +460,8 @@ final class Installer
             ['CODE' => 'KK_LEAD_IP', 'NAME' => 'IP', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_SESSION_ID', 'NAME' => 'ID сессии', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_ANSWERS_DATA', 'NAME' => 'Данные ответов', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 10],
+            ['CODE' => 'KK_LEAD_AGREEMENT_ACCEPTED', 'NAME' => 'Согласие с политикой', 'PROPERTY_TYPE' => 'L', 'LIST_TYPE' => 'C', 'VALUES' => self::getYesNoValues()],
+            ['CODE' => 'KK_LEAD_PRIVACY_URL', 'NAME' => 'URL политики', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_EMAIL_SENT', 'NAME' => 'Email отправлен', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
             ['CODE' => 'KK_LEAD_EMAIL_SENT_AT', 'NAME' => 'Дата отправки email', 'PROPERTY_TYPE' => 'S', 'USER_TYPE' => 'DateTime'],
         ];
@@ -409,6 +530,126 @@ final class Installer
         }
     }
 
+
+    private static function configureLeadElementAdminForm(int $iblockId): void
+    {
+        if ($iblockId <= 0 || !class_exists('CUserOptions')) {
+            return;
+        }
+
+        $propertyIds = self::getIblockPropertyIdsByCode($iblockId);
+        $tabs = [
+            [
+                'id' => 'edit1',
+                'name' => 'Заявка',
+                'fields' => [
+                    ['NAME', 'Название'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_STATUS'), 'Статус обработки'],
+                    ['DETAIL_TEXT', 'Ответы'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_CLIENT_NAME'), 'Имя клиента'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_CLIENT_PHONE'), 'Телефон клиента'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_CLIENT_EMAIL'), 'Email клиента'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_CLIENT_MESSENGER'), 'Мессенджер клиента'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_CLIENT_COMMENT'), 'Комментарий клиента'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_MANAGER_NOTE'), 'Комментарий менеджера'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_QUIZ_NAME'), 'Название квиза'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_RESULT_TITLE'), 'Результат'],
+                ],
+            ],
+            [
+                'id' => 'edit2',
+                'name' => 'Метрика',
+                'fields' => [
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_PAGE_URL'), 'URL страницы'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_REFERER'), 'Referer'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_UTM_SOURCE'), 'UTM Source'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_UTM_MEDIUM'), 'UTM Medium'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_UTM_CAMPAIGN'), 'UTM Campaign'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_UTM_CONTENT'), 'UTM Content'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_UTM_TERM'), 'UTM Term'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_USER_AGENT'), 'User Agent'],
+                ],
+            ],
+            [
+                'id' => 'edit3',
+                'name' => 'Технические данные',
+                'fields' => [
+                    ['ACTIVE', 'Активность'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_QUIZ_SECTION_ID'), 'ID раздела квиза'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_QUIZ_CODE'), 'Код квиза'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_RESULT_ID'), 'ID результата'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_RESULT_CODE'), 'Код результата'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_IP'), 'IP'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_SESSION_ID'), 'ID сессии'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_ANSWERS_DATA'), 'Данные ответов JSON'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_AGREEMENT_ACCEPTED'), 'Согласие с политикой'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_PRIVACY_URL'), 'URL политики'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_EMAIL_SENT'), 'Email отправлен'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_EMAIL_SENT_AT'), 'Дата отправки email'],
+                ],
+            ],
+        ];
+
+        $tabsString = self::buildAdminFormTabsString($tabs);
+        if ($tabsString === '') {
+            return;
+        }
+
+        \CUserOptions::SetOption(
+            'form',
+            'form_element_' . $iblockId,
+            ['tabs' => $tabsString],
+            true
+        );
+    }
+
+    private static function getIblockPropertyIdsByCode(int $iblockId): array
+    {
+        $ids = [];
+        $properties = \CIBlockProperty::GetList([], ['IBLOCK_ID' => $iblockId]);
+        while ($property = $properties->Fetch()) {
+            $code = (string)($property['CODE'] ?? '');
+            $id = (int)($property['ID'] ?? 0);
+            if ($code !== '' && $id > 0) {
+                $ids[$code] = $id;
+            }
+        }
+
+        return $ids;
+    }
+
+    private static function getPropertyFormField(array $propertyIds, string $code): ?string
+    {
+        $id = (int)($propertyIds[$code] ?? 0);
+
+        return $id > 0 ? 'PROPERTY_' . $id : null;
+    }
+
+    private static function buildAdminFormTabsString(array $tabs): string
+    {
+        $parts = [];
+        foreach ($tabs as $tab) {
+            $fields = [];
+            foreach ((array)($tab['fields'] ?? []) as $field) {
+                $fieldId = $field[0] ?? null;
+                $fieldTitle = $field[1] ?? '';
+                if (!is_string($fieldId) || $fieldId === '') {
+                    continue;
+                }
+
+                $fields[] = $fieldId . '--#--' . $fieldTitle;
+            }
+
+            if ($fields === []) {
+                continue;
+            }
+
+            $parts[] = $tab['id'] . '--#--' . $tab['name'] . '--,--' . implode('--,--', $fields);
+        }
+
+        return implode('--;--', $parts);
+    }
+
     private static function getFormFieldEnumValues(): array
     {
         return [
@@ -451,6 +692,17 @@ final class Installer
             'image_cards' => 'Карточки с изображениями',
             'select' => 'Выпадающий список',
             'input' => 'Поле ввода',
+        ];
+    }
+
+
+    private static function getLeadStatusEnumValues(): array
+    {
+        return [
+            'new' => 'Новая',
+            'in_progress' => 'В работе',
+            'done' => 'Обработана',
+            'spam' => 'Спам / мусор',
         ];
     }
 
