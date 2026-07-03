@@ -39,7 +39,7 @@ $checkboxOptions = [
     'debug_enabled',
     'log_notification_errors',
 ];
-$numericOptions = ['rate_limit_ttl', 'rate_limit_max', 'bitrix24_assigned_by_id'];
+$numericOptions = ['rate_limit_ttl', 'rate_limit_max', 'bitrix24_assigned_by_id', 'telegram_message_thread_id'];
 $secretOptions = ModuleSettingsService::SECRET_OPTIONS;
 
 $sanitizeText = static function (mixed $value): string {
@@ -61,10 +61,20 @@ $sanitizeNumber = static function (string $name, mixed $value): string {
         return (string)max(0, $value);
     }
 
+    if ($name === 'telegram_message_thread_id') {
+        return (string)max(0, $value);
+    }
+
     return (string)$value;
 };
 
 $buildSettingsFromPost = static function () use ($checkboxOptions, $numericOptions, $secretOptions, $sanitizeText, $sanitizeNumber): array {
+    $chatIdValue = $sanitizeText($_POST['telegram_chat_id'] ?? '');
+    if (preg_match('/^(-?\d+):(\d+)$/', $chatIdValue, $matches) === 1) {
+        $_POST['telegram_chat_id'] = $matches[1];
+        $_POST['telegram_message_thread_id'] = $matches[2];
+    }
+
     $defaults = ModuleSettingsService::getDefaults();
     $settings = ModuleSettingsService::getAll();
 
@@ -202,7 +212,13 @@ if ($message !== null) {
     <?php
     $renderCheckbox('telegram_enabled', 'Включить Telegram-уведомления');
     $renderSecretInput('telegram_bot_token', 'Telegram Bot Token');
-    $renderInput('telegram_chat_id', 'Telegram Chat ID', 'text', 'Например: 123456789, -1001234567890 или @channel_name');
+    $renderInput('telegram_chat_id', 'Telegram Chat ID', 'text', 'Например: 123456789, -1001234567890, @channel_name или -1002799533804:6');
+    $renderInput(
+        'telegram_message_thread_id',
+        'Telegram Topic ID / Message Thread ID',
+        'number',
+        'Необязательно. Используется для отправки в конкретную тему группы. Например: 6'
+    );
     $renderSecretInput('telegram_proxy_url', 'Proxy URL');
     ?>
     <tr>

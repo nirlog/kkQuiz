@@ -26,6 +26,7 @@ final class ModuleSettingsService
             'telegram_enabled' => 'N',
             'telegram_bot_token' => '',
             'telegram_chat_id' => '',
+            'telegram_message_thread_id' => '',
             'telegram_proxy_url' => '',
 
             'bitrix24_enabled' => 'N',

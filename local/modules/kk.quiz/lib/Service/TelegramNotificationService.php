@@ -20,6 +20,7 @@ final class TelegramNotificationService
     {
         $botToken = $this->normalizeBotToken($settings['telegram_bot_token'] ?? '');
         $chatId = $this->normalizeChatId($settings['telegram_chat_id'] ?? '');
+        $messageThreadId = $this->normalizeMessageThreadId($settings['telegram_message_thread_id'] ?? '');
         $proxyUrl = $this->normalizeProxyUrl($settings['telegram_proxy_url'] ?? '');
 
         if ($botToken === '') {
@@ -37,33 +38,39 @@ final class TelegramNotificationService
 
         try {
             return $proxyUrl !== ''
-                ? $this->sendViaCurl($botToken, $chatId, $text, $proxyUrl)
-                : $this->sendViaHttpClient($botToken, $chatId, $text);
+                ? $this->sendViaCurl($botToken, $chatId, $text, $proxyUrl, $messageThreadId)
+                : $this->sendViaHttpClient($botToken, $chatId, $text, $messageThreadId);
         } catch (\Throwable) {
             return ['success' => false, 'message' => 'Ошибка отправки Telegram-сообщения'];
         }
     }
 
-    private function sendViaHttpClient(string $botToken, string $chatId, string $text): array
+    private function sendViaHttpClient(string $botToken, string $chatId, string $text, int $messageThreadId = 0): array
     {
         $httpClient = new HttpClient([
             'socketTimeout' => 10,
             'streamTimeout' => 10,
         ]);
 
+        $payload = [
+            'chat_id' => $chatId,
+            'text' => $text,
+            'disable_web_page_preview' => 'true',
+        ];
+
+        if ($messageThreadId > 0) {
+            $payload['message_thread_id'] = (string)$messageThreadId;
+        }
+
         $response = $httpClient->post(
             'https://api.telegram.org/bot' . $botToken . '/sendMessage',
-            [
-                'chat_id' => $chatId,
-                'text' => $text,
-                'disable_web_page_preview' => 'true',
-            ]
+            $payload
         );
 
         return $this->handleTelegramResponse($response, (int)$httpClient->getStatus());
     }
 
-    private function sendViaCurl(string $botToken, string $chatId, string $text, string $proxyUrl): array
+    private function sendViaCurl(string $botToken, string $chatId, string $text, string $proxyUrl, int $messageThreadId = 0): array
     {
         if (!extension_loaded('curl')) {
             return ['success' => false, 'message' => 'Для отправки через proxy требуется PHP-расширение curl'];
@@ -79,11 +86,17 @@ final class TelegramNotificationService
             return ['success' => false, 'message' => 'Не удалось инициализировать cURL'];
         }
 
-        $postFields = http_build_query([
+        $payload = [
             'chat_id' => $chatId,
             'text' => $text,
             'disable_web_page_preview' => 'true',
-        ]);
+        ];
+
+        if ($messageThreadId > 0) {
+            $payload['message_thread_id'] = (string)$messageThreadId;
+        }
+
+        $postFields = http_build_query($payload);
 
         curl_setopt_array($ch, [
             CURLOPT_POST => true,
@@ -143,6 +156,21 @@ final class TelegramNotificationService
         }
 
         return '';
+    }
+
+
+    private function normalizeMessageThreadId(mixed $value): int
+    {
+        $value = trim((string)$value);
+        if ($value === '') {
+            return 0;
+        }
+
+        if (preg_match('/^\d+$/', $value) !== 1) {
+            return 0;
+        }
+
+        return max(0, (int)$value);
     }
 
     private function normalizeProxyUrl(mixed $value): string
