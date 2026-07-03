@@ -113,16 +113,19 @@ $saveSettings = static function (array $settings): void {
 };
 
 if ($requestMethod === 'POST' && check_bitrix_sessid()) {
-    $action = (string)($_POST['action'] ?? 'save');
+    $action = (string)($_POST['action'] ?? '');
+    $isSaveAction = $action === 'save' || isset($_POST['save']);
+    $isRestoreDefaultsAction = $action === 'restore_defaults';
+    $isTelegramTestAction = $action === 'telegram_test';
 
-    if ($action === 'restore_defaults') {
+    if ($isRestoreDefaultsAction) {
         ModuleSettingsService::restoreDefaults();
         $message = ['TYPE' => 'OK', 'MESSAGE' => 'Настройки сброшены по умолчанию'];
-    } else {
+    } elseif ($isSaveAction || $isTelegramTestAction) {
         $settings = $buildSettingsFromPost();
         $saveSettings($settings);
 
-        if ($action === 'telegram_test') {
+        if ($isTelegramTestAction) {
             $result = (new TelegramNotificationService())->sendTestMessage($settings);
             $message = [
                 'TYPE' => $result['success'] ? 'OK' : 'ERROR',
@@ -278,7 +281,7 @@ if ($message !== null) {
     ?>
 
     <?php $tabControl->Buttons(); ?>
-    <button type="submit" class="adm-btn-save" name="action" value="save">Сохранить</button>
+    <input type="submit" class="adm-btn-save" name="save" value="Сохранить">
     <button type="submit" class="adm-btn" name="action" value="restore_defaults" onclick="return confirm('Сбросить настройки по умолчанию?');">Сбросить по умолчанию</button>
     <?php $tabControl->End(); ?>
 </form>

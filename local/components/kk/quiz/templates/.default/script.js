@@ -346,6 +346,8 @@
 
         const submit = create('button', 'kk-quiz__button', formButtonText);
         submit.type = 'submit';
+        const submitDefaultText = formButtonText;
+        const submitLoadingText = 'Отправляется...';
         form.appendChild(submit);
 
         const message = create('div', 'kk-quiz__success');
@@ -353,6 +355,11 @@
 
         form.addEventListener('submit', (event) => {
             event.preventDefault();
+
+            if (submit.disabled) {
+                return;
+            }
+
             message.hidden = true;
             message.textContent = '';
 
@@ -366,6 +373,8 @@
             }
 
             submit.disabled = true;
+            submit.textContent = submitLoadingText;
+            submit.classList.add('kk-quiz__button--loading');
 
             const formData = new FormData(form);
             const payloadFields = {};
@@ -431,7 +440,11 @@
                     message.hidden = false;
                 })
                 .finally(() => {
-                    submit.disabled = false;
+                    if (!form.hidden) {
+                        submit.disabled = false;
+                        submit.textContent = submitDefaultText;
+                        submit.classList.remove('kk-quiz__button--loading');
+                    }
                 });
         });
 
