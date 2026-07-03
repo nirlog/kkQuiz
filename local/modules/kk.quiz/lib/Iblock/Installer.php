@@ -253,6 +253,7 @@ final class Installer
                 'DESCRIPTION' => implode("\n", [
                     '#EMAIL_TO# - Email получателя',
                     '#LEAD_ID# - ID заявки',
+                    '#LEAD_ADMIN_URL# - URL заявки в админке',
                     '#QUIZ_NAME# - Название квиза',
                     '#QUIZ_CODE# - Код квиза',
                     '#RESULT_TITLE# - Результат',
@@ -295,6 +296,7 @@ final class Installer
                 'Поступила новая заявка квиза.',
                 '',
                 'ID заявки: #LEAD_ID#',
+                'Ссылка в админке: #LEAD_ADMIN_URL#',
                 'Квиз: #QUIZ_NAME#',
                 'Код квиза: #QUIZ_CODE#',
                 'Результат: #RESULT_TITLE#',

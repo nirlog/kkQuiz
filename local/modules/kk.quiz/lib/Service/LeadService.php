@@ -7,6 +7,7 @@ namespace Kk\Quiz\Service;
 use Bitrix\Main\Application;
 use Bitrix\Main\Context;
 use Bitrix\Main\Web\Json;
+use Kk\Quiz\Iblock\Installer;
 use Kk\Quiz\Repository\LeadRepository;
 
 final class LeadService
@@ -112,6 +113,7 @@ final class LeadService
         $fields = [
             'EMAIL_TO' => $emailTo,
             'LEAD_ID' => $leadId,
+            'LEAD_ADMIN_URL' => $this->buildLeadAdminUrl($leadId),
             'QUIZ_NAME' => $this->cleanEmailField($lead['quiz_name'] ?? ''),
             'QUIZ_CODE' => $this->cleanEmailField($lead['quiz_code'] ?? ''),
             'RESULT_TITLE' => $this->cleanEmailField($lead['result_title'] ?? ''),
@@ -135,6 +137,36 @@ final class LeadService
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    private function buildLeadAdminUrl(int $leadId): string
+    {
+        if ($leadId <= 0) {
+            return '';
+        }
+
+        $iblockId = $this->leadRepository->getLeadsIblockId();
+        if ($iblockId === null || $iblockId <= 0) {
+            return '';
+        }
+
+        $request = Context::getCurrent()->getRequest();
+        $host = trim((string)$request->getHttpHost());
+        if ($host === '') {
+            return '';
+        }
+
+        $scheme = $request->isHttps() ? 'https' : 'http';
+
+        return sprintf(
+            '%s://%s/bitrix/admin/iblock_element_edit.php?IBLOCK_ID=%d&type=%s&ID=%d&lang=%s',
+            $scheme,
+            $host,
+            $iblockId,
+            rawurlencode(Installer::IBLOCK_TYPE_ID),
+            $leadId,
+            rawurlencode(defined('LANGUAGE_ID') ? (string)LANGUAGE_ID : 'ru')
+        );
     }
 
     private function normalizeEmailTo(mixed $value): string

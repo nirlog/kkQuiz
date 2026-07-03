@@ -70,7 +70,7 @@ final class LeadRepository
         ]);
     }
 
-    private function getLeadsIblockId(): ?int
+    public function getLeadsIblockId(): ?int
     {
         $iblock = \CIBlock::GetList([], [
             'TYPE' => Installer::IBLOCK_TYPE_ID,
