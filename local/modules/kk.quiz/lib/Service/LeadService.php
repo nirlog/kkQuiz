@@ -246,9 +246,39 @@ final class LeadService
 
     private function cleanTelegramText(mixed $value): string
     {
-        $value = $this->cleanString($value);
+        if (!is_scalar($value)) {
+            return '—';
+        }
 
-        return $value !== '' ? $value : '—';
+        $value = (string)$value;
+        $value = strip_tags($value);
+        $value = str_replace(["\r\n", "\r"], "\n", $value);
+        $value = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', ' ', $value) ?? $value;
+
+        $lines = preg_split('/\n/u', $value) ?: [];
+        $lines = array_map(
+            static fn($line) => trim(preg_replace('/[ \t]+/u', ' ', (string)$line) ?? (string)$line),
+            $lines
+        );
+
+        $cleanLines = [];
+        $previousEmpty = false;
+        foreach ($lines as $line) {
+            $isEmpty = $line === '';
+            if ($isEmpty && $previousEmpty) {
+                continue;
+            }
+
+            $cleanLines[] = $line;
+            $previousEmpty = $isEmpty;
+        }
+
+        $value = trim(implode("\n", $cleanLines));
+        if ($value === '') {
+            return '—';
+        }
+
+        return mb_substr($value, 0, 10000);
     }
 
     private function normalizeEmailTo(mixed $value): string
