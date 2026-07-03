@@ -17,6 +17,8 @@ Loader::registerAutoLoadClasses(
         'Kk\\Quiz\\Repository\\LeadRepository' => 'lib/Repository/LeadRepository.php',
         'Kk\\Quiz\\Service\\QuizService' => 'lib/Service/QuizService.php',
         'Kk\\Quiz\\Service\\LeadService' => 'lib/Service/LeadService.php',
+        'Kk\\Quiz\\Service\\ModuleSettingsService' => 'lib/Service/ModuleSettingsService.php',
+        'Kk\\Quiz\\Service\\TelegramNotificationService' => 'lib/Service/TelegramNotificationService.php',
         'Kk\\Quiz\\Controller\\Api' => 'lib/Controller/Api.php',
     ]
 );
