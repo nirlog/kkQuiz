@@ -170,8 +170,11 @@ $renderInput = static function (string $name, string $label, string $type = 'tex
 
 $renderSecretInput = static function (string $name, string $label) use (&$values, $e): void {
     $hasValue = trim((string)($values[$name] ?? '')) !== '';
-    echo '<tr><td width="40%"><label for="' . $e($name) . '">' . $e($label) . '</label></td><td width="60%">';
-    echo '<input type="password" size="45" autocomplete="new-password" id="' . $e($name) . '" name="' . $e($name) . '" value="">';
+    $inputId = $name;
+
+    echo '<tr><td width="40%"><label for="' . $e($inputId) . '">' . $e($label) . '</label></td><td width="60%">';
+    echo '<input type="password" size="45" autocomplete="new-password" id="' . $e($inputId) . '" name="' . $e($name) . '" value="" data-kk-secret-input>';
+    echo ' <button type="button" class="adm-btn kk-quiz-secret-toggle" data-kk-secret-toggle="' . $e($inputId) . '">Показать</button>';
     if ($hasValue) {
         echo '<br><small>Значение уже сохранено. Оставьте поле пустым, чтобы не менять.</small>';
     }
@@ -279,3 +282,32 @@ if ($message !== null) {
     <button type="submit" class="adm-btn" name="action" value="restore_defaults" onclick="return confirm('Сбросить настройки по умолчанию?');">Сбросить по умолчанию</button>
     <?php $tabControl->End(); ?>
 </form>
+
+<script>
+(function () {
+    document.addEventListener('click', function (event) {
+        var button = event.target.closest('[data-kk-secret-toggle]');
+        if (!button) {
+            return;
+        }
+
+        var inputId = button.getAttribute('data-kk-secret-toggle');
+        if (!inputId) {
+            return;
+        }
+
+        var input = document.getElementById(inputId);
+        if (!input) {
+            return;
+        }
+
+        if (input.type === 'password') {
+            input.type = 'text';
+            button.textContent = 'Скрыть';
+        } else {
+            input.type = 'password';
+            button.textContent = 'Показать';
+        }
+    });
+})();
+</script>
