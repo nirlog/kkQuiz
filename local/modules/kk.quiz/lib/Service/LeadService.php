@@ -112,15 +112,26 @@ final class LeadService
 
     private function sendEmail(array $quiz, array $lead, int $leadId): bool
     {
-        $emailTo = $this->normalizeEmailTo($quiz['email_to'] ?? '');
+        if (!ModuleSettingsService::getBool('email_enabled')) {
+            return false;
+        }
+
+        $emailTo = $this->resolveEmailTo($quiz['email_to'] ?? '');
         if ($emailTo === '' || !class_exists('CEvent')) {
             return false;
         }
 
+        $leadAdminUrl = ModuleSettingsService::getBool('email_admin_link_enabled')
+            ? $this->buildLeadAdminUrl($leadId)
+            : '';
+
         $fields = [
             'EMAIL_TO' => $emailTo,
             'LEAD_ID' => $leadId,
-            'LEAD_ADMIN_URL' => $this->buildLeadAdminUrl($leadId),
+            'LEAD_ADMIN_URL' => $leadAdminUrl,
+            'LEAD_ADMIN_BLOCK' => $leadAdminUrl !== ''
+                ? "Заявка в админке:\n" . $leadAdminUrl
+                : '',
             'QUIZ_NAME' => $this->cleanEmailField($lead['quiz_name'] ?? ''),
             'QUIZ_CODE' => $this->cleanEmailField($lead['quiz_code'] ?? ''),
             'RESULT_TITLE' => $this->cleanEmailField($lead['result_title'] ?? ''),
@@ -292,6 +303,17 @@ final class LeadService
         }
 
         return mb_substr($value, 0, 10000);
+    }
+
+    private function resolveEmailTo(mixed $quizEmailTo): string
+    {
+        $emailTo = $this->normalizeEmailTo($quizEmailTo);
+
+        if ($emailTo !== '') {
+            return $emailTo;
+        }
+
+        return $this->normalizeEmailTo(ModuleSettingsService::get('email_to'));
     }
 
     private function normalizeEmailTo(mixed $value): string
