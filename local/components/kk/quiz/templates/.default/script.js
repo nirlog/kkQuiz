@@ -208,6 +208,41 @@
         }
     };
 
+    const sendGoogleAnalyticsEvent = (quiz, params = {}) => {
+        if (!quiz || !quiz.google_analytics || quiz.google_analytics.enabled !== true) {
+            return;
+        }
+
+        if (typeof window.gtag !== 'function') {
+            return;
+        }
+
+        const eventName = String(quiz.google_analytics.event_name || '').trim() || 'generate_lead';
+        if (eventName === '') {
+            return;
+        }
+
+        const measurementId = String(quiz.google_analytics.measurement_id || '').trim();
+
+        const eventParams = {
+            event_category: 'kk_quiz',
+            quiz_code: params.quiz_code || '',
+            result_id: params.result_id || '',
+            result_code: params.result_code || '',
+            lead_id: params.lead_id || ''
+        };
+
+        if (measurementId !== '') {
+            eventParams.send_to = measurementId;
+        }
+
+        try {
+            window.gtag('event', eventName, eventParams);
+        } catch (error) {
+            // Ошибка GA4 не должна ломать отправку формы.
+        }
+    };
+
     const buildState = () => ({
         answers: {},
         fields: {}
@@ -411,12 +446,15 @@
                         message.className = 'kk-quiz__success';
                         message.textContent = successText;
                         message.hidden = false;
-                        sendMetrikaGoal(quiz, quiz.metrika.goal || 'kk_quiz_lead', {
+                        const analyticsParams = {
                             quiz_code: quiz.code || '',
                             result_id: currentResult ? currentResult.id : '',
                             result_code: currentResult ? currentResult.code : '',
                             lead_id: result.lead_id || ''
-                        });
+                        };
+
+                        sendMetrikaGoal(quiz, quiz.metrika.goal || 'kk_quiz_lead', analyticsParams);
+                        sendGoogleAnalyticsEvent(quiz, analyticsParams);
                         return;
                     }
 

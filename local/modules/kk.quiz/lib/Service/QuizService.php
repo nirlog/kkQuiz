@@ -40,11 +40,8 @@ final class QuizService
             'theme' => $quiz['theme'] !== '' ? $quiz['theme'] : 'default',
             'form_fields' => $quiz['form_fields'],
             'required_fields' => $quiz['required_fields'],
-            'metrika' => [
-                'enabled' => $quiz['use_metrika'],
-                'counter_id' => $quiz['metrika_counter_id'],
-                'goal' => $quiz['metrika_goal'] !== '' ? $quiz['metrika_goal'] : 'kk_quiz_lead',
-            ],
+            'metrika' => $this->buildMetrikaSettings($quiz),
+            'google_analytics' => $this->buildGoogleAnalyticsSettings(),
             'catalog' => [
                 'enabled' => $quiz['use_catalog'],
                 'iblock_id' => $quiz['catalog_iblock_id'],
@@ -57,6 +54,47 @@ final class QuizService
             'first_question_id' => $this->getFirstQuestionId($questions),
             'questions' => $questions,
             'results' => $results,
+        ];
+    }
+
+
+    private function buildMetrikaSettings(array $quiz): array
+    {
+        $quizEnabled = (bool)($quiz['use_metrika'] ?? false);
+        $globalEnabled = ModuleSettingsService::getBool('yandex_metrika_enabled');
+
+        $counterId = trim((string)($quiz['metrika_counter_id'] ?? ''));
+        if ($counterId === '') {
+            $counterId = trim(ModuleSettingsService::get('yandex_metrika_counter_id'));
+        }
+
+        $goal = trim((string)($quiz['metrika_goal'] ?? ''));
+        if ($goal === '') {
+            $goal = trim(ModuleSettingsService::get('yandex_metrika_goal'));
+        }
+
+        if ($goal === '') {
+            $goal = 'kk_quiz_lead';
+        }
+
+        return [
+            'enabled' => ($quizEnabled || $globalEnabled) && $counterId !== '',
+            'counter_id' => $counterId,
+            'goal' => $goal,
+        ];
+    }
+
+    private function buildGoogleAnalyticsSettings(): array
+    {
+        $eventName = trim(ModuleSettingsService::get('google_analytics_event_name'));
+        if ($eventName === '') {
+            $eventName = 'generate_lead';
+        }
+
+        return [
+            'enabled' => ModuleSettingsService::getBool('google_analytics_enabled'),
+            'measurement_id' => trim(ModuleSettingsService::get('google_analytics_measurement_id')),
+            'event_name' => $eventName,
         ];
     }
 
