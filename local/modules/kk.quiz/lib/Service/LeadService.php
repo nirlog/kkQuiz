@@ -40,14 +40,22 @@ final class LeadService
     public function submit(array $payload): array
     {
         $errors = [];
-        if ($this->cleanString($payload['website'] ?? $payload['honeypot'] ?? '') !== '') {
+        $quizCode = $this->cleanCode($payload['quiz_code'] ?? '');
+
+        if (
+            ModuleSettingsService::getBool('honeypot_enabled')
+            && $this->cleanString($payload['website'] ?? $payload['honeypot'] ?? '') !== ''
+        ) {
             return ['success' => false, 'errors' => ['Заявка отклонена']];
         }
-        if (!$this->checkRateLimit()) {
+
+        if (
+            ModuleSettingsService::getBool('rate_limit_enabled')
+            && !$this->checkRateLimit($quizCode)
+        ) {
             return ['success' => false, 'errors' => ['Слишком частая отправка формы. Попробуйте позже.']];
         }
 
-        $quizCode = $this->cleanCode($payload['quiz_code'] ?? '');
         if ($quizCode === '') {
             $errors[] = 'Не указан код квиза';
         }
@@ -849,20 +857,52 @@ final class LeadService
         return null;
     }
 
-    private function checkRateLimit(): bool
+    private function getIntSetting(string $name, int $default, int $min, int $max): int
     {
+        $value = ModuleSettingsService::get($name);
+
+        if (!is_numeric($value)) {
+            return $default;
+        }
+
+        $value = (int)$value;
+
+        if ($value < $min) {
+            return $min;
+        }
+
+        if ($value > $max) {
+            return $max;
+        }
+
+        return $value;
+    }
+
+    private function checkRateLimit(string $quizCode = ''): bool
+    {
+        $ttl = $this->getIntSetting('rate_limit_ttl', self::RATE_LIMIT_TTL, 1, 86400);
+        $max = $this->getIntSetting('rate_limit_max', self::RATE_LIMIT_MAX, 1, 1000);
+
         $session = Application::getInstance()->getSession();
-        $key = 'kk_quiz_submit_lead_' . md5((string)Context::getCurrent()->getRequest()->getRemoteAddress());
+        $request = Context::getCurrent()->getRequest();
+
+        $remoteAddress = (string)$request->getRemoteAddress();
+        $keySource = $remoteAddress . '|' . $quizCode;
+        $key = 'kk_quiz_submit_lead_' . md5($keySource);
+
         $data = $session->get($key);
         $now = time();
-        if (!is_array($data) || ($now - (int)($data['started_at'] ?? 0)) > self::RATE_LIMIT_TTL) {
+
+        if (!is_array($data) || ($now - (int)($data['started_at'] ?? 0)) > $ttl) {
             $session->set($key, ['started_at' => $now, 'count' => 1]);
+
             return true;
         }
-        $data['count'] = (int)$data['count'] + 1;
+
+        $data['count'] = (int)($data['count'] ?? 0) + 1;
         $session->set($key, $data);
 
-        return $data['count'] <= self::RATE_LIMIT_MAX;
+        return $data['count'] <= $max;
     }
 
     private function cleanString(mixed $value): string
