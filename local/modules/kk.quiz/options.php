@@ -246,10 +246,14 @@ if ($message !== null) {
     <?php
     $renderCheckbox('yandex_metrika_enabled', 'Включить Яндекс.Метрику');
     $renderInput('yandex_metrika_counter_id', 'ID счётчика Яндекс.Метрики');
-    $renderInput('yandex_metrika_goal', 'Цель Яндекс.Метрики');
+    $renderInput('yandex_metrika_first_answer_goal', 'Цель Метрики: ответил на первый вопрос');
+    $renderInput('yandex_metrika_result_goal', 'Цель Метрики: дошёл до финала');
+    $renderInput('yandex_metrika_goal', 'Цель Метрики: отправил форму');
     $renderCheckbox('google_analytics_enabled', 'Включить Google Analytics');
     $renderInput('google_analytics_measurement_id', 'Google Measurement ID');
-    $renderInput('google_analytics_event_name', 'Название события Google Analytics');
+    $renderInput('google_analytics_first_answer_event_name', 'GA4 event: ответил на первый вопрос');
+    $renderInput('google_analytics_result_event_name', 'GA4 event: дошёл до финала');
+    $renderInput('google_analytics_event_name', 'GA4 event: отправил форму');
     ?>
 
     <?php $tabControl->BeginNextTab(); ?>
