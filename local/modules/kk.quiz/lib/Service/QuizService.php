@@ -72,20 +72,63 @@ final class QuizService
             return $results;
         }
 
+        $iblockId = (int)$quiz['catalog_iblock_id'];
+        $limit = 6;
+
         foreach ($results as &$result) {
             $productIds = is_array($result['catalog_product_ids'] ?? null)
                 ? $result['catalog_product_ids']
                 : [];
 
-            $result['products'] = $this->catalogProductService->getProducts(
-                (int)$quiz['catalog_iblock_id'],
+            $products = $this->catalogProductService->getProducts(
+                $iblockId,
                 $productIds,
-                6
+                $limit
             );
+
+            $loadedIds = array_map(
+                static fn(array $product): int => (int)($product['id'] ?? 0),
+                $products
+            );
+            $loadedIds = array_values(array_filter($loadedIds));
+
+            $sectionId = (int)($result['catalog_section_id'] ?? 0);
+            $remainingLimit = $limit - count($products);
+
+            if ($sectionId > 0 && $remainingLimit > 0) {
+                $sectionProducts = $this->catalogProductService->getProductsFromSection(
+                    $iblockId,
+                    $sectionId,
+                    $loadedIds,
+                    $remainingLimit
+                );
+
+                $products = array_merge($products, $sectionProducts);
+            }
+
+            $result['products'] = array_slice($this->uniqueProducts($products), 0, $limit);
         }
         unset($result);
 
         return $results;
+    }
+
+    private function uniqueProducts(array $products): array
+    {
+        $result = [];
+        $seen = [];
+
+        foreach ($products as $product) {
+            $id = (int)($product['id'] ?? 0);
+            if ($id <= 0 || isset($seen[$id])) {
+                continue;
+            }
+
+            $seen[$id] = true;
+            $result[] = $product;
+        }
+
+        return $result;
     }
 
 

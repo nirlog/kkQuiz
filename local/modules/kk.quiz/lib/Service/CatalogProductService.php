@@ -64,6 +64,69 @@ final class CatalogProductService
         }, $items);
     }
 
+    public function getProductsFromSection(
+        int $iblockId,
+        int $sectionId,
+        array $excludeIds = [],
+        int $limit = 6
+    ): array
+    {
+        $iblockId = max(0, $iblockId);
+        $sectionId = max(0, $sectionId);
+        $excludeIds = $this->normalizeIds($excludeIds);
+        $limit = max(1, min(20, $limit));
+
+        if ($iblockId <= 0 || $sectionId <= 0 || !Loader::includeModule('iblock')) {
+            return [];
+        }
+
+        $filter = [
+            'IBLOCK_ID' => $iblockId,
+            'SECTION_ID' => $sectionId,
+            'INCLUDE_SUBSECTIONS' => 'Y',
+            'ACTIVE' => 'Y',
+            'ACTIVE_DATE' => 'Y',
+        ];
+
+        if ($excludeIds !== []) {
+            $filter['!ID'] = $excludeIds;
+        }
+
+        $items = [];
+
+        $rsElements = \CIBlockElement::GetList(
+            [
+                'SORT' => 'ASC',
+                'ID' => 'ASC',
+            ],
+            $filter,
+            false,
+            ['nTopCount' => $limit],
+            [
+                'ID',
+                'IBLOCK_ID',
+                'NAME',
+                'CODE',
+                'DETAIL_PAGE_URL',
+                'PREVIEW_PICTURE',
+                'DETAIL_PICTURE',
+            ]
+        );
+
+        while ($element = $rsElements->GetNext()) {
+            $id = (int)$element['ID'];
+
+            $items[] = [
+                'id' => $id,
+                'name' => (string)($element['NAME'] ?? ''),
+                'url' => (string)($element['DETAIL_PAGE_URL'] ?? ''),
+                'picture_src' => $this->getPictureSrc($element),
+            ];
+        }
+
+        return $items;
+    }
+
     private function normalizeIds(array $ids): array
     {
         $result = [];
