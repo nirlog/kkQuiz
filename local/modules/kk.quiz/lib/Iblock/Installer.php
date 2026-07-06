@@ -403,8 +403,9 @@ final class Installer
             ['FIELD_NAME' => 'UF_KK_METRIKA_COUNTER_ID', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'ID счётчика Метрики'],
             ['FIELD_NAME' => 'UF_KK_METRIKA_GOAL', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Цель Метрики'],
             ['FIELD_NAME' => 'UF_KK_USE_METRIKA', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Использовать Метрику'],
-            ['FIELD_NAME' => 'UF_KK_USE_CATALOG', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Использовать каталог'],
-            ['FIELD_NAME' => 'UF_KK_CATALOG_IBLOCK_ID', 'USER_TYPE_ID' => 'integer', 'EDIT_FORM_LABEL' => 'ID инфоблока каталога'],
+            ['FIELD_NAME' => 'UF_KK_USE_CATALOG', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Показывать рекомендации'],
+            ['FIELD_NAME' => 'UF_KK_CATALOG_IBLOCK_ID', 'USER_TYPE_ID' => 'integer', 'EDIT_FORM_LABEL' => 'ID инфоблока рекомендаций'],
+            ['FIELD_NAME' => 'UF_KK_CATALOG_IBLOCK_IDS', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Инфоблоки рекомендаций', 'MULTIPLE' => 'Y', 'VALUES' => self::getCatalogIblockEnumValues()],
             ['FIELD_NAME' => 'UF_KK_THEME', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Тема оформления', 'VALUES' => self::getThemeEnumValues()],
             ['FIELD_NAME' => 'UF_KK_ALLOW_POPUP_URL', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Разрешить URL для попапа'],
             ['FIELD_NAME' => 'UF_KK_PRIVACY_TEXT', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Текст политики'],
@@ -415,6 +416,24 @@ final class Installer
         foreach ($fields as $field) {
             self::addUserField($entityId, $field);
         }
+
+        self::syncCatalogIblockUserFieldEnums($entityId);
+    }
+
+    private static function updateExistingUserFieldLabels(int $fieldId, array $field): void
+    {
+        if ($fieldId <= 0 || empty($field['EDIT_FORM_LABEL'])) {
+            return;
+        }
+
+        $label = ['ru' => (string)$field['EDIT_FORM_LABEL']];
+
+        $userTypeEntity = new \CUserTypeEntity();
+        $userTypeEntity->Update($fieldId, [
+            'EDIT_FORM_LABEL' => $label,
+            'LIST_COLUMN_LABEL' => $label,
+            'LIST_FILTER_LABEL' => $label,
+        ]);
     }
 
     private static function addUserField(string $entityId, array $field): void
@@ -422,6 +441,8 @@ final class Installer
         $fieldName = $field['FIELD_NAME'];
         $exists = \CUserTypeEntity::GetList([], ['ENTITY_ID' => $entityId, 'FIELD_NAME' => $fieldName])->Fetch();
         if ($exists) {
+            self::updateExistingUserFieldLabels((int)$exists['ID'], $field);
+
             return;
         }
 
@@ -473,8 +494,8 @@ final class Installer
             ['CODE' => 'KK_RESULT_CTA_TEXT', 'NAME' => 'Текст CTA', 'SORT' => 340, 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_RESULT_CTA_LINK', 'NAME' => 'Ссылка CTA', 'SORT' => 350, 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_RESULT_SHOW_FORM', 'NAME' => 'Показывать форму', 'SORT' => 360, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
-            ['CODE' => 'KK_RESULT_CATALOG_SECTION', 'NAME' => 'Раздел каталога', 'SORT' => 370, 'PROPERTY_TYPE' => 'G'],
-            ['CODE' => 'KK_RESULT_CATALOG_PRODUCTS', 'NAME' => 'Товары каталога', 'SORT' => 380, 'PROPERTY_TYPE' => 'E', 'MULTIPLE' => 'Y'],
+            ['CODE' => 'KK_RESULT_CATALOG_SECTION', 'NAME' => 'Раздел рекомендаций', 'SORT' => 370, 'PROPERTY_TYPE' => 'G'],
+            ['CODE' => 'KK_RESULT_CATALOG_PRODUCTS', 'NAME' => 'Рекомендуемые элементы', 'SORT' => 380, 'PROPERTY_TYPE' => 'E', 'MULTIPLE' => 'Y'],
             ['CODE' => 'KK_RESULT_BADGE', 'NAME' => 'Бейдж результата', 'SORT' => 330, 'PROPERTY_TYPE' => 'S'],
         ];
 
@@ -576,6 +597,10 @@ final class Installer
 
         if (isset($property['SORT'])) {
             $fields['SORT'] = $property['SORT'];
+        }
+
+        if (isset($property['NAME'])) {
+            $fields['NAME'] = $property['NAME'];
         }
 
         if (($property['CODE'] ?? '') === 'KK_ANSWERS') {
@@ -718,6 +743,48 @@ final class Installer
         }
 
         return implode('--;--', $parts);
+    }
+
+    private static function syncCatalogIblockUserFieldEnums(string $entityId): void
+    {
+        $field = \CUserTypeEntity::GetList([], [
+            'ENTITY_ID' => $entityId,
+            'FIELD_NAME' => 'UF_KK_CATALOG_IBLOCK_IDS',
+        ])->Fetch();
+
+        if (!is_array($field) || (int)($field['ID'] ?? 0) <= 0) {
+            return;
+        }
+
+        $enum = new \CUserFieldEnum();
+        $enum->SetEnumValues((int)$field['ID'], self::formatUserFieldEnumValues(self::getCatalogIblockEnumValues()));
+    }
+
+    private static function getCatalogIblockEnumValues(): array
+    {
+        if (!\Bitrix\Main\Loader::includeModule('iblock')) {
+            return [];
+        }
+
+        $values = [];
+        $iblocks = \CIBlock::GetList(
+            ['IBLOCK_TYPE' => 'ASC', 'SORT' => 'ASC', 'NAME' => 'ASC'],
+            ['ACTIVE' => 'Y']
+        );
+
+        while ($iblock = $iblocks->Fetch()) {
+            $id = (int)$iblock['ID'];
+            if ($id <= 0) {
+                continue;
+            }
+
+            $type = (string)($iblock['IBLOCK_TYPE_ID'] ?? '');
+            $name = (string)($iblock['NAME'] ?? '');
+
+            $values[(string)$id] = '[' . $type . '] ' . $name . ' [' . $id . ']';
+        }
+
+        return $values;
     }
 
     private static function getFormFieldEnumValues(): array

@@ -36,10 +36,18 @@ final class ModuleSettingsService
 
             'yandex_metrika_enabled' => 'N',
             'yandex_metrika_counter_id' => '',
+            'yandex_metrika_first_answer_goal' => 'kk_quiz_first_answer',
+            'yandex_metrika_result_goal' => 'kk_quiz_result_reached',
+            'yandex_metrika_result_cta_click_goal' => 'kk_quiz_result_cta_click',
+            'yandex_metrika_product_click_goal' => 'kk_quiz_recommendation_click',
             'yandex_metrika_goal' => 'kk_quiz_lead',
 
             'google_analytics_enabled' => 'N',
             'google_analytics_measurement_id' => '',
+            'google_analytics_first_answer_event_name' => 'kk_quiz_first_answer',
+            'google_analytics_result_event_name' => 'kk_quiz_result_reached',
+            'google_analytics_result_cta_click_event_name' => 'kk_quiz_result_cta_click',
+            'google_analytics_product_click_event_name' => 'kk_quiz_recommendation_click',
             'google_analytics_event_name' => 'generate_lead',
 
             'default_lead_status' => 'new',

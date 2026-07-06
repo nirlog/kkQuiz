@@ -67,6 +67,8 @@ final class ElementFormAssets
             'common' => self::mapCodesToIds(self::COMMON_CODES, $propertyIds),
             'question' => self::mapCodesToIds(self::QUESTION_CODES, $propertyIds),
             'result' => self::mapCodesToIds(self::RESULT_CODES, $propertyIds),
+            'catalogSectionPropertyId' => $propertyIds['KK_RESULT_CATALOG_SECTION'] ?? 0,
+            'catalogSectionsByIblock' => self::getCatalogSectionsByIblock($iblockId),
         ];
 
         Asset::getInstance()->addString('<script>' . self::renderScript($settings) . '</script>');
@@ -135,6 +137,114 @@ final class ElementFormAssets
         return $ids;
     }
 
+    private static function getCatalogSectionsByIblock(int $quizIblockId): array
+    {
+        $sectionId = self::getCurrentQuizSectionId($quizIblockId);
+        if ($sectionId <= 0) {
+            return [];
+        }
+
+        $section = \CIBlockSection::GetList(
+            [],
+            ['IBLOCK_ID' => $quizIblockId, 'ID' => $sectionId],
+            false,
+            ['ID', 'UF_KK_CATALOG_IBLOCK_ID', 'UF_KK_CATALOG_IBLOCK_IDS']
+        )->Fetch();
+        if (!is_array($section)) {
+            return [];
+        }
+
+        $iblockIds = self::normalizeCatalogIblockIds($section['UF_KK_CATALOG_IBLOCK_IDS'] ?? []);
+        $legacyIblockId = (int)($section['UF_KK_CATALOG_IBLOCK_ID'] ?? 0);
+        if ($iblockIds === [] && $legacyIblockId > 0) {
+            $iblockIds = [$legacyIblockId];
+        }
+        if ($iblockIds === []) {
+            return [];
+        }
+
+        $result = [];
+        foreach ($iblockIds as $iblockId) {
+            $iblock = \CIBlock::GetByID($iblockId)->Fetch();
+            if (!is_array($iblock)) {
+                continue;
+            }
+
+            $sections = [];
+            $rsSections = \CIBlockSection::GetList(
+                ['LEFT_MARGIN' => 'ASC'],
+                ['IBLOCK_ID' => $iblockId, 'ACTIVE' => 'Y'],
+                false,
+                ['ID', 'NAME', 'DEPTH_LEVEL']
+            );
+            while ($catalogSection = $rsSections->Fetch()) {
+                $sections[] = [
+                    'id' => (int)$catalogSection['ID'],
+                    'name' => (string)$catalogSection['NAME'],
+                    'depth' => (int)$catalogSection['DEPTH_LEVEL'],
+                ];
+            }
+
+            $result[] = [
+                'id' => $iblockId,
+                'name' => (string)($iblock['NAME'] ?? ''),
+                'type' => (string)($iblock['IBLOCK_TYPE_ID'] ?? ''),
+                'sections' => $sections,
+            ];
+        }
+
+        return $result;
+    }
+
+    private static function getCurrentQuizSectionId(int $quizIblockId): int
+    {
+        $sectionId = (int)($_REQUEST['IBLOCK_SECTION_ID'] ?? $_REQUEST['find_section_section'] ?? 0);
+        if ($sectionId > 0) {
+            return $sectionId;
+        }
+
+        $elementId = (int)($_REQUEST['ID'] ?? 0);
+        if ($elementId <= 0) {
+            return 0;
+        }
+
+        $element = \CIBlockElement::GetList(
+            [],
+            ['IBLOCK_ID' => $quizIblockId, 'ID' => $elementId],
+            false,
+            false,
+            ['ID', 'IBLOCK_SECTION_ID']
+        )->Fetch();
+
+        return is_array($element) ? (int)($element['IBLOCK_SECTION_ID'] ?? 0) : 0;
+    }
+
+    private static function normalizeCatalogIblockIds(mixed $value): array
+    {
+        $values = is_array($value) ? $value : [$value];
+        $result = [];
+
+        foreach ($values as $item) {
+            if (is_array($item)) {
+                $item = reset($item);
+            }
+
+            if (is_numeric($item) && class_exists('CUserFieldEnum')) {
+                $enum = \CUserFieldEnum::GetList([], ['ID' => (int)$item])->Fetch();
+                if (is_array($enum)) {
+                    $item = (string)($enum['XML_ID'] ?: $enum['VALUE']);
+                }
+            }
+
+            $id = (int)$item;
+            if ($id > 0 && !in_array($id, $result, true)) {
+                $result[] = $id;
+            }
+        }
+
+        return $result;
+    }
+
     private static function renderScript(array $settings): string
     {
         return '(() => {'
@@ -196,14 +306,55 @@ final class ElementFormAssets
             . 'if (entityType === "QUESTION") setVisible(settings.question, true);'
             . 'if (entityType === "RESULT") setVisible(settings.result, true);'
             . '};'
+            . 'const enhanceCatalogSectionSelect = () => {'
+            . 'const propertyId = Number(settings.catalogSectionPropertyId || 0);'
+            . 'if (!propertyId) return;'
+            . 'const row = getPropertyRow(propertyId);'
+            . 'if (!row || row.dataset.kkCatalogEnhanced === "Y") return;'
+            . 'const original = getPropertyControls(propertyId).find((control) => control.tagName === "SELECT" || control.type === "text" || control.type === "hidden");'
+            . 'if (!original) return;'
+            . 'row.dataset.kkCatalogEnhanced = "Y";'
+            . 'original.style.display = "none";'
+            . 'const groups = Array.isArray(settings.catalogSectionsByIblock) ? settings.catalogSectionsByIblock : [];'
+            . 'if (groups.length === 0) {'
+            . 'const hint = document.createElement("div");'
+            . 'hint.textContent = "Сначала выберите инфоблоки рекомендаций в настройках квиза.";'
+            . 'hint.style.color = "#777";'
+            . 'original.insertAdjacentElement("afterend", hint);'
+            . 'return;'
+            . '}'
+            . 'const select = document.createElement("select");'
+            . 'select.className = "adm-select";'
+            . 'const empty = document.createElement("option");'
+            . 'empty.value = "";'
+            . 'empty.textContent = "Не выбран";'
+            . 'select.appendChild(empty);'
+            . 'groups.forEach((group) => {'
+            . 'const optgroup = document.createElement("optgroup");'
+            . 'optgroup.label = `[${group.type || ""}] ${group.name || ""}`;'
+            . '(Array.isArray(group.sections) ? group.sections : []).forEach((section) => {'
+            . 'const option = document.createElement("option");'
+            . 'option.value = String(section.id || "");'
+            . 'option.textContent = `${"—".repeat(Math.max(1, Number(section.depth || 1)))} ${section.name || ""}`;'
+            . 'optgroup.appendChild(option);'
+            . '});'
+            . 'select.appendChild(optgroup);'
+            . '});'
+            . 'select.value = original.value || "";'
+            . 'select.addEventListener("change", () => {'
+            . 'original.value = select.value;'
+            . 'original.dispatchEvent(new Event("change", { bubbles: true }));'
+            . '});'
+            . 'original.insertAdjacentElement("afterend", select);'
+            . '};'
             . 'document.addEventListener("change", (event) => {'
             . 'const entityRow = getPropertyRow(settings.entityTypePropertyId);'
             . 'const isEntityControl = event.target && (event.target.matches(`[name^="PROPERTY[${settings.entityTypePropertyId}]"]`) || event.target.matches(`[name^="PROP[${settings.entityTypePropertyId}]"]`) || (entityRow && entityRow.contains(event.target)));'
-            . 'if (isEntityControl) applyVisibility();'
+            . 'if (isEntityControl) { applyVisibility(); enhanceCatalogSectionSelect(); }'
             . '});'
-            . 'if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", applyVisibility); else applyVisibility();'
-            . 'setTimeout(applyVisibility, 100);'
-            . 'setTimeout(applyVisibility, 500);'
+            . 'if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { applyVisibility(); enhanceCatalogSectionSelect(); }); else { applyVisibility(); enhanceCatalogSectionSelect(); }'
+            . 'setTimeout(() => { applyVisibility(); enhanceCatalogSectionSelect(); }, 100);'
+            . 'setTimeout(() => { applyVisibility(); enhanceCatalogSectionSelect(); }, 500);'
             . '})();';
     }
 
