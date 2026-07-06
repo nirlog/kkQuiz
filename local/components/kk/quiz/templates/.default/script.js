@@ -208,125 +208,9 @@
         }
     };
 
-    const sendGoogleAnalyticsEvent = (quiz, eventName, params = {}) => {
-        if (!quiz || !quiz.google_analytics || quiz.google_analytics.enabled !== true) {
-            return;
-        }
-
-        if (typeof window.gtag !== 'function') {
-            return;
-        }
-
-        const event = String(eventName || '').trim();
-        if (event === '') {
-            return;
-        }
-
-        const measurementId = String(quiz.google_analytics.measurement_id || '').trim();
-
-        const eventParams = {
-            event_category: 'kk_quiz',
-            event_type: params.event_type || '',
-            quiz_code: params.quiz_code || '',
-            question_id: params.question_id || '',
-            question_code: params.question_code || '',
-            result_id: params.result_id || '',
-            result_code: params.result_code || '',
-            lead_id: params.lead_id || ''
-        };
-
-        if (measurementId !== '') {
-            eventParams.send_to = measurementId;
-        }
-
-        try {
-            window.gtag('event', event, eventParams);
-        } catch (error) {
-            // Ошибка GA4 не должна ломать отправку формы.
-        }
-    };
-
-    const getMetrikaGoal = (quiz, eventType) => {
-        const goals = quiz && quiz.metrika && quiz.metrika.goals ? quiz.metrika.goals : {};
-        const goal = String(goals[eventType] || '').trim();
-
-        if (goal !== '') {
-            return goal;
-        }
-
-        if (eventType === 'form_submit') {
-            return String(quiz && quiz.metrika ? quiz.metrika.goal || '' : '').trim() || 'kk_quiz_lead';
-        }
-
-        if (eventType === 'first_answer') {
-            return 'kk_quiz_first_answer';
-        }
-
-        if (eventType === 'result_reached') {
-            return 'kk_quiz_result_reached';
-        }
-
-        return '';
-    };
-
-    const getGoogleAnalyticsEventName = (quiz, eventType) => {
-        const events = quiz && quiz.google_analytics && quiz.google_analytics.events ? quiz.google_analytics.events : {};
-        const eventName = String(events[eventType] || '').trim();
-
-        if (eventName !== '') {
-            return eventName;
-        }
-
-        if (eventType === 'form_submit') {
-            return String(quiz && quiz.google_analytics ? quiz.google_analytics.event_name || '' : '').trim() || 'generate_lead';
-        }
-
-        if (eventType === 'first_answer') {
-            return 'kk_quiz_first_answer';
-        }
-
-        if (eventType === 'result_reached') {
-            return 'kk_quiz_result_reached';
-        }
-
-        return '';
-    };
-
-    const sendAnalyticsEvent = (quiz, eventType, params = {}) => {
-        const eventParams = {
-            event_type: eventType,
-            quiz_code: params.quiz_code || '',
-            question_id: params.question_id || '',
-            question_code: params.question_code || '',
-            result_id: params.result_id || '',
-            result_code: params.result_code || '',
-            lead_id: params.lead_id || ''
-        };
-
-        sendMetrikaGoal(quiz, getMetrikaGoal(quiz, eventType), eventParams);
-        sendGoogleAnalyticsEvent(quiz, getGoogleAnalyticsEventName(quiz, eventType), eventParams);
-    };
-
-    const hasQuestionAnswer = (state, question, answer) => {
-        if (answer) {
-            return true;
-        }
-
-        const value = state.answers[question.id];
-        if (Array.isArray(value)) {
-            return value.length > 0;
-        }
-
-        return String(value || '').trim() !== '';
-    };
-
     const buildState = () => ({
         answers: {},
-        fields: {},
-        analytics: {
-            firstAnswerSent: false,
-            resultReachedSent: false
-        }
+        fields: {}
     });
 
     const appendTextBlock = (container, className, text) => {
@@ -527,14 +411,12 @@
                         message.className = 'kk-quiz__success';
                         message.textContent = successText;
                         message.hidden = false;
-                        const analyticsParams = {
+                        sendMetrikaGoal(quiz, quiz.metrika.goal || 'kk_quiz_lead', {
                             quiz_code: quiz.code || '',
                             result_id: currentResult ? currentResult.id : '',
                             result_code: currentResult ? currentResult.code : '',
                             lead_id: result.lead_id || ''
-                        };
-
-                        sendAnalyticsEvent(quiz, 'form_submit', analyticsParams);
+                        });
                         return;
                     }
 
@@ -577,16 +459,6 @@
             return;
         }
 
-        if (!state.analytics.resultReachedSent) {
-            state.analytics.resultReachedSent = true;
-
-            sendAnalyticsEvent(quiz, 'result_reached', {
-                quiz_code: quiz.code || '',
-                result_id: result.id || '',
-                result_code: result.code || ''
-            });
-        }
-
         hideAll(nodes);
         clear(nodes.result);
         nodes.result.hidden = false;
@@ -625,21 +497,6 @@
     };
 
     const goNext = (nodes, quiz, state, question, answer) => {
-        if (
-            !state.analytics.firstAnswerSent
-            && question
-            && toId(question.id) === toId(quiz.first_question_id)
-            && hasQuestionAnswer(state, question, answer)
-        ) {
-            state.analytics.firstAnswerSent = true;
-
-            sendAnalyticsEvent(quiz, 'first_answer', {
-                quiz_code: quiz.code || '',
-                question_id: question.id || '',
-                question_code: question.code || ''
-            });
-        }
-
         if (answer && answer.result_id) {
             showResult(nodes, quiz, state, answer.result_id);
             return;
