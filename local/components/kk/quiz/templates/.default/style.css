@@ -313,3 +313,58 @@
         width: 100%;
     }
 }
+
+.kk-quiz__products {
+    margin-top: 24px;
+}
+
+.kk-quiz__products-title {
+    margin: 0 0 14px;
+    font-size: 20px;
+    line-height: 1.25;
+}
+
+.kk-quiz__products-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+}
+
+.kk-quiz__product-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid var(--kk-quiz-border, #d9e1ec);
+    border-radius: 16px;
+    background: var(--kk-quiz-card-bg, #fff);
+    color: inherit;
+    text-decoration: none;
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+
+.kk-quiz__product-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px rgba(15, 23, 42, .12);
+    border-color: var(--kk-quiz-accent, #2f6fed);
+}
+
+.kk-quiz__product-image {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: contain;
+    border-radius: 12px;
+    background: #f7f9fc;
+}
+
+.kk-quiz__product-name {
+    font-weight: 700;
+    line-height: 1.35;
+}
+
+.kk-quiz__product-link {
+    margin-top: auto;
+    font-size: 14px;
+    color: var(--kk-quiz-accent, #2f6fed);
+    font-weight: 700;
+}

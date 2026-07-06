@@ -452,6 +452,47 @@
         nodes.form.appendChild(message);
     };
 
+    const renderResultProducts = (result) => {
+        const products = Array.isArray(result.products) ? result.products : [];
+        if (products.length === 0) {
+            return null;
+        }
+
+        const wrapper = create('div', 'kk-quiz__products');
+        wrapper.appendChild(create('h3', 'kk-quiz__products-title', 'Подходящие варианты'));
+
+        const grid = create('div', 'kk-quiz__products-grid');
+
+        products.forEach((product) => {
+            const card = create('a', 'kk-quiz__product-card');
+            card.href = String(product.url || '#');
+
+            if (product.url) {
+                card.target = '_blank';
+                card.rel = 'noopener noreferrer';
+            }
+
+            if (product.picture_src) {
+                const image = document.createElement('img');
+                image.className = 'kk-quiz__product-image';
+                image.src = String(product.picture_src);
+                image.alt = String(product.name || '');
+                card.appendChild(image);
+            }
+
+            card.appendChild(create('div', 'kk-quiz__product-name', product.name || 'Товар'));
+
+            const linkText = create('div', 'kk-quiz__product-link', 'Смотреть товар');
+            card.appendChild(linkText);
+
+            grid.appendChild(card);
+        });
+
+        wrapper.appendChild(grid);
+
+        return wrapper;
+    };
+
     const showResult = (nodes, quiz, state, resultId) => {
         const result = findById(quiz.results, resultId);
         if (!result) {
@@ -484,6 +525,11 @@
         }
 
         nodes.result.appendChild(card);
+
+        const productsBlock = renderResultProducts(result);
+        if (productsBlock) {
+            nodes.result.appendChild(productsBlock);
+        }
 
         if (result.show_form === true) {
             const formWrap = create('div', 'kk-quiz__result-form');

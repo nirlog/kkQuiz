@@ -9,10 +9,14 @@ use Kk\Quiz\Repository\QuizRepository;
 final class QuizService
 {
     private QuizRepository $quizRepository;
+    private CatalogProductService $catalogProductService;
 
-    public function __construct(?QuizRepository $quizRepository = null)
-    {
+    public function __construct(
+        ?QuizRepository $quizRepository = null,
+        ?CatalogProductService $catalogProductService = null
+    ) {
         $this->quizRepository = $quizRepository ?? new QuizRepository();
+        $this->catalogProductService = $catalogProductService ?? new CatalogProductService();
     }
 
     public function getPublicQuiz(string $code): ?array
@@ -24,6 +28,7 @@ final class QuizService
 
         $questions = $quiz['questions'];
         $results = $quiz['results'];
+        $results = $this->attachProductsToResults($quiz, $results);
 
         return [
             'id' => $quiz['id'],
@@ -58,6 +63,32 @@ final class QuizService
             'questions' => $questions,
             'results' => $results,
         ];
+    }
+
+
+    private function attachProductsToResults(array $quiz, array $results): array
+    {
+        if (
+            (bool)($quiz['use_catalog'] ?? false) !== true
+            || (int)($quiz['catalog_iblock_id'] ?? 0) <= 0
+        ) {
+            return $results;
+        }
+
+        foreach ($results as &$result) {
+            $productIds = is_array($result['catalog_product_ids'] ?? null)
+                ? $result['catalog_product_ids']
+                : [];
+
+            $result['products'] = $this->catalogProductService->getProducts(
+                (int)$quiz['catalog_iblock_id'],
+                $productIds,
+                6
+            );
+        }
+        unset($result);
+
+        return $results;
     }
 
 
