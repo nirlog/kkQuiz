@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kk\Quiz\Service;
 
-use Bitrix\Main\Application;
+use Bitrix\Main\Data\Cache;
 use Bitrix\Main\Context;
 use Bitrix\Main\Web\Json;
 use Kk\Quiz\Iblock\Installer;
@@ -22,6 +22,9 @@ final class LeadService
     private const INPUT_QUESTION_TYPES = ['text', 'textarea', 'phone', 'email'];
     private const RATE_LIMIT_TTL = 60;
     private const RATE_LIMIT_MAX = 3;
+    private const RATE_LIMIT_CACHE_DIR = '/kk.quiz/rate_limit';
+    private const VISITOR_COOKIE_NAME = 'kk_quiz_visitor_id';
+    private const VISITOR_COOKIE_TTL = 31536000;
 
     private QuizService $quizService;
     private LeadRepository $leadRepository;
@@ -887,19 +890,19 @@ final class LeadService
         $ttl = $this->getIntSetting('rate_limit_ttl', self::RATE_LIMIT_TTL, 1, 86400);
         $max = $this->getIntSetting('rate_limit_max', self::RATE_LIMIT_MAX, 1, 1000);
 
-        $session = Application::getInstance()->getSession();
-        $request = Context::getCurrent()->getRequest();
+        $visitorId = $this->getRateLimitVisitorId();
 
-        $remoteAddress = (string)$request->getRemoteAddress();
-        $keySource = $remoteAddress . '|' . $quizCode;
-        $key = 'kk_quiz_submit_lead_' . md5($keySource);
+        $cacheKey = $this->buildRateLimitCacheKey($visitorId, $quizCode);
+        $data = $this->readRateLimitBucket($cacheKey, $ttl);
 
-        $data = $session->get($key);
         $now = time();
         $startedAt = is_array($data) ? (int)($data['started_at'] ?? 0) : 0;
 
-        if (!is_array($data) || ($now - $startedAt) > $ttl) {
-            $session->set($key, ['started_at' => $now, 'count' => 1]);
+        if (!is_array($data) || ($now - $startedAt) >= $ttl) {
+            $this->writeRateLimitBucket($cacheKey, [
+                'started_at' => $now,
+                'count' => 1,
+            ], $ttl);
 
             return [
                 'allowed' => true,
@@ -907,22 +910,101 @@ final class LeadService
             ];
         }
 
-        $data['count'] = (int)($data['count'] ?? 0) + 1;
-        $session->set($key, $data);
-
-        if ($data['count'] <= $max) {
-            return [
-                'allowed' => true,
-                'retry_after' => 0,
-            ];
-        }
-
+        $count = (int)($data['count'] ?? 0) + 1;
         $retryAfter = max(1, $ttl - ($now - $startedAt));
+
+        $this->writeRateLimitBucket($cacheKey, [
+            'started_at' => $startedAt > 0 ? $startedAt : $now,
+            'count' => $count,
+        ], $retryAfter);
+
+        if ($count <= $max) {
+            return [
+                'allowed' => true,
+                'retry_after' => 0,
+            ];
+        }
 
         return [
             'allowed' => false,
             'retry_after' => $retryAfter,
         ];
+    }
+
+    private function getRateLimitVisitorId(): string
+    {
+        $request = Context::getCurrent()->getRequest();
+        $visitorId = $this->cleanVisitorId((string)$request->getCookie(self::VISITOR_COOKIE_NAME));
+
+        if ($visitorId !== '') {
+            return $visitorId;
+        }
+
+        try {
+            $visitorId = bin2hex(random_bytes(16));
+        } catch (\Throwable) {
+            $visitorId = md5(uniqid('kk_quiz_', true));
+        }
+
+        $this->setVisitorCookie($visitorId);
+
+        return $visitorId;
+    }
+
+    private function cleanVisitorId(string $value): string
+    {
+        $value = trim($value);
+
+        return preg_match('/^[a-f0-9]{32,64}$/i', $value) === 1 ? strtolower($value) : '';
+    }
+
+    private function setVisitorCookie(string $visitorId): void
+    {
+        if (headers_sent()) {
+            return;
+        }
+
+        $secure = Context::getCurrent()->getRequest()->isHttps();
+
+        setcookie(self::VISITOR_COOKIE_NAME, $visitorId, [
+            'expires' => time() + self::VISITOR_COOKIE_TTL,
+            'path' => '/',
+            'secure' => $secure,
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+
+        $_COOKIE[self::VISITOR_COOKIE_NAME] = $visitorId;
+    }
+
+    private function buildRateLimitCacheKey(string $visitorId, string $quizCode): string
+    {
+        return 'kk_quiz_submit_lead_' . md5($visitorId . '|' . $quizCode);
+    }
+
+    private function readRateLimitBucket(string $cacheKey, int $ttl): array
+    {
+        $cache = Cache::createInstance();
+
+        if (!$cache->initCache($ttl, $cacheKey, self::RATE_LIMIT_CACHE_DIR)) {
+            return [];
+        }
+
+        $data = $cache->getVars();
+
+        return is_array($data) ? $data : [];
+    }
+
+    private function writeRateLimitBucket(string $cacheKey, array $data, int $ttl): void
+    {
+        $ttl = max(1, $ttl);
+
+        $cache = Cache::createInstance();
+        $cache->clean($cacheKey, self::RATE_LIMIT_CACHE_DIR);
+
+        if ($cache->startDataCache($ttl, $cacheKey, self::RATE_LIMIT_CACHE_DIR)) {
+            $cache->endDataCache($data);
+        }
     }
 
     private function buildRateLimitMessage(int $retryAfter): string
