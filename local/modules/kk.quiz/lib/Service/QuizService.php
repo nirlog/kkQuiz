@@ -45,11 +45,8 @@ final class QuizService
             'theme' => $quiz['theme'] !== '' ? $quiz['theme'] : 'default',
             'form_fields' => $quiz['form_fields'],
             'required_fields' => $quiz['required_fields'],
-            'metrika' => [
-                'enabled' => $quiz['use_metrika'],
-                'counter_id' => $quiz['metrika_counter_id'],
-                'goal' => $quiz['metrika_goal'] !== '' ? $quiz['metrika_goal'] : 'kk_quiz_lead',
-            ],
+            'metrika' => $this->buildMetrikaSettings($quiz),
+            'google_analytics' => $this->buildGoogleAnalyticsSettings(),
             'catalog' => [
                 'enabled' => $quiz['use_catalog'],
                 'iblock_id' => $quiz['catalog_iblock_id'],
