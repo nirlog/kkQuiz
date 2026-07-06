@@ -9,10 +9,14 @@ use Kk\Quiz\Repository\QuizRepository;
 final class QuizService
 {
     private QuizRepository $quizRepository;
+    private CatalogProductService $catalogProductService;
 
-    public function __construct(?QuizRepository $quizRepository = null)
-    {
+    public function __construct(
+        ?QuizRepository $quizRepository = null,
+        ?CatalogProductService $catalogProductService = null
+    ) {
         $this->quizRepository = $quizRepository ?? new QuizRepository();
+        $this->catalogProductService = $catalogProductService ?? new CatalogProductService();
     }
 
     public function getPublicQuiz(string $code): ?array
@@ -24,6 +28,7 @@ final class QuizService
 
         $questions = $quiz['questions'];
         $results = $quiz['results'];
+        $results = $this->attachProductsToResults($quiz, $results);
 
         return [
             'id' => $quiz['id'],
@@ -58,73 +63,29 @@ final class QuizService
     }
 
 
-    private function buildMetrikaSettings(array $quiz): array
+    private function attachProductsToResults(array $quiz, array $results): array
     {
-        $quizEnabled = (bool)($quiz['use_metrika'] ?? false);
-        $globalEnabled = ModuleSettingsService::getBool('yandex_metrika_enabled');
-
-        $counterId = trim((string)($quiz['metrika_counter_id'] ?? ''));
-        if ($counterId === '') {
-            $counterId = trim(ModuleSettingsService::get('yandex_metrika_counter_id'));
+        if (
+            (bool)($quiz['use_catalog'] ?? false) !== true
+            || (int)($quiz['catalog_iblock_id'] ?? 0) <= 0
+        ) {
+            return $results;
         }
 
-        $formSubmitGoal = trim((string)($quiz['metrika_goal'] ?? ''));
-        if ($formSubmitGoal === '') {
-            $formSubmitGoal = trim(ModuleSettingsService::get('yandex_metrika_goal'));
-        }
-        if ($formSubmitGoal === '') {
-            $formSubmitGoal = 'kk_quiz_lead';
-        }
+        foreach ($results as &$result) {
+            $productIds = is_array($result['catalog_product_ids'] ?? null)
+                ? $result['catalog_product_ids']
+                : [];
 
-        $firstAnswerGoal = trim(ModuleSettingsService::get('yandex_metrika_first_answer_goal'));
-        if ($firstAnswerGoal === '') {
-            $firstAnswerGoal = 'kk_quiz_first_answer';
+            $result['products'] = $this->catalogProductService->getProducts(
+                (int)$quiz['catalog_iblock_id'],
+                $productIds,
+                6
+            );
         }
+        unset($result);
 
-        $resultReachedGoal = trim(ModuleSettingsService::get('yandex_metrika_result_goal'));
-        if ($resultReachedGoal === '') {
-            $resultReachedGoal = 'kk_quiz_result_reached';
-        }
-
-        return [
-            'enabled' => ($quizEnabled || $globalEnabled) && $counterId !== '',
-            'counter_id' => $counterId,
-            'goal' => $formSubmitGoal,
-            'goals' => [
-                'first_answer' => $firstAnswerGoal,
-                'result_reached' => $resultReachedGoal,
-                'form_submit' => $formSubmitGoal,
-            ],
-        ];
-    }
-
-    private function buildGoogleAnalyticsSettings(): array
-    {
-        $formSubmitEventName = trim(ModuleSettingsService::get('google_analytics_event_name'));
-        if ($formSubmitEventName === '') {
-            $formSubmitEventName = 'generate_lead';
-        }
-
-        $firstAnswerEventName = trim(ModuleSettingsService::get('google_analytics_first_answer_event_name'));
-        if ($firstAnswerEventName === '') {
-            $firstAnswerEventName = 'kk_quiz_first_answer';
-        }
-
-        $resultReachedEventName = trim(ModuleSettingsService::get('google_analytics_result_event_name'));
-        if ($resultReachedEventName === '') {
-            $resultReachedEventName = 'kk_quiz_result_reached';
-        }
-
-        return [
-            'enabled' => ModuleSettingsService::getBool('google_analytics_enabled'),
-            'measurement_id' => trim(ModuleSettingsService::get('google_analytics_measurement_id')),
-            'event_name' => $formSubmitEventName,
-            'events' => [
-                'first_answer' => $firstAnswerEventName,
-                'result_reached' => $resultReachedEventName,
-                'form_submit' => $formSubmitEventName,
-            ],
-        ];
+        return $results;
     }
 
 
