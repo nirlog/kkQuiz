@@ -40,14 +40,26 @@ final class LeadService
     public function submit(array $payload): array
     {
         $errors = [];
-        if ($this->cleanString($payload['website'] ?? $payload['honeypot'] ?? '') !== '') {
+        $quizCode = $this->cleanCode($payload['quiz_code'] ?? '');
+
+        if (
+            ModuleSettingsService::getBool('honeypot_enabled')
+            && $this->cleanString($payload['website'] ?? $payload['honeypot'] ?? '') !== ''
+        ) {
             return ['success' => false, 'errors' => ['Заявка отклонена']];
         }
-        if (!$this->checkRateLimit()) {
-            return ['success' => false, 'errors' => ['Слишком частая отправка формы. Попробуйте позже.']];
+
+        if (ModuleSettingsService::getBool('rate_limit_enabled')) {
+            $rateLimit = $this->checkRateLimit($quizCode);
+
+            if (($rateLimit['allowed'] ?? false) !== true) {
+                return [
+                    'success' => false,
+                    'errors' => [$this->buildRateLimitMessage((int)($rateLimit['retry_after'] ?? 0))],
+                ];
+            }
         }
 
-        $quizCode = $this->cleanCode($payload['quiz_code'] ?? '');
         if ($quizCode === '') {
             $errors[] = 'Не указан код квиза';
         }
@@ -827,21 +839,117 @@ final class LeadService
         return null;
     }
 
-    private function checkRateLimit(): bool
+    private function getIntSetting(string $name, int $default, int $min, int $max): int
     {
+        $value = ModuleSettingsService::get($name);
+
+        if (!is_numeric($value)) {
+            return $default;
+        }
+
+        $value = (int)$value;
+
+        if ($value < $min) {
+            return $min;
+        }
+
+        if ($value > $max) {
+            return $max;
+        }
+
+        return $value;
+    }
+
+    private function checkRateLimit(string $quizCode = ''): array
+    {
+        $ttl = $this->getIntSetting('rate_limit_ttl', self::RATE_LIMIT_TTL, 1, 86400);
+        $max = $this->getIntSetting('rate_limit_max', self::RATE_LIMIT_MAX, 1, 1000);
+
         $session = Application::getInstance()->getSession();
-        $key = 'kk_quiz_submit_lead_' . md5((string)Context::getCurrent()->getRequest()->getRemoteAddress());
+        $request = Context::getCurrent()->getRequest();
+
+        $remoteAddress = (string)$request->getRemoteAddress();
+        $keySource = $remoteAddress . '|' . $quizCode;
+        $key = 'kk_quiz_submit_lead_' . md5($keySource);
+
         $data = $session->get($key);
         $now = time();
-        if (!is_array($data) || ($now - (int)($data['started_at'] ?? 0)) > self::RATE_LIMIT_TTL) {
+        $startedAt = is_array($data) ? (int)($data['started_at'] ?? 0) : 0;
+
+        if (!is_array($data) || ($now - $startedAt) > $ttl) {
             $session->set($key, ['started_at' => $now, 'count' => 1]);
-            return true;
+
+            return [
+                'allowed' => true,
+                'retry_after' => 0,
+            ];
         }
-        $data['count'] = (int)$data['count'] + 1;
+
+        $data['count'] = (int)($data['count'] ?? 0) + 1;
         $session->set($key, $data);
 
-        return $data['count'] <= self::RATE_LIMIT_MAX;
+        if ($data['count'] <= $max) {
+            return [
+                'allowed' => true,
+                'retry_after' => 0,
+            ];
+        }
+
+        $retryAfter = max(1, $ttl - ($now - $startedAt));
+
+        return [
+            'allowed' => false,
+            'retry_after' => $retryAfter,
+        ];
     }
+
+    private function buildRateLimitMessage(int $retryAfter): string
+    {
+        $retryAfter = max(1, $retryAfter);
+
+        return 'Слишком частая отправка формы. Попробуйте через ' . $this->formatDuration($retryAfter) . '.';
+    }
+
+    private function formatDuration(int $seconds): string
+    {
+        $seconds = max(1, $seconds);
+
+        if ($seconds < 60) {
+            return $seconds . ' ' . $this->pluralizeRu($seconds, 'секунду', 'секунды', 'секунд');
+        }
+
+        $minutes = (int)ceil($seconds / 60);
+
+        if ($minutes < 60) {
+            return $minutes . ' ' . $this->pluralizeRu($minutes, 'минуту', 'минуты', 'минут');
+        }
+
+        $hours = (int)ceil($minutes / 60);
+
+        return $hours . ' ' . $this->pluralizeRu($hours, 'час', 'часа', 'часов');
+    }
+
+    private function pluralizeRu(int $number, string $one, string $few, string $many): string
+    {
+        $number = abs($number);
+        $mod10 = $number % 10;
+        $mod100 = $number % 100;
+
+        if ($mod100 >= 11 && $mod100 <= 14) {
+            return $many;
+        }
+
+        if ($mod10 === 1) {
+            return $one;
+        }
+
+        if ($mod10 >= 2 && $mod10 <= 4) {
+            return $few;
+        }
+
+        return $many;
+    }
+
 
     private function cleanString(mixed $value): string
     {
