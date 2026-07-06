@@ -8,14 +8,14 @@ use Bitrix\Main\Loader;
 
 final class CatalogProductService
 {
-    public function getProducts(int $iblockId, array $productIds, int $limit = 6): array
+    public function getProducts(int|array $iblockIds, array $productIds, int $limit = 6): array
     {
-        $iblockId = max(0, $iblockId);
+        $iblockIds = $this->normalizeIds(is_array($iblockIds) ? $iblockIds : [$iblockIds]);
         $productIds = $this->normalizeIds($productIds);
         $limit = max(1, min(20, $limit));
         $productIds = array_slice($productIds, 0, $limit);
 
-        if ($iblockId <= 0 || $productIds === [] || !Loader::includeModule('iblock')) {
+        if ($iblockIds === [] || $productIds === [] || !Loader::includeModule('iblock')) {
             return [];
         }
 
@@ -25,7 +25,7 @@ final class CatalogProductService
         $rsElements = \CIBlockElement::GetList(
             ['SORT' => 'ASC', 'ID' => 'ASC'],
             [
-                'IBLOCK_ID' => $iblockId,
+                'IBLOCK_ID' => $iblockIds,
                 'ID' => $productIds,
                 'ACTIVE' => 'Y',
                 'ACTIVE_DATE' => 'Y',
@@ -65,23 +65,23 @@ final class CatalogProductService
     }
 
     public function getProductsFromSection(
-        int $iblockId,
+        int|array $iblockIds,
         int $sectionId,
         array $excludeIds = [],
         int $limit = 6
     ): array
     {
-        $iblockId = max(0, $iblockId);
+        $iblockIds = $this->normalizeIds(is_array($iblockIds) ? $iblockIds : [$iblockIds]);
         $sectionId = max(0, $sectionId);
         $excludeIds = $this->normalizeIds($excludeIds);
         $limit = max(1, min(20, $limit));
 
-        if ($iblockId <= 0 || $sectionId <= 0 || !Loader::includeModule('iblock')) {
+        if ($iblockIds === [] || $sectionId <= 0 || !Loader::includeModule('iblock')) {
             return [];
         }
 
         $filter = [
-            'IBLOCK_ID' => $iblockId,
+            'IBLOCK_ID' => $iblockIds,
             'SECTION_ID' => $sectionId,
             'INCLUDE_SUBSECTIONS' => 'Y',
             'ACTIVE' => 'Y',

@@ -433,6 +433,7 @@ final class Installer
             ['FIELD_NAME' => 'UF_KK_USE_METRIKA', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Использовать Метрику'],
             ['FIELD_NAME' => 'UF_KK_USE_CATALOG', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Использовать каталог'],
             ['FIELD_NAME' => 'UF_KK_CATALOG_IBLOCK_ID', 'USER_TYPE_ID' => 'integer', 'EDIT_FORM_LABEL' => 'ID инфоблока каталога'],
+            ['FIELD_NAME' => 'UF_KK_CATALOG_IBLOCK_IDS', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Инфоблоки каталога', 'MULTIPLE' => 'Y', 'VALUES' => self::getCatalogIblockEnumValues()],
             ['FIELD_NAME' => 'UF_KK_THEME', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Тема оформления', 'VALUES' => self::getThemeEnumValues()],
             ['FIELD_NAME' => 'UF_KK_ALLOW_POPUP_URL', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Разрешить URL для попапа'],
             ['FIELD_NAME' => 'UF_KK_PRIVACY_TEXT', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Текст политики'],
@@ -443,6 +444,8 @@ final class Installer
         foreach ($fields as $field) {
             self::addUserField($entityId, $field);
         }
+
+        self::syncCatalogIblockUserFieldEnums($entityId);
     }
 
     private static function addUserField(string $entityId, array $field): void
@@ -746,6 +749,48 @@ final class Installer
         }
 
         return implode('--;--', $parts);
+    }
+
+    private static function syncCatalogIblockUserFieldEnums(string $entityId): void
+    {
+        $field = \CUserTypeEntity::GetList([], [
+            'ENTITY_ID' => $entityId,
+            'FIELD_NAME' => 'UF_KK_CATALOG_IBLOCK_IDS',
+        ])->Fetch();
+
+        if (!is_array($field) || (int)($field['ID'] ?? 0) <= 0) {
+            return;
+        }
+
+        $enum = new \CUserFieldEnum();
+        $enum->SetEnumValues((int)$field['ID'], self::formatUserFieldEnumValues(self::getCatalogIblockEnumValues()));
+    }
+
+    private static function getCatalogIblockEnumValues(): array
+    {
+        if (!\Bitrix\Main\Loader::includeModule('iblock')) {
+            return [];
+        }
+
+        $values = [];
+        $iblocks = \CIBlock::GetList(
+            ['IBLOCK_TYPE' => 'ASC', 'SORT' => 'ASC', 'NAME' => 'ASC'],
+            ['ACTIVE' => 'Y']
+        );
+
+        while ($iblock = $iblocks->Fetch()) {
+            $id = (int)$iblock['ID'];
+            if ($id <= 0) {
+                continue;
+            }
+
+            $type = (string)($iblock['IBLOCK_TYPE_ID'] ?? '');
+            $name = (string)($iblock['NAME'] ?? '');
+
+            $values[(string)$id] = '[' . $type . '] ' . $name . ' [' . $id . ']';
+        }
+
+        return $values;
     }
 
     private static function getFormFieldEnumValues(): array

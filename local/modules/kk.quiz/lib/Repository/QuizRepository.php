@@ -97,6 +97,7 @@ final class QuizRepository
                 'UF_KK_USE_METRIKA',
                 'UF_KK_USE_CATALOG',
                 'UF_KK_CATALOG_IBLOCK_ID',
+                'UF_KK_CATALOG_IBLOCK_IDS',
                 'UF_KK_THEME',
                 'UF_KK_ALLOW_POPUP_URL',
                 'UF_KK_PRIVACY_TEXT',
@@ -112,6 +113,14 @@ final class QuizRepository
     private function buildQuiz(int $iblockId, array $section): array
     {
         $items = $this->getSectionItems($iblockId, (int)$section['ID']);
+        $catalogIblockIds = $this->normalizeIntList(
+            $this->normalizeUserFieldEnumList($section['UF_KK_CATALOG_IBLOCK_IDS'] ?? [])
+        );
+        $legacyCatalogIblockId = $this->toNullableInt($section['UF_KK_CATALOG_IBLOCK_ID'] ?? null);
+
+        if ($catalogIblockIds === [] && $legacyCatalogIblockId !== null) {
+            $catalogIblockIds = [$legacyCatalogIblockId];
+        }
 
         return [
             'id' => (int)$section['ID'],
@@ -134,7 +143,8 @@ final class QuizRepository
             'metrika_goal' => $this->normalizeMetrikaGoal($section['UF_KK_METRIKA_GOAL'] ?? ''),
             'use_metrika' => $this->toBool($section['UF_KK_USE_METRIKA'] ?? null),
             'use_catalog' => $this->toBool($section['UF_KK_USE_CATALOG'] ?? null),
-            'catalog_iblock_id' => $this->toNullableInt($section['UF_KK_CATALOG_IBLOCK_ID'] ?? null),
+            'catalog_iblock_id' => $legacyCatalogIblockId,
+            'catalog_iblock_ids' => $catalogIblockIds,
             'theme' => $this->normalizeUserFieldEnumValue($section['UF_KK_THEME'] ?? 'default') ?: 'default',
             'allow_popup_url' => $this->toBool($section['UF_KK_ALLOW_POPUP_URL'] ?? null),
             'privacy_text' => (string)($section['UF_KK_PRIVACY_TEXT'] ?? ''),

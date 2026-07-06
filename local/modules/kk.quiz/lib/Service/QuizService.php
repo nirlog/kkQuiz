@@ -50,6 +50,7 @@ final class QuizService
             'catalog' => [
                 'enabled' => $quiz['use_catalog'],
                 'iblock_id' => $quiz['catalog_iblock_id'],
+                'iblock_ids' => $quiz['catalog_iblock_ids'] ?? [],
             ],
             'privacy' => [
                 'text' => $quiz['privacy_text'],
@@ -65,14 +66,23 @@ final class QuizService
 
     private function attachProductsToResults(array $quiz, array $results): array
     {
-        if (
-            (bool)($quiz['use_catalog'] ?? false) !== true
-            || (int)($quiz['catalog_iblock_id'] ?? 0) <= 0
-        ) {
+        if ((bool)($quiz['use_catalog'] ?? false) !== true) {
             return $results;
         }
 
-        $iblockId = (int)$quiz['catalog_iblock_id'];
+        $iblockIds = is_array($quiz['catalog_iblock_ids'] ?? null)
+            ? $quiz['catalog_iblock_ids']
+            : [];
+        $iblockIds = array_values(array_filter(array_map('intval', $iblockIds)));
+
+        if ($iblockIds === [] && (int)($quiz['catalog_iblock_id'] ?? 0) > 0) {
+            $iblockIds = [(int)$quiz['catalog_iblock_id']];
+        }
+
+        if ($iblockIds === []) {
+            return $results;
+        }
+
         $limit = 6;
 
         foreach ($results as &$result) {
@@ -81,7 +91,7 @@ final class QuizService
                 : [];
 
             $products = $this->catalogProductService->getProducts(
-                $iblockId,
+                $iblockIds,
                 $productIds,
                 $limit
             );
@@ -97,7 +107,7 @@ final class QuizService
 
             if ($sectionId > 0 && $remainingLimit > 0) {
                 $sectionProducts = $this->catalogProductService->getProductsFromSection(
-                    $iblockId,
+                    $iblockIds,
                     $sectionId,
                     $loadedIds,
                     $remainingLimit
