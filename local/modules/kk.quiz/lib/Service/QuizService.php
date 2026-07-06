@@ -117,6 +117,16 @@ final class QuizService
             $resultReachedGoal = 'kk_quiz_result_reached';
         }
 
+        $resultCtaClickGoal = trim(ModuleSettingsService::get('yandex_metrika_result_cta_click_goal'));
+        if ($resultCtaClickGoal === '') {
+            $resultCtaClickGoal = 'kk_quiz_result_cta_click';
+        }
+
+        $productClickGoal = trim(ModuleSettingsService::get('yandex_metrika_product_click_goal'));
+        if ($productClickGoal === '') {
+            $productClickGoal = 'kk_quiz_product_click';
+        }
+
         return [
             'enabled' => ($quizEnabled || $globalEnabled) && $counterId !== '',
             'counter_id' => $counterId,
@@ -124,6 +134,8 @@ final class QuizService
             'goals' => [
                 'first_answer' => $firstAnswerGoal,
                 'result_reached' => $resultReachedGoal,
+                'result_cta_click' => $resultCtaClickGoal,
+                'product_click' => $productClickGoal,
                 'form_submit' => $formSubmitGoal,
             ],
         ];
@@ -146,6 +158,16 @@ final class QuizService
             $resultReachedEventName = 'kk_quiz_result_reached';
         }
 
+        $resultCtaClickEventName = trim(ModuleSettingsService::get('google_analytics_result_cta_click_event_name'));
+        if ($resultCtaClickEventName === '') {
+            $resultCtaClickEventName = 'kk_quiz_result_cta_click';
+        }
+
+        $productClickEventName = trim(ModuleSettingsService::get('google_analytics_product_click_event_name'));
+        if ($productClickEventName === '') {
+            $productClickEventName = 'kk_quiz_product_click';
+        }
+
         return [
             'enabled' => ModuleSettingsService::getBool('google_analytics_enabled'),
             'measurement_id' => trim(ModuleSettingsService::get('google_analytics_measurement_id')),
@@ -153,6 +175,8 @@ final class QuizService
             'events' => [
                 'first_answer' => $firstAnswerEventName,
                 'result_reached' => $resultReachedEventName,
+                'result_cta_click' => $resultCtaClickEventName,
+                'product_click' => $productClickEventName,
                 'form_submit' => $formSubmitEventName,
             ],
         ];

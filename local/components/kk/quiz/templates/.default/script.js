@@ -232,7 +232,12 @@
             question_code: params.question_code || '',
             result_id: params.result_id || '',
             result_code: params.result_code || '',
-            lead_id: params.lead_id || ''
+            lead_id: params.lead_id || '',
+            cta_text: params.cta_text || '',
+            cta_link: params.cta_link || '',
+            product_id: params.product_id || '',
+            product_name: params.product_name || '',
+            product_url: params.product_url || ''
         };
 
         if (measurementId !== '') {
@@ -242,7 +247,7 @@
         try {
             window.gtag('event', event, eventParams);
         } catch (error) {
-            // Ошибка GA4 не должна ломать отправку формы.
+            // Ошибка GA4 не должна ломать квиз.
         }
     };
 
@@ -264,6 +269,14 @@
 
         if (eventType === 'result_reached') {
             return 'kk_quiz_result_reached';
+        }
+
+        if (eventType === 'result_cta_click') {
+            return 'kk_quiz_result_cta_click';
+        }
+
+        if (eventType === 'product_click') {
+            return 'kk_quiz_product_click';
         }
 
         return '';
@@ -289,6 +302,14 @@
             return 'kk_quiz_result_reached';
         }
 
+        if (eventType === 'result_cta_click') {
+            return 'kk_quiz_result_cta_click';
+        }
+
+        if (eventType === 'product_click') {
+            return 'kk_quiz_product_click';
+        }
+
         return '';
     };
 
@@ -300,7 +321,12 @@
             question_code: params.question_code || '',
             result_id: params.result_id || '',
             result_code: params.result_code || '',
-            lead_id: params.lead_id || ''
+            lead_id: params.lead_id || '',
+            cta_text: params.cta_text || '',
+            cta_link: params.cta_link || '',
+            product_id: params.product_id || '',
+            product_name: params.product_name || '',
+            product_url: params.product_url || ''
         };
 
         sendMetrikaGoal(quiz, getMetrikaGoal(quiz, eventType), eventParams);
@@ -570,7 +596,7 @@
         nodes.form.appendChild(message);
     };
 
-    const renderResultProducts = (result) => {
+    const renderResultProducts = (quiz, result) => {
         const products = Array.isArray(result.products) ? result.products : [];
         if (products.length === 0) {
             return null;
@@ -589,6 +615,17 @@
                 card.target = '_blank';
                 card.rel = 'noopener noreferrer';
             }
+
+            card.addEventListener('click', () => {
+                sendAnalyticsEvent(quiz, 'product_click', {
+                    quiz_code: quiz.code || '',
+                    result_id: result.id || '',
+                    result_code: result.code || '',
+                    product_id: product.id || '',
+                    product_name: product.name || '',
+                    product_url: product.url || ''
+                });
+            });
 
             if (product.picture_src) {
                 const image = document.createElement('img');
@@ -649,12 +686,23 @@
         if (result.cta_text && result.cta_link) {
             const link = create('a', 'kk-quiz__button kk-quiz__button--link', result.cta_text);
             link.href = String(result.cta_link);
+
+            link.addEventListener('click', () => {
+                sendAnalyticsEvent(quiz, 'result_cta_click', {
+                    quiz_code: quiz.code || '',
+                    result_id: result.id || '',
+                    result_code: result.code || '',
+                    cta_text: result.cta_text || '',
+                    cta_link: result.cta_link || ''
+                });
+            });
+
             card.appendChild(link);
         }
 
         nodes.result.appendChild(card);
 
-        const productsBlock = renderResultProducts(result);
+        const productsBlock = renderResultProducts(quiz, result);
         if (productsBlock) {
             nodes.result.appendChild(productsBlock);
         }
