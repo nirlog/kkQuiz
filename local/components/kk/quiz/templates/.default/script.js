@@ -276,7 +276,7 @@
         }
 
         if (eventType === 'product_click') {
-            return 'kk_quiz_product_click';
+            return 'kk_quiz_recommendation_click';
         }
 
         return '';
@@ -307,7 +307,7 @@
         }
 
         if (eventType === 'product_click') {
-            return 'kk_quiz_product_click';
+            return 'kk_quiz_recommendation_click';
         }
 
         return '';
@@ -635,9 +635,9 @@
                 card.appendChild(image);
             }
 
-            card.appendChild(create('div', 'kk-quiz__product-name', product.name || 'Товар'));
+            card.appendChild(create('div', 'kk-quiz__product-name', product.name || 'Вариант'));
 
-            const linkText = create('div', 'kk-quiz__product-link', 'Смотреть товар');
+            const linkText = create('div', 'kk-quiz__product-link', 'Подробнее');
             card.appendChild(linkText);
 
             grid.appendChild(card);

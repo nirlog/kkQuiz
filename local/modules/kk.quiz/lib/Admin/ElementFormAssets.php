@@ -318,7 +318,7 @@ final class ElementFormAssets
             . 'const groups = Array.isArray(settings.catalogSectionsByIblock) ? settings.catalogSectionsByIblock : [];'
             . 'if (groups.length === 0) {'
             . 'const hint = document.createElement("div");'
-            . 'hint.textContent = "Сначала выберите инфоблоки каталога в настройках квиза.";'
+            . 'hint.textContent = "Сначала выберите инфоблоки рекомендаций в настройках квиза.";'
             . 'hint.style.color = "#777";'
             . 'original.insertAdjacentElement("afterend", hint);'
             . 'return;'

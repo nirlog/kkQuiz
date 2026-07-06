@@ -177,7 +177,7 @@ final class QuizService
 
         $productClickGoal = trim(ModuleSettingsService::get('yandex_metrika_product_click_goal'));
         if ($productClickGoal === '') {
-            $productClickGoal = 'kk_quiz_product_click';
+            $productClickGoal = 'kk_quiz_recommendation_click';
         }
 
         return [
@@ -218,7 +218,7 @@ final class QuizService
 
         $productClickEventName = trim(ModuleSettingsService::get('google_analytics_product_click_event_name'));
         if ($productClickEventName === '') {
-            $productClickEventName = 'kk_quiz_product_click';
+            $productClickEventName = 'kk_quiz_recommendation_click';
         }
 
         return [

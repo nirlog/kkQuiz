@@ -249,14 +249,14 @@ if ($message !== null) {
     $renderInput('yandex_metrika_first_answer_goal', 'Цель Метрики: ответил на первый вопрос');
     $renderInput('yandex_metrika_result_goal', 'Цель Метрики: дошёл до финала');
     $renderInput('yandex_metrika_result_cta_click_goal', 'Yandex.Metrika: цель клика по CTA результата');
-    $renderInput('yandex_metrika_product_click_goal', 'Yandex.Metrika: цель клика по товару');
+    $renderInput('yandex_metrika_product_click_goal', 'Yandex.Metrika: цель клика по рекомендации');
     $renderInput('yandex_metrika_goal', 'Цель Метрики: отправил форму');
     $renderCheckbox('google_analytics_enabled', 'Включить Google Analytics');
     $renderInput('google_analytics_measurement_id', 'Google Measurement ID');
     $renderInput('google_analytics_first_answer_event_name', 'GA4 event: ответил на первый вопрос');
     $renderInput('google_analytics_result_event_name', 'GA4 event: дошёл до финала');
     $renderInput('google_analytics_result_cta_click_event_name', 'GA4: событие клика по CTA результата');
-    $renderInput('google_analytics_product_click_event_name', 'GA4: событие клика по товару');
+    $renderInput('google_analytics_product_click_event_name', 'GA4: событие клика по рекомендации');
     $renderInput('google_analytics_event_name', 'GA4 event: отправил форму');
     ?>
 
