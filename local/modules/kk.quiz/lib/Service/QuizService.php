@@ -89,6 +89,76 @@ final class QuizService
     }
 
 
+    private function buildMetrikaSettings(array $quiz): array
+    {
+        $quizEnabled = (bool)($quiz['use_metrika'] ?? false);
+        $globalEnabled = ModuleSettingsService::getBool('yandex_metrika_enabled');
+
+        $counterId = trim((string)($quiz['metrika_counter_id'] ?? ''));
+        if ($counterId === '') {
+            $counterId = trim(ModuleSettingsService::get('yandex_metrika_counter_id'));
+        }
+
+        $formSubmitGoal = trim((string)($quiz['metrika_goal'] ?? ''));
+        if ($formSubmitGoal === '') {
+            $formSubmitGoal = trim(ModuleSettingsService::get('yandex_metrika_goal'));
+        }
+        if ($formSubmitGoal === '') {
+            $formSubmitGoal = 'kk_quiz_lead';
+        }
+
+        $firstAnswerGoal = trim(ModuleSettingsService::get('yandex_metrika_first_answer_goal'));
+        if ($firstAnswerGoal === '') {
+            $firstAnswerGoal = 'kk_quiz_first_answer';
+        }
+
+        $resultReachedGoal = trim(ModuleSettingsService::get('yandex_metrika_result_goal'));
+        if ($resultReachedGoal === '') {
+            $resultReachedGoal = 'kk_quiz_result_reached';
+        }
+
+        return [
+            'enabled' => ($quizEnabled || $globalEnabled) && $counterId !== '',
+            'counter_id' => $counterId,
+            'goal' => $formSubmitGoal,
+            'goals' => [
+                'first_answer' => $firstAnswerGoal,
+                'result_reached' => $resultReachedGoal,
+                'form_submit' => $formSubmitGoal,
+            ],
+        ];
+    }
+
+    private function buildGoogleAnalyticsSettings(): array
+    {
+        $formSubmitEventName = trim(ModuleSettingsService::get('google_analytics_event_name'));
+        if ($formSubmitEventName === '') {
+            $formSubmitEventName = 'generate_lead';
+        }
+
+        $firstAnswerEventName = trim(ModuleSettingsService::get('google_analytics_first_answer_event_name'));
+        if ($firstAnswerEventName === '') {
+            $firstAnswerEventName = 'kk_quiz_first_answer';
+        }
+
+        $resultReachedEventName = trim(ModuleSettingsService::get('google_analytics_result_event_name'));
+        if ($resultReachedEventName === '') {
+            $resultReachedEventName = 'kk_quiz_result_reached';
+        }
+
+        return [
+            'enabled' => ModuleSettingsService::getBool('google_analytics_enabled'),
+            'measurement_id' => trim(ModuleSettingsService::get('google_analytics_measurement_id')),
+            'event_name' => $formSubmitEventName,
+            'events' => [
+                'first_answer' => $firstAnswerEventName,
+                'result_reached' => $resultReachedEventName,
+                'form_submit' => $formSubmitEventName,
+            ],
+        ];
+    }
+
+
     public function getQuizEmailTo(string $code): string
     {
         $quiz = $this->quizRepository->getQuizByCode($code);
