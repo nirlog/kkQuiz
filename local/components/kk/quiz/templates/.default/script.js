@@ -208,9 +208,151 @@
         }
     };
 
+    const sendGoogleAnalyticsEvent = (quiz, eventName, params = {}) => {
+        if (!quiz || !quiz.google_analytics || quiz.google_analytics.enabled !== true) {
+            return;
+        }
+
+        if (typeof window.gtag !== 'function') {
+            return;
+        }
+
+        const event = String(eventName || '').trim();
+        if (event === '') {
+            return;
+        }
+
+        const measurementId = String(quiz.google_analytics.measurement_id || '').trim();
+
+        const eventParams = {
+            event_category: 'kk_quiz',
+            event_type: params.event_type || '',
+            quiz_code: params.quiz_code || '',
+            question_id: params.question_id || '',
+            question_code: params.question_code || '',
+            result_id: params.result_id || '',
+            result_code: params.result_code || '',
+            lead_id: params.lead_id || '',
+            cta_text: params.cta_text || '',
+            cta_link: params.cta_link || '',
+            product_id: params.product_id || '',
+            product_name: params.product_name || '',
+            product_url: params.product_url || ''
+        };
+
+        if (measurementId !== '') {
+            eventParams.send_to = measurementId;
+        }
+
+        try {
+            window.gtag('event', event, eventParams);
+        } catch (error) {
+            // Ошибка GA4 не должна ломать квиз.
+        }
+    };
+
+    const getMetrikaGoal = (quiz, eventType) => {
+        const goals = quiz && quiz.metrika && quiz.metrika.goals ? quiz.metrika.goals : {};
+        const goal = String(goals[eventType] || '').trim();
+
+        if (goal !== '') {
+            return goal;
+        }
+
+        if (eventType === 'form_submit') {
+            return String(quiz && quiz.metrika ? quiz.metrika.goal || '' : '').trim() || 'kk_quiz_lead';
+        }
+
+        if (eventType === 'first_answer') {
+            return 'kk_quiz_first_answer';
+        }
+
+        if (eventType === 'result_reached') {
+            return 'kk_quiz_result_reached';
+        }
+
+        if (eventType === 'result_cta_click') {
+            return 'kk_quiz_result_cta_click';
+        }
+
+        if (eventType === 'product_click') {
+            return 'kk_quiz_product_click';
+        }
+
+        return '';
+    };
+
+    const getGoogleAnalyticsEventName = (quiz, eventType) => {
+        const events = quiz && quiz.google_analytics && quiz.google_analytics.events ? quiz.google_analytics.events : {};
+        const eventName = String(events[eventType] || '').trim();
+
+        if (eventName !== '') {
+            return eventName;
+        }
+
+        if (eventType === 'form_submit') {
+            return String(quiz && quiz.google_analytics ? quiz.google_analytics.event_name || '' : '').trim() || 'generate_lead';
+        }
+
+        if (eventType === 'first_answer') {
+            return 'kk_quiz_first_answer';
+        }
+
+        if (eventType === 'result_reached') {
+            return 'kk_quiz_result_reached';
+        }
+
+        if (eventType === 'result_cta_click') {
+            return 'kk_quiz_result_cta_click';
+        }
+
+        if (eventType === 'product_click') {
+            return 'kk_quiz_product_click';
+        }
+
+        return '';
+    };
+
+    const sendAnalyticsEvent = (quiz, eventType, params = {}) => {
+        const eventParams = {
+            event_type: eventType,
+            quiz_code: params.quiz_code || '',
+            question_id: params.question_id || '',
+            question_code: params.question_code || '',
+            result_id: params.result_id || '',
+            result_code: params.result_code || '',
+            lead_id: params.lead_id || '',
+            cta_text: params.cta_text || '',
+            cta_link: params.cta_link || '',
+            product_id: params.product_id || '',
+            product_name: params.product_name || '',
+            product_url: params.product_url || ''
+        };
+
+        sendMetrikaGoal(quiz, getMetrikaGoal(quiz, eventType), eventParams);
+        sendGoogleAnalyticsEvent(quiz, getGoogleAnalyticsEventName(quiz, eventType), eventParams);
+    };
+
+    const hasQuestionAnswer = (state, question, answer) => {
+        if (answer) {
+            return true;
+        }
+
+        const value = state.answers[question.id];
+        if (Array.isArray(value)) {
+            return value.length > 0;
+        }
+
+        return String(value || '').trim() !== '';
+    };
+
     const buildState = () => ({
         answers: {},
-        fields: {}
+        fields: {},
+        analytics: {
+            firstAnswerSent: false,
+            resultReachedSent: false
+        }
     });
 
     const appendTextBlock = (container, className, text) => {
@@ -411,12 +553,14 @@
                         message.className = 'kk-quiz__success';
                         message.textContent = successText;
                         message.hidden = false;
-                        sendMetrikaGoal(quiz, quiz.metrika.goal || 'kk_quiz_lead', {
+                        const analyticsParams = {
                             quiz_code: quiz.code || '',
                             result_id: currentResult ? currentResult.id : '',
                             result_code: currentResult ? currentResult.code : '',
                             lead_id: result.lead_id || ''
-                        });
+                        };
+
+                        sendAnalyticsEvent(quiz, 'form_submit', analyticsParams);
                         return;
                     }
 
@@ -452,11 +596,73 @@
         nodes.form.appendChild(message);
     };
 
+    const renderResultProducts = (quiz, result) => {
+        const products = Array.isArray(result.products) ? result.products : [];
+        if (products.length === 0) {
+            return null;
+        }
+
+        const wrapper = create('div', 'kk-quiz__products');
+        wrapper.appendChild(create('h3', 'kk-quiz__products-title', 'Подходящие варианты'));
+
+        const grid = create('div', 'kk-quiz__products-grid');
+
+        products.forEach((product) => {
+            const card = create('a', 'kk-quiz__product-card');
+            card.href = String(product.url || '#');
+
+            if (product.url) {
+                card.target = '_blank';
+                card.rel = 'noopener noreferrer';
+            }
+
+            card.addEventListener('click', () => {
+                sendAnalyticsEvent(quiz, 'product_click', {
+                    quiz_code: quiz.code || '',
+                    result_id: result.id || '',
+                    result_code: result.code || '',
+                    product_id: product.id || '',
+                    product_name: product.name || '',
+                    product_url: product.url || ''
+                });
+            });
+
+            if (product.picture_src) {
+                const image = document.createElement('img');
+                image.className = 'kk-quiz__product-image';
+                image.src = String(product.picture_src);
+                image.alt = String(product.name || '');
+                card.appendChild(image);
+            }
+
+            card.appendChild(create('div', 'kk-quiz__product-name', product.name || 'Товар'));
+
+            const linkText = create('div', 'kk-quiz__product-link', 'Смотреть товар');
+            card.appendChild(linkText);
+
+            grid.appendChild(card);
+        });
+
+        wrapper.appendChild(grid);
+
+        return wrapper;
+    };
+
     const showResult = (nodes, quiz, state, resultId) => {
         const result = findById(quiz.results, resultId);
         if (!result) {
             showFinalForm(nodes, quiz, state, null);
             return;
+        }
+
+        if (!state.analytics.resultReachedSent) {
+            state.analytics.resultReachedSent = true;
+
+            sendAnalyticsEvent(quiz, 'result_reached', {
+                quiz_code: quiz.code || '',
+                result_id: result.id || '',
+                result_code: result.code || ''
+            });
         }
 
         hideAll(nodes);
@@ -480,10 +686,26 @@
         if (result.cta_text && result.cta_link) {
             const link = create('a', 'kk-quiz__button kk-quiz__button--link', result.cta_text);
             link.href = String(result.cta_link);
+
+            link.addEventListener('click', () => {
+                sendAnalyticsEvent(quiz, 'result_cta_click', {
+                    quiz_code: quiz.code || '',
+                    result_id: result.id || '',
+                    result_code: result.code || '',
+                    cta_text: result.cta_text || '',
+                    cta_link: result.cta_link || ''
+                });
+            });
+
             card.appendChild(link);
         }
 
         nodes.result.appendChild(card);
+
+        const productsBlock = renderResultProducts(quiz, result);
+        if (productsBlock) {
+            nodes.result.appendChild(productsBlock);
+        }
 
         if (result.show_form === true) {
             const formWrap = create('div', 'kk-quiz__result-form');
@@ -497,6 +719,21 @@
     };
 
     const goNext = (nodes, quiz, state, question, answer) => {
+        if (
+            !state.analytics.firstAnswerSent
+            && question
+            && toId(question.id) === toId(quiz.first_question_id)
+            && hasQuestionAnswer(state, question, answer)
+        ) {
+            state.analytics.firstAnswerSent = true;
+
+            sendAnalyticsEvent(quiz, 'first_answer', {
+                quiz_code: quiz.code || '',
+                question_id: question.id || '',
+                question_code: question.code || ''
+            });
+        }
+
         if (answer && answer.result_id) {
             showResult(nodes, quiz, state, answer.result_id);
             return;
