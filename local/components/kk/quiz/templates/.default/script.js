@@ -439,7 +439,15 @@
             input.className = 'kk-quiz__input';
             input.name = field;
             input.required = visibleRequiredFields.includes(field);
-            input.type = field === 'email' ? 'email' : field === 'phone' ? 'tel' : 'text';
+
+            if (input.tagName === 'INPUT') {
+                input.type = field === 'email' ? 'email' : field === 'phone' ? 'tel' : 'text';
+            }
+
+            if (field === 'comment') {
+                input.rows = 4;
+            }
+
             if (field === 'phone') {
                 input.inputMode = 'tel';
                 input.autocomplete = 'tel';
