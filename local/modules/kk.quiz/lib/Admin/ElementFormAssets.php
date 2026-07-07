@@ -71,6 +71,7 @@ final class ElementFormAssets
             'result' => self::mapCodesToIds(self::RESULT_CODES, $propertyIds),
             'catalogSectionPropertyId' => $propertyIds['KK_RESULT_CATALOG_SECTION'] ?? 0,
             'catalogProductsPropertyId' => $propertyIds['KK_RESULT_CATALOG_PRODUCTS'] ?? 0,
+            'catalogProductsByIblock' => self::getCatalogProductsByIblock($iblockId, $propertyIds['KK_RESULT_CATALOG_PRODUCTS'] ?? 0),
             'catalogSectionsByIblock' => self::getCatalogSectionsByIblock($iblockId),
             'recommendationsEnabled' => $recommendationSettings['enabled'],
             'recommendationsSectionId' => $recommendationSettings['section_id'],
@@ -142,7 +143,84 @@ final class ElementFormAssets
         return $ids;
     }
 
-    private static function getCatalogSectionsByIblock(int $quizIblockId): array
+    private static function getCatalogProductsByIblock(int $quizIblockId, int $productsPropertyId): array
+    {
+        $iblockIds = self::getCurrentQuizCatalogIblockIds($quizIblockId);
+        if ($iblockIds === []) {
+            return [];
+        }
+
+        $selectedIds = self::getCurrentSelectedProductIds($quizIblockId, $productsPropertyId);
+        $result = [];
+
+        foreach ($iblockIds as $iblockId) {
+            $iblock = \CIBlock::GetByID($iblockId)->Fetch();
+            if (!is_array($iblock)) {
+                continue;
+            }
+
+            $items = [];
+            $seenIds = [];
+            $elements = \CIBlockElement::GetList(
+                ['SORT' => 'ASC', 'NAME' => 'ASC', 'ID' => 'ASC'],
+                [
+                    'IBLOCK_ID' => $iblockId,
+                    'ACTIVE' => 'Y',
+                    'ACTIVE_DATE' => 'Y',
+                ],
+                false,
+                ['nTopCount' => 300],
+                ['ID', 'IBLOCK_ID', 'NAME', 'CODE', 'DETAIL_PAGE_URL']
+            );
+
+            while ($element = $elements->GetNext()) {
+                $id = (int)$element['ID'];
+                $seenIds[] = $id;
+                $items[] = [
+                    'id' => $id,
+                    'name' => (string)($element['NAME'] ?? ''),
+                    'url' => (string)($element['DETAIL_PAGE_URL'] ?? ''),
+                ];
+            }
+
+            $missingSelectedIds = array_values(array_diff($selectedIds, $seenIds));
+            if ($missingSelectedIds !== []) {
+                $selectedElements = \CIBlockElement::GetList(
+                    ['SORT' => 'ASC', 'NAME' => 'ASC', 'ID' => 'ASC'],
+                    ['IBLOCK_ID' => $iblockId, 'ID' => $missingSelectedIds],
+                    false,
+                    false,
+                    ['ID', 'IBLOCK_ID', 'NAME', 'CODE', 'DETAIL_PAGE_URL']
+                );
+
+                while ($element = $selectedElements->GetNext()) {
+                    $id = (int)$element['ID'];
+                    if (in_array($id, $seenIds, true)) {
+                        continue;
+                    }
+
+                    $seenIds[] = $id;
+                    $items[] = [
+                        'id' => $id,
+                        'name' => (string)($element['NAME'] ?? ''),
+                        'url' => (string)($element['DETAIL_PAGE_URL'] ?? ''),
+                    ];
+                }
+            }
+
+            $result[] = [
+                'id' => $iblockId,
+                'name' => (string)($iblock['NAME'] ?? ''),
+                'type' => (string)($iblock['IBLOCK_TYPE_ID'] ?? ''),
+                'items' => $items,
+                'limited' => count($items) >= 300,
+            ];
+        }
+
+        return $result;
+    }
+
+    private static function getCurrentQuizCatalogIblockIds(int $quizIblockId): array
     {
         $sectionId = self::getCurrentQuizSectionId($quizIblockId);
         if ($sectionId <= 0) {
@@ -164,6 +242,32 @@ final class ElementFormAssets
         if ($iblockIds === [] && $legacyIblockId > 0) {
             $iblockIds = [$legacyIblockId];
         }
+
+        return $iblockIds;
+    }
+
+    private static function getCurrentSelectedProductIds(int $quizIblockId, int $productsPropertyId): array
+    {
+        $elementId = (int)($_REQUEST['ID'] ?? 0);
+        if ($elementId <= 0 || $productsPropertyId <= 0) {
+            return [];
+        }
+
+        $ids = [];
+        $properties = \CIBlockElement::GetProperty($quizIblockId, $elementId, [], ['ID' => $productsPropertyId]);
+        while ($property = $properties->Fetch()) {
+            $value = (int)($property['VALUE'] ?? 0);
+            if ($value > 0 && !in_array($value, $ids, true)) {
+                $ids[] = $value;
+            }
+        }
+
+        return $ids;
+    }
+
+    private static function getCatalogSectionsByIblock(int $quizIblockId): array
+    {
+        $iblockIds = self::getCurrentQuizCatalogIblockIds($quizIblockId);
         if ($iblockIds === []) {
             return [];
         }
@@ -359,12 +463,12 @@ final class ElementFormAssets
             . 'let hasProducts = false;'
             . 'if (sectionPropertyId) {'
             . 'getPropertyControls(sectionPropertyId).forEach((control) => {'
-            . 'if (String(control.value || "").trim() !== "") hasSection = true;'
+            . 'if (!control.disabled && control.type !== "checkbox" && control.type !== "radio" && String(control.value || "").trim() !== "") hasSection = true;'
             . '});'
             . '}'
             . 'if (productsPropertyId) {'
             . 'getPropertyControls(productsPropertyId).forEach((control) => {'
-            . 'if (String(control.value || "").trim() !== "") hasProducts = true;'
+            . 'if (!control.disabled && (control.type !== "checkbox" || control.checked) && (control.type !== "radio" || control.checked) && String(control.value || "").trim() !== "") hasProducts = true;'
             . '});'
             . '}'
             . 'return hasSection || hasProducts;'
@@ -476,16 +580,139 @@ final class ElementFormAssets
             . '});'
             . '});'
             . '}'
+            . '};'
+            . 'const enhanceCatalogProductsSelect = () => {'
+            . 'const propertyId = Number(settings.catalogProductsPropertyId || 0);'
+            . 'if (!propertyId) return;'
+            . 'const row = getPropertyRow(propertyId);'
+            . 'if (!row || row.dataset.kkProductsEnhanced === "Y") return;'
+            . 'const controls = getPropertyControls(propertyId);'
+            . 'const namedControls = controls.filter((control) => control.name);'
+            . 'if (namedControls.length === 0) return;'
+            . 'const selectedIds = [];'
+            . 'controls.forEach((control) => {'
+            . 'const value = String(control.value || "").trim();'
+            . 'if (value !== "" && !selectedIds.includes(value)) selectedIds.push(value);'
+            . '});'
+            . 'const baseName = String(namedControls[0].name || "");'
+            . 'const buildName = (index) => {'
+            . 'const propertyPrefix = `PROPERTY[${propertyId}]`;'
+            . 'if (baseName.startsWith(propertyPrefix)) {'
+            . 'const suffix = baseName.slice(propertyPrefix.length).replace(/^\\[[^\\]]*\\]/, "") || "[VALUE]";'
+            . 'return `${propertyPrefix}[${index}]${suffix}`;'
+            . '}'
+            . 'return `${propertyPrefix}[${index}][VALUE]`;'
+            . '};'
+            . 'row.dataset.kkProductsEnhanced = "Y";'
+            . 'const cells = Array.from(row.children).filter((child) => child.tagName === "TD");'
+            . 'const labelCell = cells.length > 1 ? cells[0] : null;'
+            . 'const valueCell = cells.length > 1 ? cells[cells.length - 1] : (namedControls[0].closest("td") || row);'
+            . 'if (labelCell) labelCell.textContent = "Рекомендуемые элементы:";'
+            . 'const nativeWrapper = document.createElement("div");'
+            . 'nativeWrapper.hidden = true;'
+            . 'nativeWrapper.dataset.kkProductsNative = "Y";'
+            . 'while (valueCell.firstChild) nativeWrapper.appendChild(valueCell.firstChild);'
+            . 'nativeWrapper.querySelectorAll("select,input,textarea").forEach((control) => { control.disabled = true; });'
+            . 'valueCell.appendChild(nativeWrapper);'
+            . 'const customWrapper = document.createElement("div");'
+            . 'customWrapper.className = "kk-quiz-admin-recommendation-products";'
+            . 'const search = document.createElement("input");'
+            . 'search.type = "search";'
+            . 'search.className = "adm-input";'
+            . 'search.placeholder = "Поиск по названию...";'
+            . 'search.style.marginBottom = "8px";'
+            . 'customWrapper.appendChild(search);'
+            . 'const hiddenInputsWrap = document.createElement("div");'
+            . 'hiddenInputsWrap.hidden = true;'
+            . 'customWrapper.appendChild(hiddenInputsWrap);'
+            . 'const selected = new Set(selectedIds);'
+            . 'const knownIds = new Set();'
+            . 'const list = document.createElement("div");'
+            . 'customWrapper.appendChild(list);'
+            . 'const createCheckbox = (item, groupName, stale) => {'
+            . 'const label = document.createElement("label");'
+            . 'label.style.display = "block";'
+            . 'label.style.margin = "4px 0";'
+            . 'label.dataset.kkProductName = String(item.name || "").toLowerCase();'
+            . 'const checkbox = document.createElement("input");'
+            . 'checkbox.type = "checkbox";'
+            . 'checkbox.value = String(item.id || "");'
+            . 'checkbox.checked = selected.has(checkbox.value);'
+            . 'checkbox.style.marginRight = "6px";'
+            . 'const text = document.createElement("span");'
+            . 'text.textContent = stale ? `Текущее значение #${item.id} — элемент не входит в текущий список рекомендаций` : String(item.name || `#${item.id}`);'
+            . 'checkbox.addEventListener("change", () => {'
+            . 'if (checkbox.checked) selected.add(checkbox.value); else selected.delete(checkbox.value);'
+            . 'renderHiddenInputs();'
+            . 'updateRecommendationsDisabledHint();'
+            . '});'
+            . 'label.appendChild(checkbox);'
+            . 'label.appendChild(text);'
+            . 'return label;'
+            . '};'
+            . 'const renderHiddenInputs = () => {'
+            . 'hiddenInputsWrap.innerHTML = "";'
+            . 'const values = Array.from(selected);'
+            . 'if (values.length === 0) values.push("");'
+            . 'values.forEach((id, index) => {'
+            . 'const input = document.createElement("input");'
+            . 'input.type = "hidden";'
+            . 'input.name = buildName(index);'
+            . 'input.value = String(id);'
+            . 'hiddenInputsWrap.appendChild(input);'
+            . '});'
+            . '};'
+            . 'const groups = Array.isArray(settings.catalogProductsByIblock) ? settings.catalogProductsByIblock : [];'
+            . 'groups.forEach((group) => {'
+            . 'const groupBlock = document.createElement("div");'
+            . 'groupBlock.style.margin = "8px 0";'
+            . 'const title = document.createElement("div");'
+            . 'title.style.fontWeight = "bold";'
+            . 'title.textContent = `[${group.type || ""}] ${group.name || ""}`;'
+            . 'groupBlock.appendChild(title);'
+            . '(Array.isArray(group.items) ? group.items : []).forEach((item) => {'
+            . 'const id = String(item.id || "");'
+            . 'if (id === "") return;'
+            . 'knownIds.add(id);'
+            . 'groupBlock.appendChild(createCheckbox(item, group.name || "", false));'
+            . '});'
+            . 'if (group.limited === true) {'
+            . 'const limitHint = document.createElement("div");'
+            . 'limitHint.textContent = "Показаны первые 300 элементов. Для точного выбора используйте поиск по названию в инфоблоке или выберите раздел рекомендаций.";'
+            . 'limitHint.style.color = "#777";'
+            . 'groupBlock.appendChild(limitHint);'
+            . '}'
+            . 'list.appendChild(groupBlock);'
+            . '});'
+            . 'selectedIds.forEach((id) => {'
+            . 'if (knownIds.has(id)) return;'
+            . 'list.appendChild(createCheckbox({ id, name: `#${id}` }, "", true));'
+            . '});'
+            . 'if (groups.length === 0 && selectedIds.length === 0) {'
+            . 'const hint = document.createElement("div");'
+            . 'hint.textContent = "Сначала выберите инфоблоки рекомендаций в настройках квиза.";'
+            . 'hint.style.color = "#777";'
+            . 'list.appendChild(hint);'
+            . '}'
+            . 'search.addEventListener("input", () => {'
+            . 'const query = String(search.value || "").trim().toLowerCase();'
+            . 'list.querySelectorAll("label[data-kk-product-name]").forEach((label) => {'
+            . 'const checkbox = label.querySelector("input[type=checkbox]");'
+            . 'const checked = checkbox ? checkbox.checked : false;'
+            . 'label.style.display = query === "" || checked || label.dataset.kkProductName.includes(query) ? "block" : "none";'
+            . '});'
+            . '});'
+            . 'renderHiddenInputs();'
             . 'valueCell.appendChild(customWrapper);'
             . '};'
             . 'document.addEventListener("change", (event) => {'
             . 'const entityRow = getPropertyRow(settings.entityTypePropertyId);'
             . 'const isEntityControl = event.target && (event.target.matches(`[name^="PROPERTY[${settings.entityTypePropertyId}]"]`) || event.target.matches(`[name^="PROP[${settings.entityTypePropertyId}]"]`) || (entityRow && entityRow.contains(event.target)));'
-            . 'if (isEntityControl) { applyVisibility(); enhanceCatalogSectionSelect(); }'
+            . 'if (isEntityControl) { applyVisibility(); enhanceCatalogSectionSelect(); enhanceCatalogProductsSelect(); }'
             . 'updateRecommendationsDisabledHint();'
             . '});'
             . 'document.addEventListener("input", () => { updateRecommendationsDisabledHint(); });'
-            . 'const refreshAdminForm = () => { applyVisibility(); enhanceCatalogSectionSelect(); updateRecommendationsDisabledHint(); };'
+            . 'const refreshAdminForm = () => { applyVisibility(); enhanceCatalogSectionSelect(); enhanceCatalogProductsSelect(); updateRecommendationsDisabledHint(); };'
             . 'if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", refreshAdminForm); else { refreshAdminForm(); }'
             . 'setTimeout(refreshAdminForm, 100);'
             . 'setTimeout(refreshAdminForm, 500);'
