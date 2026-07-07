@@ -780,12 +780,64 @@ final class Installer
             'FIELD_NAME' => 'UF_KK_CATALOG_IBLOCK_IDS',
         ])->Fetch();
 
-        if (!is_array($field) || (int)($field['ID'] ?? 0) <= 0) {
+        $fieldId = (int)($field['ID'] ?? 0);
+        if (!is_array($field) || $fieldId <= 0) {
             return;
         }
 
+        $existingByXmlId = [];
+        $existingValues = [];
+
+        $rsEnum = \CUserFieldEnum::GetList([], ['USER_FIELD_ID' => $fieldId]);
+        while ($enumItem = $rsEnum->Fetch()) {
+            $enumId = (int)($enumItem['ID'] ?? 0);
+            $xmlId = (string)($enumItem['XML_ID'] ?? '');
+
+            if ($enumId <= 0 || $xmlId === '') {
+                continue;
+            }
+
+            $existingByXmlId[$xmlId] = $enumId;
+            $existingValues[$enumId] = [
+                'VALUE' => (string)($enumItem['VALUE'] ?? ''),
+                'XML_ID' => $xmlId,
+                'DEF' => (string)($enumItem['DEF'] ?? 'N'),
+                'SORT' => (int)($enumItem['SORT'] ?? 500),
+            ];
+        }
+
+        $values = [];
+        $currentXmlIds = [];
+        $sort = 100;
+
+        foreach (self::getCatalogIblockEnumValues() as $xmlId => $label) {
+            $xmlId = (string)$xmlId;
+            $currentXmlIds[$xmlId] = true;
+            $key = isset($existingByXmlId[$xmlId])
+                ? (string)$existingByXmlId[$xmlId]
+                : 'n' . $sort;
+
+            $values[$key] = [
+                'VALUE' => $label,
+                'XML_ID' => $xmlId,
+                'DEF' => 'N',
+                'SORT' => $sort,
+            ];
+
+            $sort += 100;
+        }
+
+        foreach ($existingValues as $enumId => $enumValue) {
+            $xmlId = (string)($enumValue['XML_ID'] ?? '');
+            if ($xmlId === '' || isset($currentXmlIds[$xmlId])) {
+                continue;
+            }
+
+            $values[(string)$enumId] = $enumValue;
+        }
+
         $enum = new \CUserFieldEnum();
-        $enum->SetEnumValues((int)$field['ID'], self::formatUserFieldEnumValues(self::getCatalogIblockEnumValues()));
+        $enum->SetEnumValues($fieldId, $values);
     }
 
     private static function getCatalogIblockEnumValues(): array
