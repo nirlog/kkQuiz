@@ -61,6 +61,8 @@ final class ElementFormAssets
             return;
         }
 
+        $recommendationSettings = self::getCurrentQuizRecommendationSettings($iblockId);
+
         $settings = [
             'entityTypePropertyId' => $propertyIds['KK_ENTITY_TYPE'],
             'entityTypeEnumMap' => self::getEntityTypeEnumMap($propertyIds['KK_ENTITY_TYPE']),
@@ -68,7 +70,10 @@ final class ElementFormAssets
             'question' => self::mapCodesToIds(self::QUESTION_CODES, $propertyIds),
             'result' => self::mapCodesToIds(self::RESULT_CODES, $propertyIds),
             'catalogSectionPropertyId' => $propertyIds['KK_RESULT_CATALOG_SECTION'] ?? 0,
+            'catalogProductsPropertyId' => $propertyIds['KK_RESULT_CATALOG_PRODUCTS'] ?? 0,
             'catalogSectionsByIblock' => self::getCatalogSectionsByIblock($iblockId),
+            'recommendationsEnabled' => $recommendationSettings['enabled'],
+            'recommendationsSectionId' => $recommendationSettings['section_id'],
         ];
 
         Asset::getInstance()->addString('<script>' . self::renderScript($settings) . '</script>');
@@ -219,6 +224,47 @@ final class ElementFormAssets
         return is_array($element) ? (int)($element['IBLOCK_SECTION_ID'] ?? 0) : 0;
     }
 
+    private static function getCurrentQuizRecommendationSettings(int $quizIblockId): array
+    {
+        $sectionId = self::getCurrentQuizSectionId($quizIblockId);
+        if ($sectionId <= 0) {
+            return [
+                'enabled' => false,
+                'section_id' => 0,
+            ];
+        }
+
+        $section = \CIBlockSection::GetList(
+            [],
+            ['IBLOCK_ID' => $quizIblockId, 'ID' => $sectionId],
+            false,
+            ['ID', 'UF_KK_USE_CATALOG']
+        )->Fetch();
+
+        if (!is_array($section)) {
+            return [
+                'enabled' => false,
+                'section_id' => $sectionId,
+            ];
+        }
+
+        return [
+            'enabled' => self::toBool($section['UF_KK_USE_CATALOG'] ?? null),
+            'section_id' => $sectionId,
+        ];
+    }
+
+    private static function toBool(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        $value = strtoupper(trim((string)$value));
+
+        return in_array($value, ['1', 'Y', 'YES', 'TRUE'], true);
+    }
+
     private static function normalizeCatalogIblockIds(mixed $value): array
     {
         $values = is_array($value) ? $value : [$value];
@@ -305,6 +351,48 @@ final class ElementFormAssets
             . 'setVisible(settings.common, true);'
             . 'if (entityType === "QUESTION") setVisible(settings.question, true);'
             . 'if (entityType === "RESULT") setVisible(settings.result, true);'
+            . '};'
+            . 'const hasFilledRecommendationFields = () => {'
+            . 'const sectionPropertyId = Number(settings.catalogSectionPropertyId || 0);'
+            . 'const productsPropertyId = Number(settings.catalogProductsPropertyId || 0);'
+            . 'let hasSection = false;'
+            . 'let hasProducts = false;'
+            . 'if (sectionPropertyId) {'
+            . 'getPropertyControls(sectionPropertyId).forEach((control) => {'
+            . 'if (String(control.value || "").trim() !== "") hasSection = true;'
+            . '});'
+            . '}'
+            . 'if (productsPropertyId) {'
+            . 'getPropertyControls(productsPropertyId).forEach((control) => {'
+            . 'if (String(control.value || "").trim() !== "") hasProducts = true;'
+            . '});'
+            . '}'
+            . 'return hasSection || hasProducts;'
+            . '};'
+            . 'const updateRecommendationsDisabledHint = () => {'
+            . 'const sectionPropertyId = Number(settings.catalogSectionPropertyId || 0);'
+            . 'const productsPropertyId = Number(settings.catalogProductsPropertyId || 0);'
+            . 'const anchorPropertyId = sectionPropertyId || productsPropertyId;'
+            . 'if (!anchorPropertyId) return;'
+            . 'const row = getPropertyRow(anchorPropertyId);'
+            . 'if (!row) return;'
+            . 'const existing = document.getElementById("kk-quiz-recommendations-disabled-hint");'
+            . 'const entityType = getSelectedEntityType();'
+            . 'const shouldShow = entityType === "RESULT" && settings.recommendationsEnabled !== true && hasFilledRecommendationFields();'
+            . 'if (!shouldShow) {'
+            . 'if (existing) existing.remove();'
+            . 'return;'
+            . '}'
+            . 'if (existing) return;'
+            . 'const hint = document.createElement("div");'
+            . 'hint.id = "kk-quiz-recommendations-disabled-hint";'
+            . 'hint.textContent = "Рекомендации не будут показаны на сайте, потому что в настройках квиза выключено “Показывать рекомендации”.";'
+            . 'hint.style.margin = "8px 0";'
+            . 'hint.style.padding = "8px 10px";'
+            . 'hint.style.border = "1px solid #f0c36d";'
+            . 'hint.style.background = "#fff8e5";'
+            . 'hint.style.color = "#6b4e00";'
+            . 'row.insertAdjacentElement("beforebegin", hint);'
             . '};'
             . 'const enhanceCatalogSectionSelect = () => {'
             . 'const propertyId = Number(settings.catalogSectionPropertyId || 0);'
@@ -394,10 +482,13 @@ final class ElementFormAssets
             . 'const entityRow = getPropertyRow(settings.entityTypePropertyId);'
             . 'const isEntityControl = event.target && (event.target.matches(`[name^="PROPERTY[${settings.entityTypePropertyId}]"]`) || event.target.matches(`[name^="PROP[${settings.entityTypePropertyId}]"]`) || (entityRow && entityRow.contains(event.target)));'
             . 'if (isEntityControl) { applyVisibility(); enhanceCatalogSectionSelect(); }'
+            . 'updateRecommendationsDisabledHint();'
             . '});'
-            . 'if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { applyVisibility(); enhanceCatalogSectionSelect(); }); else { applyVisibility(); enhanceCatalogSectionSelect(); }'
-            . 'setTimeout(() => { applyVisibility(); enhanceCatalogSectionSelect(); }, 100);'
-            . 'setTimeout(() => { applyVisibility(); enhanceCatalogSectionSelect(); }, 500);'
+            . 'document.addEventListener("input", () => { updateRecommendationsDisabledHint(); });'
+            . 'const refreshAdminForm = () => { applyVisibility(); enhanceCatalogSectionSelect(); updateRecommendationsDisabledHint(); };'
+            . 'if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", refreshAdminForm); else { refreshAdminForm(); }'
+            . 'setTimeout(refreshAdminForm, 100);'
+            . 'setTimeout(refreshAdminForm, 500);'
             . '})();';
     }
 
