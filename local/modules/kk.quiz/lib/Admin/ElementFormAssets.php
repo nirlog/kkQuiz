@@ -62,6 +62,7 @@ final class ElementFormAssets
         }
 
         $recommendationSettings = self::getCurrentQuizRecommendationSettings($iblockId);
+        $quizSectionSettings = self::getCurrentQuizSectionSettings($iblockId);
 
         $settings = [
             'entityTypePropertyId' => $propertyIds['KK_ENTITY_TYPE'],
@@ -71,9 +72,13 @@ final class ElementFormAssets
             'result' => self::mapCodesToIds(self::RESULT_CODES, $propertyIds),
             'catalogSectionPropertyId' => $propertyIds['KK_RESULT_CATALOG_SECTION'] ?? 0,
             'catalogProductsPropertyId' => $propertyIds['KK_RESULT_CATALOG_PRODUCTS'] ?? 0,
+            'answersPropertyId' => $propertyIds['KK_ANSWERS'] ?? 0,
+            'defaultNextQuestionPropertyId' => $propertyIds['KK_DEFAULT_NEXT_QUESTION'] ?? 0,
+            'showFormPropertyId' => $propertyIds['KK_RESULT_SHOW_FORM'] ?? 0,
             'catalogSectionsByIblock' => self::getCatalogSectionsByIblock($iblockId),
             'recommendationsEnabled' => $recommendationSettings['enabled'],
             'recommendationsSectionId' => $recommendationSettings['section_id'],
+            'quizSectionSettings' => $quizSectionSettings,
         ];
 
         Asset::getInstance()->addString('<script>' . self::renderScript($settings) . '</script>');
@@ -261,6 +266,80 @@ final class ElementFormAssets
         ];
     }
 
+
+    private static function getCurrentQuizSectionSettings(int $quizIblockId): array
+    {
+        $sectionId = self::getCurrentQuizSectionId($quizIblockId);
+        $defaults = [
+            'id' => $sectionId,
+            'use_catalog' => false,
+            'catalog_iblock_ids' => [],
+            'form_fields' => [],
+            'required_fields' => [],
+            'use_metrika' => false,
+            'metrika_counter_id' => '',
+        ];
+
+        if ($sectionId <= 0) {
+            return $defaults;
+        }
+
+        $section = \CIBlockSection::GetList(
+            [],
+            ['IBLOCK_ID' => $quizIblockId, 'ID' => $sectionId],
+            false,
+            [
+                'ID',
+                'UF_KK_USE_CATALOG',
+                'UF_KK_CATALOG_IBLOCK_ID',
+                'UF_KK_CATALOG_IBLOCK_IDS',
+                'UF_KK_FORM_FIELDS',
+                'UF_KK_REQUIRED_FIELDS',
+                'UF_KK_USE_METRIKA',
+                'UF_KK_METRIKA_COUNTER_ID',
+            ]
+        )->Fetch();
+
+        if (!is_array($section)) {
+            return $defaults;
+        }
+
+        $catalogIblockIds = self::normalizeCatalogIblockIds($section['UF_KK_CATALOG_IBLOCK_IDS'] ?? []);
+        $legacyIblockId = (int)($section['UF_KK_CATALOG_IBLOCK_ID'] ?? 0);
+        if ($catalogIblockIds === [] && $legacyIblockId > 0) {
+            $catalogIblockIds = [$legacyIblockId];
+        }
+
+        return [
+            'id' => $sectionId,
+            'use_catalog' => self::toBool($section['UF_KK_USE_CATALOG'] ?? null),
+            'catalog_iblock_ids' => $catalogIblockIds,
+            'form_fields' => self::normalizeStringList($section['UF_KK_FORM_FIELDS'] ?? []),
+            'required_fields' => self::normalizeStringList($section['UF_KK_REQUIRED_FIELDS'] ?? []),
+            'use_metrika' => self::toBool($section['UF_KK_USE_METRIKA'] ?? null),
+            'metrika_counter_id' => trim((string)($section['UF_KK_METRIKA_COUNTER_ID'] ?? '')),
+        ];
+    }
+
+    private static function normalizeStringList(mixed $value): array
+    {
+        $values = is_array($value) ? $value : [$value];
+        $result = [];
+
+        foreach ($values as $item) {
+            if (is_array($item)) {
+                $item = reset($item);
+            }
+
+            $item = trim((string)$item);
+            if ($item !== '' && !in_array($item, $result, true)) {
+                $result[] = $item;
+            }
+        }
+
+        return $result;
+    }
+
     private static function toBool(mixed $value): bool
     {
         if (is_bool($value)) {
@@ -401,6 +480,70 @@ final class ElementFormAssets
             . 'hint.style.color = "#6b4e00";'
             . 'row.insertAdjacentElement("beforebegin", hint);'
             . '};'
+            . 'const getControlValue = (control) => {'
+            . 'if (!control || control.disabled) return "";'
+            . 'if ((control.type === "checkbox" || control.type === "radio") && !control.checked) return "";'
+            . 'return String(control.value || "").trim();'
+            . '};'
+            . 'const hasPropertyValue = (propertyId) => Number(propertyId || 0) > 0 && getPropertyControls(propertyId).some((control) => getControlValue(control) !== "");'
+            . 'const hasControlValueByNames = (names) => names.some((name) => Array.from(document.querySelectorAll(`[name*="${name}"]`)).some((control) => getControlValue(control) !== ""));'
+            . 'const isTruthyValue = (value) => ["1", "Y", "YES", "TRUE", "ON"].includes(String(value || "").trim().toUpperCase());'
+            . 'const isPropertyTruthy = (propertyId) => Number(propertyId || 0) > 0 && getPropertyControls(propertyId).some((control) => isTruthyValue(getControlValue(control)) || (control.tagName === "SELECT" && isTruthyValue(control.options[control.selectedIndex]?.textContent || "")));'
+            . 'const hasElementText = () => ["PREVIEW_TEXT", "DETAIL_TEXT"].some((name) => Array.from(document.querySelectorAll(`textarea[name="${name}"], input[name="${name}"]`)).some((control) => getControlValue(control) !== ""));'
+            . 'const getDiagnosticsAnchor = () => getPropertyRow(settings.entityTypePropertyId) || document.querySelector("form table.edit-table, form table.adm-detail-content-table, form");'
+            . 'const upsertDiagnosticsBlock = (diagnostics) => {'
+            . 'const existing = document.getElementById("kk-quiz-admin-diagnostics");'
+            . 'const anchor = getDiagnosticsAnchor();'
+            . 'if (!anchor) return;'
+            . 'const block = existing || document.createElement("div");'
+            . 'block.id = "kk-quiz-admin-diagnostics";'
+            . 'block.style.margin = "0 0 14px 0";'
+            . 'block.style.padding = "10px 12px";'
+            . 'block.style.border = "1px solid #d6d6d6";'
+            . 'block.style.borderRadius = "4px";'
+            . 'block.style.background = "#f6fff2";'
+            . 'const hasErrors = diagnostics.some((item) => item.type === "error");'
+            . 'const hasWarnings = diagnostics.some((item) => item.type === "warning");'
+            . 'if (hasErrors) block.style.background = "#fff1f0"; else if (hasWarnings) block.style.background = "#fff8e5";'
+            . 'block.innerHTML = "";'
+            . 'const title = document.createElement("div");'
+            . 'title.textContent = "Проверка квиза";'
+            . 'title.style.fontWeight = "bold";'
+            . 'title.style.marginBottom = "6px";'
+            . 'block.appendChild(title);'
+            . '(diagnostics.length > 0 ? diagnostics : [{ type: "success", message: "Критичных проблем не найдено." }]).forEach((item) => {'
+            . 'const line = document.createElement("div");'
+            . 'line.style.margin = "4px 0";'
+            . 'line.style.color = item.type === "error" ? "#a40000" : (item.type === "warning" ? "#6b4e00" : "#267000");'
+            . 'line.textContent = `${item.type === "error" ? "✕" : (item.type === "warning" ? "⚠" : "✓")} ${item.message}`;'
+            . 'block.appendChild(line);'
+            . '});'
+            . 'if (!existing) anchor.insertAdjacentElement("beforebegin", block);'
+            . '};'
+            . 'const renderQuizDiagnostics = () => {'
+            . 'const diagnostics = [];'
+            . 'const entityType = getSelectedEntityType();'
+            . 'const sectionSettings = settings.quizSectionSettings || {};'
+            . 'const catalogIblockIds = Array.isArray(sectionSettings.catalog_iblock_ids) ? sectionSettings.catalog_iblock_ids : [];'
+            . 'const formFields = Array.isArray(sectionSettings.form_fields) ? sectionSettings.form_fields.map(String) : [];'
+            . 'const requiredFields = Array.isArray(sectionSettings.required_fields) ? sectionSettings.required_fields.map(String) : [];'
+            . 'if (entityType === "") diagnostics.push({ type: "error", message: "Ошибка: выберите тип элемента — Вопрос или Результат." });'
+            . 'if (entityType === "QUESTION") {'
+            . 'if (!hasPropertyValue(settings.answersPropertyId)) diagnostics.push({ type: "warning", message: "Предупреждение: у вопроса нет вариантов ответа." });'
+            . 'const hasTransitions = hasPropertyValue(settings.defaultNextQuestionPropertyId) || hasControlValueByNames(["default_next_question_id", "next_question_id", "result_id", "score_result_id"]);'
+            . 'if (!hasTransitions) diagnostics.push({ type: "warning", message: "Предупреждение: у вопроса не настроены переходы. Пользователь может не дойти до результата." });'
+            . '}'
+            . 'if (entityType === "RESULT") {'
+            . 'if (!hasElementText()) diagnostics.push({ type: "warning", message: "Предупреждение: у результата не заполнено описание." });'
+            . 'if (settings.recommendationsEnabled !== true && hasFilledRecommendationFields()) diagnostics.push({ type: "warning", message: "Предупреждение: рекомендации не будут показаны на сайте, потому что в настройках квиза выключено “Показывать рекомендации”." });'
+            . 'if (hasPropertyValue(settings.catalogSectionPropertyId) && catalogIblockIds.length === 0) diagnostics.push({ type: "warning", message: "Предупреждение: выбран раздел рекомендаций, но у квиза не выбраны инфоблоки рекомендаций." });'
+            . 'if (isPropertyTruthy(settings.showFormPropertyId) && formFields.length === 0) diagnostics.push({ type: "error", message: "Ошибка: форма результата включена, но в настройках квиза не выбраны поля формы." });'
+            . '}'
+            . 'if (sectionSettings.use_catalog === true && catalogIblockIds.length === 0) diagnostics.push({ type: "error", message: "Ошибка: рекомендации включены, но не выбраны инфоблоки рекомендаций." });'
+            . 'if (requiredFields.some((field) => !formFields.includes(field))) diagnostics.push({ type: "error", message: "Ошибка: обязательные поля формы не входят в список видимых полей." });'
+            . 'if (sectionSettings.use_metrika === true && String(sectionSettings.metrika_counter_id || "").trim() === "") diagnostics.push({ type: "warning", message: "Предупреждение: Яндекс.Метрика включена, но не указан ID счётчика." });'
+            . 'upsertDiagnosticsBlock(diagnostics);'
+            . '};'
             . 'const enhanceCatalogSectionSelect = () => {'
             . 'const propertyId = Number(settings.catalogSectionPropertyId || 0);'
             . 'if (!propertyId) return;'
@@ -489,9 +632,10 @@ final class ElementFormAssets
             . 'const isEntityControl = event.target && (event.target.matches(`[name^="PROPERTY[${settings.entityTypePropertyId}]"]`) || event.target.matches(`[name^="PROP[${settings.entityTypePropertyId}]"]`) || (entityRow && entityRow.contains(event.target)));'
             . 'if (isEntityControl) { applyVisibility(); enhanceCatalogSectionSelect(); }'
             . 'updateRecommendationsDisabledHint();'
+            . 'renderQuizDiagnostics();'
             . '});'
-            . 'document.addEventListener("input", () => { updateRecommendationsDisabledHint(); });'
-            . 'const refreshAdminForm = () => { applyVisibility(); enhanceCatalogSectionSelect(); updateRecommendationsDisabledHint(); };'
+            . 'document.addEventListener("input", () => { updateRecommendationsDisabledHint(); renderQuizDiagnostics(); });'
+            . 'const refreshAdminForm = () => { applyVisibility(); enhanceCatalogSectionSelect(); updateRecommendationsDisabledHint(); renderQuizDiagnostics(); };'
             . 'if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", refreshAdminForm); else { refreshAdminForm(); }'
             . 'setTimeout(refreshAdminForm, 100);'
             . 'setTimeout(refreshAdminForm, 500);'
