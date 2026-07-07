@@ -71,7 +71,6 @@ final class ElementFormAssets
             'result' => self::mapCodesToIds(self::RESULT_CODES, $propertyIds),
             'catalogSectionPropertyId' => $propertyIds['KK_RESULT_CATALOG_SECTION'] ?? 0,
             'catalogProductsPropertyId' => $propertyIds['KK_RESULT_CATALOG_PRODUCTS'] ?? 0,
-            'catalogProductsByIblock' => self::getCatalogProductsByIblock($iblockId, $propertyIds['KK_RESULT_CATALOG_PRODUCTS'] ?? 0),
             'catalogSectionsByIblock' => self::getCatalogSectionsByIblock($iblockId),
             'recommendationsEnabled' => $recommendationSettings['enabled'],
             'recommendationsSectionId' => $recommendationSettings['section_id'],
@@ -143,83 +142,6 @@ final class ElementFormAssets
         return $ids;
     }
 
-    private static function getCatalogProductsByIblock(int $quizIblockId, int $productsPropertyId): array
-    {
-        $iblockIds = self::getCurrentQuizCatalogIblockIds($quizIblockId);
-        if ($iblockIds === []) {
-            return [];
-        }
-
-        $selectedIds = self::getCurrentSelectedProductIds($quizIblockId, $productsPropertyId);
-        $result = [];
-
-        foreach ($iblockIds as $iblockId) {
-            $iblock = \CIBlock::GetByID($iblockId)->Fetch();
-            if (!is_array($iblock)) {
-                continue;
-            }
-
-            $items = [];
-            $seenIds = [];
-            $elements = \CIBlockElement::GetList(
-                ['SORT' => 'ASC', 'NAME' => 'ASC', 'ID' => 'ASC'],
-                [
-                    'IBLOCK_ID' => $iblockId,
-                    'ACTIVE' => 'Y',
-                    'ACTIVE_DATE' => 'Y',
-                ],
-                false,
-                ['nTopCount' => 300],
-                ['ID', 'IBLOCK_ID', 'NAME', 'CODE', 'DETAIL_PAGE_URL']
-            );
-
-            while ($element = $elements->GetNext()) {
-                $id = (int)$element['ID'];
-                $seenIds[] = $id;
-                $items[] = [
-                    'id' => $id,
-                    'name' => (string)($element['NAME'] ?? ''),
-                    'url' => (string)($element['DETAIL_PAGE_URL'] ?? ''),
-                ];
-            }
-
-            $missingSelectedIds = array_values(array_diff($selectedIds, $seenIds));
-            if ($missingSelectedIds !== []) {
-                $selectedElements = \CIBlockElement::GetList(
-                    ['SORT' => 'ASC', 'NAME' => 'ASC', 'ID' => 'ASC'],
-                    ['IBLOCK_ID' => $iblockId, 'ID' => $missingSelectedIds],
-                    false,
-                    false,
-                    ['ID', 'IBLOCK_ID', 'NAME', 'CODE', 'DETAIL_PAGE_URL']
-                );
-
-                while ($element = $selectedElements->GetNext()) {
-                    $id = (int)$element['ID'];
-                    if (in_array($id, $seenIds, true)) {
-                        continue;
-                    }
-
-                    $seenIds[] = $id;
-                    $items[] = [
-                        'id' => $id,
-                        'name' => (string)($element['NAME'] ?? ''),
-                        'url' => (string)($element['DETAIL_PAGE_URL'] ?? ''),
-                    ];
-                }
-            }
-
-            $result[] = [
-                'id' => $iblockId,
-                'name' => (string)($iblock['NAME'] ?? ''),
-                'type' => (string)($iblock['IBLOCK_TYPE_ID'] ?? ''),
-                'items' => $items,
-                'limited' => count($items) >= 300,
-            ];
-        }
-
-        return $result;
-    }
-
     private static function getCurrentQuizCatalogIblockIds(int $quizIblockId): array
     {
         $sectionId = self::getCurrentQuizSectionId($quizIblockId);
@@ -244,25 +166,6 @@ final class ElementFormAssets
         }
 
         return $iblockIds;
-    }
-
-    private static function getCurrentSelectedProductIds(int $quizIblockId, int $productsPropertyId): array
-    {
-        $elementId = (int)($_REQUEST['ID'] ?? 0);
-        if ($elementId <= 0 || $productsPropertyId <= 0) {
-            return [];
-        }
-
-        $ids = [];
-        $properties = \CIBlockElement::GetProperty($quizIblockId, $elementId, [], ['ID' => $productsPropertyId]);
-        while ($property = $properties->Fetch()) {
-            $value = (int)($property['VALUE'] ?? 0);
-            if ($value > 0 && !in_array($value, $ids, true)) {
-                $ids[] = $value;
-            }
-        }
-
-        return $ids;
     }
 
     private static function getCatalogSectionsByIblock(int $quizIblockId): array
@@ -580,27 +483,6 @@ final class ElementFormAssets
             . '});'
             . '});'
             . '}'
-            . '};'
-            . 'const enhanceCatalogProductsSelect = () => {'
-            . 'const propertyId = Number(settings.catalogProductsPropertyId || 0);'
-            . 'if (!propertyId) return;'
-            . 'const row = getPropertyRow(propertyId);'
-            . 'if (!row || row.dataset.kkProductsEnhanced === "Y") return;'
-            . 'const controls = getPropertyControls(propertyId);'
-            . 'const namedControls = controls.filter((control) => control.name);'
-            . 'if (namedControls.length === 0) return;'
-            . 'const selectedIds = [];'
-            . 'controls.forEach((control) => {'
-            . 'const value = String(control.value || "").trim();'
-            . 'if (value !== "" && !selectedIds.includes(value)) selectedIds.push(value);'
-            . '});'
-            . 'const baseName = String(namedControls[0].name || "");'
-            . 'const buildName = (index) => {'
-            . 'const propertyPrefix = `PROPERTY[${propertyId}]`;'
-            . 'if (baseName.startsWith(propertyPrefix)) {'
-            . 'const suffix = baseName.slice(propertyPrefix.length).replace(/^\\[[^\\]]*\\]/, "") || "[VALUE]";'
-            . 'return `${propertyPrefix}[${index}]${suffix}`;'
-            . '}'
             . 'return `${propertyPrefix}[${index}][VALUE]`;'
             . '};'
             . 'row.dataset.kkProductsEnhanced = "Y";'
@@ -708,11 +590,11 @@ final class ElementFormAssets
             . 'document.addEventListener("change", (event) => {'
             . 'const entityRow = getPropertyRow(settings.entityTypePropertyId);'
             . 'const isEntityControl = event.target && (event.target.matches(`[name^="PROPERTY[${settings.entityTypePropertyId}]"]`) || event.target.matches(`[name^="PROP[${settings.entityTypePropertyId}]"]`) || (entityRow && entityRow.contains(event.target)));'
-            . 'if (isEntityControl) { applyVisibility(); enhanceCatalogSectionSelect(); enhanceCatalogProductsSelect(); }'
+            . 'if (isEntityControl) { applyVisibility(); enhanceCatalogSectionSelect(); }'
             . 'updateRecommendationsDisabledHint();'
             . '});'
             . 'document.addEventListener("input", () => { updateRecommendationsDisabledHint(); });'
-            . 'const refreshAdminForm = () => { applyVisibility(); enhanceCatalogSectionSelect(); enhanceCatalogProductsSelect(); updateRecommendationsDisabledHint(); };'
+            . 'const refreshAdminForm = () => { applyVisibility(); enhanceCatalogSectionSelect(); updateRecommendationsDisabledHint(); };'
             . 'if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", refreshAdminForm); else { refreshAdminForm(); }'
             . 'setTimeout(refreshAdminForm, 100);'
             . 'setTimeout(refreshAdminForm, 500);'
