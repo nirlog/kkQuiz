@@ -314,14 +314,14 @@ final class ElementFormAssets
             'id' => $sectionId,
             'use_catalog' => self::toBool($section['UF_KK_USE_CATALOG'] ?? null),
             'catalog_iblock_ids' => $catalogIblockIds,
-            'form_fields' => self::normalizeStringList($section['UF_KK_FORM_FIELDS'] ?? []),
-            'required_fields' => self::normalizeStringList($section['UF_KK_REQUIRED_FIELDS'] ?? []),
+            'form_fields' => self::normalizeUserFieldEnumStringList($section['UF_KK_FORM_FIELDS'] ?? []),
+            'required_fields' => self::normalizeUserFieldEnumStringList($section['UF_KK_REQUIRED_FIELDS'] ?? []),
             'use_metrika' => self::toBool($section['UF_KK_USE_METRIKA'] ?? null),
             'metrika_counter_id' => trim((string)($section['UF_KK_METRIKA_COUNTER_ID'] ?? '')),
         ];
     }
 
-    private static function normalizeStringList(mixed $value): array
+    private static function normalizeUserFieldEnumStringList(mixed $value): array
     {
         $values = is_array($value) ? $value : [$value];
         $result = [];
@@ -329,6 +329,13 @@ final class ElementFormAssets
         foreach ($values as $item) {
             if (is_array($item)) {
                 $item = reset($item);
+            }
+
+            if (is_numeric($item) && class_exists('CUserFieldEnum')) {
+                $enum = \CUserFieldEnum::GetList([], ['ID' => (int)$item])->Fetch();
+                if (is_array($enum)) {
+                    $item = (string)($enum['XML_ID'] ?: $enum['VALUE']);
+                }
             }
 
             $item = trim((string)$item);
