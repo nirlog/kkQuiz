@@ -388,6 +388,7 @@ final class ElementFormAssets
             . '});'
             . '});'
             . '}'
+            . 'valueCell.appendChild(customWrapper);'
             . '};'
             . 'document.addEventListener("change", (event) => {'
             . 'const entityRow = getPropertyRow(settings.entityTypePropertyId);'
