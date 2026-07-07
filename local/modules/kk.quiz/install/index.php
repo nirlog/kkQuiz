@@ -27,19 +27,44 @@ class kk_quiz extends CModule
 
     public function DoInstall()
     {
+        global $APPLICATION;
+
+        $step = (int)($_REQUEST['step'] ?? 1);
+
+        if ($step < 2) {
+            $APPLICATION->IncludeAdminFile(
+                Loc::getMessage('KK_QUIZ_MODULE_INSTALL_TITLE') ?: 'Установка KK Quiz',
+                __DIR__ . '/step.php'
+            );
+
+            return true;
+        }
+
         RegisterModule($this->MODULE_ID);
 
         try {
             Loader::includeModule($this->MODULE_ID);
+            require_once __DIR__ . '/../lib/Iblock/DemoDataInstaller.php';
+
             \Kk\Quiz\Iblock\Installer::install();
+
+            if ((string)($_REQUEST['install_demo'] ?? '') === 'Y') {
+                \Kk\Quiz\Iblock\DemoDataInstaller::install();
+            }
         } catch (\Throwable $exception) {
             UnRegisterModule($this->MODULE_ID);
-            global $APPLICATION;
+
             if (is_object($APPLICATION)) {
                 $APPLICATION->ThrowException($exception->getMessage());
             }
+
             return false;
         }
+
+        $APPLICATION->IncludeAdminFile(
+            Loc::getMessage('KK_QUIZ_MODULE_INSTALL_FINISH_TITLE') ?: 'Установка KK Quiz завершена',
+            __DIR__ . '/finish.php'
+        );
 
         return true;
     }

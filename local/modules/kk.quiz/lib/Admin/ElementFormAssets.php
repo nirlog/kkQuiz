@@ -61,6 +61,8 @@ final class ElementFormAssets
             return;
         }
 
+        $recommendationSettings = self::getCurrentQuizRecommendationSettings($iblockId);
+
         $settings = [
             'entityTypePropertyId' => $propertyIds['KK_ENTITY_TYPE'],
             'entityTypeEnumMap' => self::getEntityTypeEnumMap($propertyIds['KK_ENTITY_TYPE']),
@@ -68,7 +70,10 @@ final class ElementFormAssets
             'question' => self::mapCodesToIds(self::QUESTION_CODES, $propertyIds),
             'result' => self::mapCodesToIds(self::RESULT_CODES, $propertyIds),
             'catalogSectionPropertyId' => $propertyIds['KK_RESULT_CATALOG_SECTION'] ?? 0,
+            'catalogProductsPropertyId' => $propertyIds['KK_RESULT_CATALOG_PRODUCTS'] ?? 0,
             'catalogSectionsByIblock' => self::getCatalogSectionsByIblock($iblockId),
+            'recommendationsEnabled' => $recommendationSettings['enabled'],
+            'recommendationsSectionId' => $recommendationSettings['section_id'],
         ];
 
         Asset::getInstance()->addString('<script>' . self::renderScript($settings) . '</script>');
@@ -219,6 +224,47 @@ final class ElementFormAssets
         return is_array($element) ? (int)($element['IBLOCK_SECTION_ID'] ?? 0) : 0;
     }
 
+    private static function getCurrentQuizRecommendationSettings(int $quizIblockId): array
+    {
+        $sectionId = self::getCurrentQuizSectionId($quizIblockId);
+        if ($sectionId <= 0) {
+            return [
+                'enabled' => false,
+                'section_id' => 0,
+            ];
+        }
+
+        $section = \CIBlockSection::GetList(
+            [],
+            ['IBLOCK_ID' => $quizIblockId, 'ID' => $sectionId],
+            false,
+            ['ID', 'UF_KK_USE_CATALOG']
+        )->Fetch();
+
+        if (!is_array($section)) {
+            return [
+                'enabled' => false,
+                'section_id' => $sectionId,
+            ];
+        }
+
+        return [
+            'enabled' => self::toBool($section['UF_KK_USE_CATALOG'] ?? null),
+            'section_id' => $sectionId,
+        ];
+    }
+
+    private static function toBool(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        $value = strtoupper(trim((string)$value));
+
+        return in_array($value, ['1', 'Y', 'YES', 'TRUE'], true);
+    }
+
     private static function normalizeCatalogIblockIds(mixed $value): array
     {
         $values = is_array($value) ? $value : [$value];
@@ -306,19 +352,80 @@ final class ElementFormAssets
             . 'if (entityType === "QUESTION") setVisible(settings.question, true);'
             . 'if (entityType === "RESULT") setVisible(settings.result, true);'
             . '};'
+            . 'const hasFilledRecommendationFields = () => {'
+            . 'const sectionPropertyId = Number(settings.catalogSectionPropertyId || 0);'
+            . 'const productsPropertyId = Number(settings.catalogProductsPropertyId || 0);'
+            . 'let hasSection = false;'
+            . 'let hasProducts = false;'
+            . 'if (sectionPropertyId) {'
+            . 'getPropertyControls(sectionPropertyId).forEach((control) => {'
+            . 'if (String(control.value || "").trim() !== "") hasSection = true;'
+            . '});'
+            . '}'
+            . 'if (productsPropertyId) {'
+            . 'getPropertyControls(productsPropertyId).forEach((control) => {'
+            . 'if (String(control.value || "").trim() !== "") hasProducts = true;'
+            . '});'
+            . '}'
+            . 'return hasSection || hasProducts;'
+            . '};'
+            . 'const updateRecommendationsDisabledHint = () => {'
+            . 'const sectionPropertyId = Number(settings.catalogSectionPropertyId || 0);'
+            . 'const productsPropertyId = Number(settings.catalogProductsPropertyId || 0);'
+            . 'const anchorPropertyId = sectionPropertyId || productsPropertyId;'
+            . 'if (!anchorPropertyId) return;'
+            . 'const row = getPropertyRow(anchorPropertyId);'
+            . 'if (!row) return;'
+            . 'const existing = document.getElementById("kk-quiz-recommendations-disabled-hint");'
+            . 'const entityType = getSelectedEntityType();'
+            . 'const shouldShow = entityType === "RESULT" && settings.recommendationsEnabled !== true && hasFilledRecommendationFields();'
+            . 'if (!shouldShow) {'
+            . 'if (existing) existing.remove();'
+            . 'return;'
+            . '}'
+            . 'if (existing) return;'
+            . 'const hint = document.createElement("div");'
+            . 'hint.id = "kk-quiz-recommendations-disabled-hint";'
+            . 'hint.textContent = "Рекомендации не будут показаны на сайте, потому что в настройках квиза выключено “Показывать рекомендации”.";'
+            . 'hint.style.margin = "8px 0";'
+            . 'hint.style.padding = "8px 10px";'
+            . 'hint.style.border = "1px solid #f0c36d";'
+            . 'hint.style.background = "#fff8e5";'
+            . 'hint.style.color = "#6b4e00";'
+            . 'row.insertAdjacentElement("beforebegin", hint);'
+            . '};'
             . 'const enhanceCatalogSectionSelect = () => {'
             . 'const propertyId = Number(settings.catalogSectionPropertyId || 0);'
             . 'if (!propertyId) return;'
             . 'const row = getPropertyRow(propertyId);'
             . 'if (!row || row.dataset.kkCatalogEnhanced === "Y") return;'
-            . 'const original = getPropertyControls(propertyId).find((control) => control.tagName === "SELECT" || control.type === "text" || control.type === "hidden");'
-            . 'if (!original) return;'
+            . 'const controls = getPropertyControls(propertyId);'
+            . 'const saveControl = controls.find((control) => control.tagName === "SELECT" && control.name) || controls.find((control) => control.type === "hidden" && control.name) || controls.find((control) => control.type === "text" && control.name);'
+            . 'if (!saveControl) return;'
             . 'row.dataset.kkCatalogEnhanced = "Y";'
-            . 'original.style.display = "none";'
+            . 'const cells = Array.from(row.children).filter((child) => child.tagName === "TD");'
+            . 'const labelCell = cells.length > 1 ? cells[0] : null;'
+            . 'const valueCell = cells.length > 1 ? cells[cells.length - 1] : (saveControl.closest("td") || row);'
+            . 'if (labelCell) labelCell.textContent = "Раздел рекомендаций:";'
             . 'const groups = Array.isArray(settings.catalogSectionsByIblock) ? settings.catalogSectionsByIblock : [];'
-            . 'const currentValue = String(original.value || "");'
+            . 'const currentValue = String(saveControl.value || "");'
+            . 'const saveName = String(saveControl.name || "");'
+            . 'const nativeWrapper = document.createElement("div");'
+            . 'nativeWrapper.hidden = true;'
+            . 'nativeWrapper.dataset.kkCatalogNative = "Y";'
+            . 'while (valueCell.firstChild) nativeWrapper.appendChild(valueCell.firstChild);'
+            . 'valueCell.appendChild(nativeWrapper);'
+            . 'const customWrapper = document.createElement("div");'
+            . 'customWrapper.className = "kk-quiz-admin-recommendation-section";'
             . 'const select = document.createElement("select");'
             . 'select.className = "adm-select";'
+            . 'if (saveName !== "") {'
+            . 'select.name = saveName;'
+            . 'saveControl.dataset.kkOriginalName = saveName;'
+            . 'saveControl.removeAttribute("name");'
+            . '}'
+            . 'if (!saveControl.id) saveControl.id = `kk_quiz_catalog_section_native_${propertyId}`;'
+            . 'select.dataset.kkTargetControlId = saveControl.id;'
             . 'const empty = document.createElement("option");'
             . 'empty.value = "";'
             . 'empty.textContent = "Не выбран";'
@@ -328,8 +435,9 @@ final class ElementFormAssets
             . 'optgroup.label = `[${group.type || ""}] ${group.name || ""}`;'
             . '(Array.isArray(group.sections) ? group.sections : []).forEach((section) => {'
             . 'const option = document.createElement("option");'
+            . 'const depth = Math.max(1, Number(section.depth || 1));'
             . 'option.value = String(section.id || "");'
-            . 'option.textContent = `${"—".repeat(Math.max(1, Number(section.depth || 1)))} ${section.name || ""}`;'
+            . 'option.textContent = `${"\u00A0\u00A0\u00A0\u00A0".repeat(depth - 1)}${section.name || ""}`;'
             . 'optgroup.appendChild(option);'
             . '});'
             . 'select.appendChild(optgroup);'
@@ -346,25 +454,40 @@ final class ElementFormAssets
             . '}'
             . 'select.value = currentValue;'
             . 'select.addEventListener("change", () => {'
-            . 'original.value = select.value;'
-            . 'original.dispatchEvent(new Event("change", { bubbles: true }));'
+            . 'saveControl.value = select.value;'
+            . 'saveControl.dispatchEvent(new Event("change", { bubbles: true }));'
             . '});'
-            . 'original.insertAdjacentElement("afterend", select);'
+            . 'customWrapper.appendChild(select);'
             . 'if (groups.length === 0) {'
             . 'const hint = document.createElement("div");'
             . 'hint.textContent = "Сначала выберите инфоблоки рекомендаций в настройках квиза.";'
             . 'hint.style.color = "#777";'
-            . 'select.insertAdjacentElement("afterend", hint);'
+            . 'customWrapper.appendChild(hint);'
+            . '}'
+            . 'valueCell.appendChild(customWrapper);'
+            . 'const form = row.closest("form");'
+            . 'if (form && form.dataset.kkCatalogSubmitSync !== "Y") {'
+            . 'form.dataset.kkCatalogSubmitSync = "Y";'
+            . 'form.addEventListener("submit", () => {'
+            . 'document.querySelectorAll(".kk-quiz-admin-recommendation-section select").forEach((customSelect) => {'
+            . 'const targetId = customSelect.dataset.kkTargetControlId || "";'
+            . 'const target = targetId ? document.getElementById(targetId) : null;'
+            . 'if (target) target.value = customSelect.value;'
+            . '});'
+            . '});'
             . '}'
             . '};'
             . 'document.addEventListener("change", (event) => {'
             . 'const entityRow = getPropertyRow(settings.entityTypePropertyId);'
             . 'const isEntityControl = event.target && (event.target.matches(`[name^="PROPERTY[${settings.entityTypePropertyId}]"]`) || event.target.matches(`[name^="PROP[${settings.entityTypePropertyId}]"]`) || (entityRow && entityRow.contains(event.target)));'
             . 'if (isEntityControl) { applyVisibility(); enhanceCatalogSectionSelect(); }'
+            . 'updateRecommendationsDisabledHint();'
             . '});'
-            . 'if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { applyVisibility(); enhanceCatalogSectionSelect(); }); else { applyVisibility(); enhanceCatalogSectionSelect(); }'
-            . 'setTimeout(() => { applyVisibility(); enhanceCatalogSectionSelect(); }, 100);'
-            . 'setTimeout(() => { applyVisibility(); enhanceCatalogSectionSelect(); }, 500);'
+            . 'document.addEventListener("input", () => { updateRecommendationsDisabledHint(); });'
+            . 'const refreshAdminForm = () => { applyVisibility(); enhanceCatalogSectionSelect(); updateRecommendationsDisabledHint(); };'
+            . 'if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", refreshAdminForm); else { refreshAdminForm(); }'
+            . 'setTimeout(refreshAdminForm, 100);'
+            . 'setTimeout(refreshAdminForm, 500);'
             . '})();';
     }
 
