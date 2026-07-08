@@ -369,6 +369,49 @@
         nodes.result.hidden = true;
     };
 
+    const getQuizCode = (root, quiz) => String(root.getAttribute('data-kk-quiz-code') || quiz.code || '').trim();
+
+    const findPopupRoot = (quizCode) => Array.from(document.querySelectorAll('[data-kk-quiz-popup-root]'))
+        .find((root) => String(root.getAttribute('data-kk-quiz-code') || '').trim() === quizCode) || null;
+
+    const updatePopupLock = () => {
+        const hasOpenPopup = document.querySelector('[data-kk-quiz-popup-root].kk-quiz--popup-open') !== null;
+        document.body.classList.toggle('kk-quiz-popup-lock', hasOpenPopup);
+    };
+
+    const openPopup = (root) => {
+        if (!root) {
+            return;
+        }
+
+        root.hidden = false;
+        root.classList.add('kk-quiz--popup-open');
+        updatePopupLock();
+
+        const focusTarget = root.querySelector('[data-kk-quiz-popup-close]')
+            || root.querySelector('[data-kk-quiz-start-button]')
+            || root.querySelector('button, a, input, select, textarea, [tabindex]:not([tabindex="-1"])')
+            || root.querySelector('.kk-quiz__popup-card');
+
+        if (focusTarget && typeof focusTarget.focus === 'function') {
+            try {
+                focusTarget.focus({ preventScroll: true });
+            } catch (error) {
+                focusTarget.focus();
+            }
+        }
+    };
+
+    const closePopup = (root) => {
+        if (!root) {
+            return;
+        }
+
+        root.classList.remove('kk-quiz--popup-open');
+        root.hidden = true;
+        updatePopupLock();
+    };
+
 
     const buildAgreementField = (quiz) => {
         if (!quiz.privacy || quiz.privacy.required !== true) {
@@ -904,6 +947,19 @@
             return;
         }
 
+        const quizCode = getQuizCode(root, quiz);
+        if (root.hasAttribute('data-kk-quiz-popup-root') && quizCode !== '') {
+            root.setAttribute('data-kk-quiz-code', quizCode);
+            root.addEventListener('click', (event) => {
+                if (event.target === root) {
+                    closePopup(root);
+                }
+            });
+            root.querySelectorAll('[data-kk-quiz-popup-close]').forEach((button) => {
+                button.addEventListener('click', () => closePopup(root));
+            });
+        }
+
         const state = buildState();
         const startButton = root.querySelector('[data-kk-quiz-start-button]');
         if (startButton) {
@@ -917,4 +973,44 @@
             });
         }
     });
+
+    document.addEventListener('click', (event) => {
+        const target = event.target && event.target.nodeType === 1 ? event.target : (event.target ? event.target.parentElement : null);
+        const trigger = target ? target.closest('[data-kk-quiz-popup]') : null;
+        if (!trigger) {
+            return;
+        }
+
+        const quizCode = String(trigger.getAttribute('data-kk-quiz-popup') || '').trim();
+        if (quizCode === '') {
+            return;
+        }
+
+        const popupRoot = findPopupRoot(quizCode);
+        if (!popupRoot) {
+            return;
+        }
+
+        event.preventDefault();
+        openPopup(popupRoot);
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') {
+            return;
+        }
+
+        document.querySelectorAll('[data-kk-quiz-popup-root].kk-quiz--popup-open').forEach((root) => {
+            closePopup(root);
+        });
+    });
+
+    const params = new URLSearchParams(window.location.search);
+    const quizCode = String(params.get('kkquiz') || '').trim();
+    if (quizCode !== '') {
+        const popupRoot = findPopupRoot(quizCode);
+        if (popupRoot) {
+            openPopup(popupRoot);
+        }
+    }
 }());

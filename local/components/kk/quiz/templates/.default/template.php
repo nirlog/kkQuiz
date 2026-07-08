@@ -13,8 +13,24 @@ $title = $quiz !== null ? (string)($quiz['title'] ?? '') : '';
 $subtitle = $quiz !== null ? (string)($quiz['subtitle'] ?? '') : '';
 $startText = $quiz !== null ? (string)($quiz['start_text'] ?? '') : '';
 $buttonText = $quiz !== null && (string)($quiz['button_text'] ?? '') !== '' ? (string)$quiz['button_text'] : 'Начать';
+$quizCode = $quiz !== null ? (string)($quiz['code'] ?? '') : '';
+$isButtonMode = $displayMode === 'button';
+$isPopupMode = $displayMode === 'popup' || $isButtonMode;
+$rootDisplayMode = $isPopupMode ? 'popup' : 'block';
 ?>
-<div class="kk-quiz kk-quiz--<?= htmlspecialcharsbx($displayMode) ?>" data-kk-quiz data-kk-quiz-sessid="<?= htmlspecialcharsbx(bitrix_sessid()) ?>">
+<?php if ($isButtonMode && $quizCode !== ''): ?>
+    <button class="kk-quiz__button kk-quiz__popup-trigger" type="button" data-kk-quiz-popup="<?= htmlspecialcharsbx($quizCode) ?>"><?= htmlspecialcharsbx($buttonText) ?></button>
+<?php endif; ?>
+<div
+    class="kk-quiz kk-quiz--<?= htmlspecialcharsbx($rootDisplayMode) ?>"
+    data-kk-quiz
+    data-kk-quiz-sessid="<?= htmlspecialcharsbx(bitrix_sessid()) ?>"
+    <?php if ($isPopupMode): ?>data-kk-quiz-popup-root data-kk-quiz-code="<?= htmlspecialcharsbx($quizCode) ?>" hidden<?php endif; ?>
+>
+    <?php if ($isPopupMode): ?>
+        <div class="kk-quiz__popup-card" role="dialog" aria-modal="true" aria-label="<?= htmlspecialcharsbx($title !== '' ? $title : 'Квиз') ?>" tabindex="-1">
+            <button class="kk-quiz__popup-close" type="button" data-kk-quiz-popup-close aria-label="Закрыть">×</button>
+    <?php endif; ?>
     <?php if ($error !== ''): ?>
         <div class="kk-quiz__error" data-kk-quiz-error><?= htmlspecialcharsbx($error) ?></div>
     <?php elseif ($quiz !== null): ?>
@@ -34,5 +50,8 @@ $buttonText = $quiz !== null && (string)($quiz['button_text'] ?? '') !== '' ? (s
         <div class="kk-quiz__form" data-kk-quiz-form hidden></div>
         <div class="kk-quiz__result" data-kk-quiz-result hidden></div>
         <script type="application/json" data-kk-quiz-data><?= Json::encode($quiz) ?></script>
+    <?php endif; ?>
+    <?php if ($isPopupMode): ?>
+        </div>
     <?php endif; ?>
 </div>
