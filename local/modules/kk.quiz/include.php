@@ -13,6 +13,7 @@ Loader::registerAutoLoadClasses(
         'Kk\\Quiz\\Iblock\\Installer' => 'lib/Iblock/Installer.php',
         'Kk\\Quiz\\Iblock\\Property\\QuizAnswersProperty' => 'lib/Iblock/Property/QuizAnswersProperty.php',
         'Kk\\Quiz\\Admin\\ElementFormAssets' => 'lib/Admin/ElementFormAssets.php',
+        'Kk\\Quiz\\Admin\\SectionFormAssets' => 'lib/Admin/SectionFormAssets.php',
         'Kk\\Quiz\\Repository\\QuizRepository' => 'lib/Repository/QuizRepository.php',
         'Kk\\Quiz\\Repository\\LeadRepository' => 'lib/Repository/LeadRepository.php',
         'Kk\\Quiz\\Service\\QuizService' => 'lib/Service/QuizService.php',

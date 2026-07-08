@@ -8,6 +8,7 @@ use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\SystemException;
 use Kk\Quiz\Admin\ElementFormAssets;
+use Kk\Quiz\Admin\SectionFormAssets;
 use Kk\Quiz\Iblock\Property\QuizAnswersProperty;
 
 final class Installer
@@ -63,6 +64,14 @@ final class Installer
             ElementFormAssets::class,
             'onProlog'
         );
+
+        EventManager::getInstance()->registerEventHandler(
+            'main',
+            'OnProlog',
+            'kk.quiz',
+            SectionFormAssets::class,
+            'onProlog'
+        );
     }
 
     private static function unregisterEventHandlers(): void
@@ -80,6 +89,14 @@ final class Installer
             'OnProlog',
             'kk.quiz',
             ElementFormAssets::class,
+            'onProlog'
+        );
+
+        EventManager::getInstance()->unRegisterEventHandler(
+            'main',
+            'OnProlog',
+            'kk.quiz',
+            SectionFormAssets::class,
             'onProlog'
         );
     }
