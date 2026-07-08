@@ -23,3 +23,7 @@ Loader::registerAutoLoadClasses(
         'Kk\\Quiz\\Controller\\Api' => 'lib/Controller/Api.php',
     ]
 );
+
+if (class_exists(\Kk\Quiz\Iblock\Installer::class)) {
+    \Kk\Quiz\Iblock\Installer::ensureEventHandlers();
+}

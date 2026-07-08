@@ -45,6 +45,71 @@ final class Installer
         // Инфоблоки и пользовательские данные намеренно не удаляются.
     }
 
+    public static function ensureEventHandlers(): void
+    {
+        self::registerEventHandlerIfMissing(
+            'iblock',
+            'OnIBlockPropertyBuildList',
+            QuizAnswersProperty::class,
+            'getUserTypeDescription'
+        );
+
+        self::registerEventHandlerIfMissing(
+            'main',
+            'OnProlog',
+            ElementFormAssets::class,
+            'onProlog'
+        );
+
+        self::registerEventHandlerIfMissing(
+            'main',
+            'OnProlog',
+            SectionFormAssets::class,
+            'onProlog'
+        );
+    }
+
+    private static function registerEventHandlerIfMissing(
+        string $fromModuleId,
+        string $eventType,
+        string $class,
+        string $method
+    ): void {
+        if (self::hasEventHandler($fromModuleId, $eventType, $class, $method)) {
+            return;
+        }
+
+        EventManager::getInstance()->registerEventHandler(
+            $fromModuleId,
+            $eventType,
+            'kk.quiz',
+            $class,
+            $method
+        );
+    }
+
+    private static function hasEventHandler(string $fromModuleId, string $eventType, string $class, string $method): bool
+    {
+        $handlers = EventManager::getInstance()->findEventHandlers($fromModuleId, $eventType);
+        $normalizedClass = ltrim($class, '\\');
+
+        foreach ($handlers as $handler) {
+            $handlerModule = (string)($handler['TO_MODULE_ID'] ?? '');
+            $handlerClass = ltrim((string)($handler['TO_CLASS'] ?? ''), '\\');
+            $handlerMethod = (string)($handler['TO_METHOD'] ?? '');
+
+            if (
+                $handlerModule === 'kk.quiz'
+                && $handlerClass === $normalizedClass
+                && $handlerMethod === $method
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static function registerEventHandlers(): void
     {
         self::unregisterEventHandlers();
