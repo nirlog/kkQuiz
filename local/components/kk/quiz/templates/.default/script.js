@@ -12,6 +12,8 @@
     const INPUT_TYPES = ['text', 'textarea', 'phone', 'email'];
     const OPTION_TYPES = ['radio', 'select'];
     const TEMPLATE_NAMES = ['image_cards', 'cards', 'list'];
+    const loadedQuizzes = new Map();
+    const loadingQuizzes = new Map();
 
     const clear = (node) => {
         while (node.firstChild) {
@@ -124,9 +126,13 @@
         }, {});
     };
 
-    const getAjaxUrl = (root) => {
-        const sessid = root.getAttribute('data-kk-quiz-sessid') || (window.BX && BX.bitrix_sessid ? BX.bitrix_sessid() : '');
-        const params = new URLSearchParams({ action: 'kk:quiz.api.submitLead' });
+    const getSessid = (node) => node && node.getAttribute('data-kk-quiz-sessid')
+        ? node.getAttribute('data-kk-quiz-sessid')
+        : (window.BX && BX.bitrix_sessid ? BX.bitrix_sessid() : '');
+
+    const getAjaxUrl = (root, action = 'kk:quiz.api.submitLead') => {
+        const sessid = getSessid(root);
+        const params = new URLSearchParams({ action });
         if (sessid) {
             params.set('sessid', sessid);
         }
@@ -367,6 +373,207 @@
         nodes.question.hidden = true;
         nodes.form.hidden = true;
         nodes.result.hidden = true;
+    };
+
+    const getQuizCode = (root, quiz) => String(root.getAttribute('data-kk-quiz-code') || quiz.code || '').trim();
+
+    const findPopupRoot = (quizCode) => Array.from(document.querySelectorAll('[data-kk-quiz-popup-root]'))
+        .find((root) => String(root.getAttribute('data-kk-quiz-code') || '').trim() === quizCode) || null;
+
+    const updatePopupLock = () => {
+        const hasOpenPopup = document.querySelector('[data-kk-quiz-popup-root].kk-quiz--popup-open') !== null;
+        document.body.classList.toggle('kk-quiz-popup-lock', hasOpenPopup);
+    };
+
+    const openPopup = (root) => {
+        if (!root) {
+            return;
+        }
+
+        root.hidden = false;
+        root.classList.add('kk-quiz--popup-open');
+        updatePopupLock();
+
+        const focusTarget = root.querySelector('[data-kk-quiz-popup-close]')
+            || root.querySelector('[data-kk-quiz-start-button]')
+            || root.querySelector('button, a, input, select, textarea, [tabindex]:not([tabindex="-1"])')
+            || root.querySelector('.kk-quiz__popup-card');
+
+        if (focusTarget && typeof focusTarget.focus === 'function') {
+            try {
+                focusTarget.focus({ preventScroll: true });
+            } catch (error) {
+                focusTarget.focus();
+            }
+        }
+    };
+
+    const closePopup = (root) => {
+        if (!root) {
+            return;
+        }
+
+        root.classList.remove('kk-quiz--popup-open');
+        root.hidden = true;
+        updatePopupLock();
+    };
+
+    const getLoaderNode = () => document.querySelector('[data-kk-quiz-loader]');
+
+    const getLoaderSessid = () => getSessid(getLoaderNode());
+
+    const normalizeQuizCode = (quizCode) => String(quizCode || '').trim();
+
+    const isValidQuizCode = (quizCode) => /^[a-zA-Z0-9_-]+$/.test(quizCode);
+
+    const warnPopupError = (error) => {
+        if (window.console && typeof window.console.warn === 'function') {
+            window.console.warn('KK Quiz popup was not opened:', error.message || error);
+        }
+    };
+
+    const createPopupRootFromQuiz = (quiz, sessid) => {
+        const quizCode = String(quiz.code || '').trim();
+        const root = document.createElement('div');
+        root.className = 'kk-quiz kk-quiz--popup';
+        root.setAttribute('data-kk-quiz', '');
+        root.setAttribute('data-kk-quiz-popup-root', '');
+        root.setAttribute('data-kk-quiz-code', quizCode);
+        root.setAttribute('data-kk-quiz-sessid', sessid || '');
+        root.hidden = true;
+
+        const card = document.createElement('div');
+        card.className = 'kk-quiz__popup-card';
+        card.setAttribute('role', 'dialog');
+        card.setAttribute('aria-modal', 'true');
+        card.setAttribute('aria-label', String(quiz.title || 'Квиз'));
+        card.tabIndex = -1;
+
+        const close = document.createElement('button');
+        close.className = 'kk-quiz__popup-close';
+        close.type = 'button';
+        close.setAttribute('data-kk-quiz-popup-close', '');
+        close.setAttribute('aria-label', 'Закрыть');
+        close.textContent = '×';
+        card.appendChild(close);
+
+        const start = create('div', 'kk-quiz__start');
+        start.setAttribute('data-kk-quiz-start', '');
+        if (String(quiz.title || '') !== '') {
+            start.appendChild(create('h2', 'kk-quiz__title', quiz.title));
+        }
+        if (String(quiz.subtitle || '') !== '') {
+            start.appendChild(create('div', 'kk-quiz__subtitle', quiz.subtitle));
+        }
+        if (String(quiz.start_text || '') !== '') {
+            start.appendChild(create('div', 'kk-quiz__start-text', quiz.start_text));
+        }
+        const startButton = create('button', 'kk-quiz__button', String(quiz.button_text || '').trim() || 'Начать');
+        startButton.type = 'button';
+        startButton.setAttribute('data-kk-quiz-start-button', '');
+        start.appendChild(startButton);
+
+        const question = create('div', 'kk-quiz__question');
+        question.setAttribute('data-kk-quiz-question', '');
+        question.hidden = true;
+
+        const form = create('div', 'kk-quiz__form');
+        form.setAttribute('data-kk-quiz-form', '');
+        form.hidden = true;
+
+        const result = create('div', 'kk-quiz__result');
+        result.setAttribute('data-kk-quiz-result', '');
+        result.hidden = true;
+
+        const data = document.createElement('script');
+        data.type = 'application/json';
+        data.setAttribute('data-kk-quiz-data', '');
+        data.textContent = JSON.stringify(quiz);
+
+        card.appendChild(start);
+        card.appendChild(question);
+        card.appendChild(form);
+        card.appendChild(result);
+        card.appendChild(data);
+        root.appendChild(card);
+
+        return root;
+    };
+
+    const loadQuizByCode = (quizCode) => {
+        const normalizedCode = normalizeQuizCode(quizCode);
+        if (!isValidQuizCode(normalizedCode)) {
+            return Promise.reject(new Error('INVALID_QUIZ_CODE'));
+        }
+
+        if (loadedQuizzes.has(normalizedCode)) {
+            return Promise.resolve(loadedQuizzes.get(normalizedCode));
+        }
+
+        if (loadingQuizzes.has(normalizedCode)) {
+            return loadingQuizzes.get(normalizedCode);
+        }
+
+        const loader = getLoaderNode();
+        const request = fetch(getAjaxUrl(loader, 'kk:quiz.api.getQuiz'), {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ quizCode: normalizedCode })
+        })
+            .then((response) => response.json())
+            .then((data) => {
+                const result = normalizeAjaxResponse(data);
+                if (!result || result.success !== true || !result.quiz) {
+                    const message = result && Array.isArray(result.errors) && result.errors.length > 0
+                        ? result.errors.join(', ')
+                        : 'QUIZ_NOT_FOUND';
+                    throw new Error(message);
+                }
+
+                loadedQuizzes.set(normalizedCode, result.quiz);
+                return result.quiz;
+            })
+            .finally(() => {
+                loadingQuizzes.delete(normalizedCode);
+            });
+
+        loadingQuizzes.set(normalizedCode, request);
+        return request;
+    };
+
+    const openQuizPopupByCode = (quizCode) => {
+        const normalizedCode = normalizeQuizCode(quizCode);
+        if (!isValidQuizCode(normalizedCode)) {
+            warnPopupError(new Error('INVALID_QUIZ_CODE'));
+            return Promise.resolve(null);
+        }
+
+        const existingRoot = findPopupRoot(normalizedCode);
+        if (existingRoot) {
+            openPopup(existingRoot);
+            return Promise.resolve(existingRoot);
+        }
+
+        if (!getLoaderNode()) {
+            warnPopupError(new Error('QUIZ_POPUP_LOADER_NOT_FOUND'));
+            return Promise.resolve(null);
+        }
+
+        return loadQuizByCode(normalizedCode)
+            .then((quiz) => {
+                const root = findPopupRoot(normalizedCode) || createPopupRootFromQuiz(quiz, getLoaderSessid());
+                if (!root.parentNode) {
+                    document.body.appendChild(root);
+                }
+                initQuizRoot(root);
+                openPopup(root);
+                return root;
+            })
+            .catch((error) => {
+                warnPopupError(error);
+                return null;
+            });
     };
 
 
@@ -879,7 +1086,12 @@
         nodes.question.appendChild(next);
     };
 
-    document.querySelectorAll('[data-kk-quiz]').forEach((root) => {
+    const initQuizRoot = (root) => {
+        if (!root || root.dataset.kkQuizInitialized === 'Y') {
+            return;
+        }
+
+        root.dataset.kkQuizInitialized = 'Y';
         const dataNode = root.querySelector('[data-kk-quiz-data]');
         if (!dataNode) {
             return;
@@ -904,6 +1116,20 @@
             return;
         }
 
+        const quizCode = getQuizCode(root, quiz);
+        if (root.hasAttribute('data-kk-quiz-popup-root') && quizCode !== '') {
+            root.setAttribute('data-kk-quiz-code', quizCode);
+            loadedQuizzes.set(quizCode, quiz);
+            root.addEventListener('click', (event) => {
+                if (event.target === root) {
+                    closePopup(root);
+                }
+            });
+            root.querySelectorAll('[data-kk-quiz-popup-close]').forEach((button) => {
+                button.addEventListener('click', () => closePopup(root));
+            });
+        }
+
         const state = buildState();
         const startButton = root.querySelector('[data-kk-quiz-start-button]');
         if (startButton) {
@@ -916,5 +1142,40 @@
                 showFinalForm(nodes, quiz, state, null);
             });
         }
+    };
+
+    document.querySelectorAll('[data-kk-quiz]').forEach(initQuizRoot);
+
+    document.addEventListener('click', (event) => {
+        const target = event.target && event.target.nodeType === 1 ? event.target : (event.target ? event.target.parentElement : null);
+        const trigger = target ? target.closest('[data-kk-quiz-popup]') : null;
+        if (!trigger) {
+            return;
+        }
+
+        event.preventDefault();
+
+        const quizCode = String(trigger.getAttribute('data-kk-quiz-popup') || '').trim();
+        if (quizCode === '') {
+            return;
+        }
+
+        openQuizPopupByCode(quizCode);
     });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') {
+            return;
+        }
+
+        document.querySelectorAll('[data-kk-quiz-popup-root].kk-quiz--popup-open').forEach((root) => {
+            closePopup(root);
+        });
+    });
+
+    const params = new URLSearchParams(window.location.search);
+    const quizCode = String(params.get('kkquiz') || '').trim();
+    if (quizCode !== '') {
+        openQuizPopupByCode(quizCode);
+    }
 }());
