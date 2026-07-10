@@ -393,6 +393,9 @@ targetTitle.textContent = String(edge.to_title || target.title || ('ID ' + edge.
 edgeLine.appendChild(targetTitle);
 appendEditLink(edgeLine, target);
 container.appendChild(edgeLine);
+if (target.type === 'result') {
+return;
+}
 if (renderedNodes < maxNodes) {
 container.appendChild(renderFlowBranch(target, depth + 1, nextVisited));
 } else {
