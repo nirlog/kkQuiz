@@ -254,8 +254,13 @@ applyQuickFilter(enumId);
 });
 return link;
 };
-const getAjaxUrl = (action) => {
-return '/bitrix/services/main/ajax.php?mode=ajax&c=kk:api&action=' + encodeURIComponent(action);
+const getAdminQuizAjaxUrl = (action) => {
+const params = new URLSearchParams();
+params.set('action', action);
+if (window.BX && BX.bitrix_sessid) {
+params.set('sessid', BX.bitrix_sessid());
+}
+return '/bitrix/services/main/ajax.php?' + params.toString();
 };
 const extractQuizFromResponse = (response) => {
 if (!response || response.status !== 'success') {
@@ -290,18 +295,13 @@ return item;
 return null;
 };
 const loadAdminQuiz = (quizCode) => {
-const body = new URLSearchParams();
-body.append('quizCode', quizCode);
-body.append('sessid', window.BX && BX.bitrix_sessid ? BX.bitrix_sessid() : '');
-return fetch(getAjaxUrl('getQuiz'), {
+return fetch(getAdminQuizAjaxUrl('kk:quiz.api.getQuiz'), {
 method: 'POST',
-credentials: 'include',
+credentials: 'same-origin',
 headers: {
-'Content-Type': 'application/x-www-form-urlencoded',
-'BX-Ajax': 'true',
-'X-Bitrix-Csrf-Token': window.BX && BX.bitrix_sessid ? BX.bitrix_sessid() : ''
+'Content-Type': 'application/json'
 },
-body
+body: JSON.stringify({ quizCode })
 })
 .then((response) => response.json())
 .then((response) => {
