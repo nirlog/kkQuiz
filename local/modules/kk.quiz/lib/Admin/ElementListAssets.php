@@ -130,6 +130,29 @@ return normalized;
 }
 return '';
 };
+const reloadGrid = (gridId) => {
+if (
+window.BX
+&& BX.Main
+&& BX.Main.gridManager
+&& typeof BX.Main.gridManager.getById === 'function'
+) {
+const grid = BX.Main.gridManager.getById(gridId);
+const instance = grid && grid.instance ? grid.instance : grid;
+if (instance && typeof instance.reloadTable === 'function') {
+instance.reloadTable('POST', {
+apply_filter: 'Y',
+clear_nav: 'Y'
+});
+return true;
+}
+if (instance && typeof instance.reload === 'function') {
+instance.reload();
+return true;
+}
+}
+return false;
+};
 const applyQuickFilter = (enumId) => {
 const gridId = getGridId();
 if (!gridId) {
@@ -138,6 +161,11 @@ return;
 }
 const propertyField = 'PROPERTY_' + settings.entityTypePropertyId;
 const url = new URL('/bitrix/services/main/ajax.php', window.location.origin);
+url.searchParams.set('analyticsLabel[FILTER_ID]', gridId);
+url.searchParams.set('analyticsLabel[GRID_ID]', gridId);
+url.searchParams.set('analyticsLabel[PRESET_ID]', 'tmp_filter');
+url.searchParams.set('analyticsLabel[FIND]', 'N');
+url.searchParams.set('analyticsLabel[ROWS]', 'N');
 url.searchParams.set('mode', 'ajax');
 url.searchParams.set('c', 'bitrix:main.ui.filter');
 url.searchParams.set('action', 'setFilter');
@@ -176,7 +204,13 @@ if (!response || response.status !== 'success') {
 console.warn('KK Quiz: filter apply failed', response);
 return;
 }
-window.location.reload();
+if (reloadGrid(gridId)) {
+return;
+}
+const fallbackUrl = new URL(window.location.href);
+fallbackUrl.searchParams.set('apply_filter', 'Y');
+fallbackUrl.searchParams.set('clear_nav', 'Y');
+window.location.href = fallbackUrl.toString();
 })
 .catch((error) => { console.warn('KK Quiz: filter apply request failed', error); });
 };
