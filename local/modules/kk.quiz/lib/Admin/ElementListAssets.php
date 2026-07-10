@@ -963,6 +963,15 @@ const title = document.createElement('span');
 title.textContent = (node.is_start ? '★ ' : '') + String(node.title || ('ID ' + node.id));
 title.style.fontWeight = node.type === 'question' ? 'bold' : 'normal';
 line.appendChild(title);
+if (node.is_start) {
+const start = document.createElement('span');
+start.textContent = ' старт';
+start.style.marginLeft = '6px';
+start.style.color = '#267000';
+start.style.fontSize = '12px';
+start.style.fontWeight = 'bold';
+line.appendChild(start);
+}
 appendEditLink(line, node);
 return line;
 };

@@ -56,6 +56,7 @@ final class DemoDataInstaller
         $resultIds = self::createResults($iblockId, $sectionId, $results);
         $questions = [['pc-purpose','Для чего нужен компьютер?',100],['pc-game-budget','Какой бюджет на игровой компьютер?',200],['pc-work-task','Какие рабочие задачи важнее всего?',300],['pc-home-task','Какой сценарий ближе?',400]];
         $questionIds = self::createQuestions($iblockId, $sectionId, $questions);
+        self::updateStartQuestion($sectionId, (int)($questionIds['pc-purpose'] ?? 0));
         self::updateAnswers($iblockId, $questionIds['pc-purpose'], [self::answer('Игры','games','Для современных игр и высокого FPS',100,$questionIds['pc-game-budget']), self::answer('Работа','work','Для рабочих задач и профессиональных программ',200,$questionIds['pc-work-task']), self::answer('Дом и учёба','home-study','Для повседневных задач, учёбы и мультимедиа',300,$questionIds['pc-home-task'])]);
         self::updateAnswers($iblockId, $questionIds['pc-game-budget'], [self::answer('До 100 000 ₽','budget-under-100','Базовый игровой ПК без переплаты',100,null,$resultIds['pc-game-start']), self::answer('100 000–180 000 ₽','budget-100-180','Оптимальный запас для современных игр',200,null,$resultIds['pc-game-power']), self::answer('Больше 180 000 ₽','budget-over-180','Максимальный запас производительности',300,null,$resultIds['pc-game-power'])]);
         self::updateAnswers($iblockId, $questionIds['pc-work-task'], [self::answer('Документы, CRM, браузер','office','Стабильная ежедневная офисная работа',100,null,$resultIds['pc-office']), self::answer('Дизайн, монтаж, 3D, CAD','creative','Нужна высокая производительность под нагрузкой',200,null,$resultIds['pc-workstation']), self::answer('Программирование и многозадачность','development','Баланс процессора, памяти и накопителя',300,null,$resultIds['pc-universal'])]);
@@ -86,6 +87,7 @@ final class DemoDataInstaller
         ];
         $resultIds = self::createResults($iblockId, $sectionId, $results);
         $questionIds = self::createQuestions($iblockId, $sectionId, [['cleaning-object','Где нужна уборка?',100],['cleaning-apartment-type','Какой формат уборки нужен?',200],['cleaning-office-area','Какой формат обслуживания нужен?',300]]);
+        self::updateStartQuestion($sectionId, (int)($questionIds['cleaning-object'] ?? 0));
         self::updateAnswers($iblockId, $questionIds['cleaning-object'], [self::answer('Квартира или дом','apartment-house','Подберём формат уборки для жилого помещения',100,$questionIds['cleaning-apartment-type']), self::answer('Офис или коммерческое помещение','office-commercial','Подберём обслуживание рабочего пространства',200,$questionIds['cleaning-office-area']), self::answer('После ремонта','after-renovation','Нужна уборка строительной пыли и следов ремонта',300,null,$resultIds['cleaning-after-renovation']), self::answer('Нужна мойка окон','windows','Отдельная услуга для окон и остекления',400,null,$resultIds['cleaning-windows'])]);
         self::updateAnswers($iblockId, $questionIds['cleaning-apartment-type'], [self::answer('Поддерживающая уборка','regular','Для поддержания чистоты дома',100,null,$resultIds['cleaning-regular']), self::answer('Генеральная уборка','general','Глубокая уборка с деталями',200,null,$resultIds['cleaning-general']), self::answer('Не уверен, нужна консультация','consultation','Поможем выбрать оптимальный формат',300,null,$resultIds['cleaning-general'])]);
         self::updateAnswers($iblockId, $questionIds['cleaning-office-area'], [self::answer('Разовая уборка офиса','one-time-office','Разовое наведение порядка',100,null,$resultIds['cleaning-office']), self::answer('Регулярная уборка по графику','scheduled-office','Постоянное обслуживание офиса',200,null,$resultIds['cleaning-office']), self::answer('Уборка перед мероприятием или после него','event-cleaning','Интенсивная уборка перед событием или после него',300,null,$resultIds['cleaning-general'])]);
@@ -150,6 +152,16 @@ final class DemoDataInstaller
         $id = (int)$element->Add(array_merge(['IBLOCK_ID' => $iblockId, 'IBLOCK_SECTION_ID' => $sectionId, 'ACTIVE' => 'Y', 'SORT' => 500, 'PROPERTY_VALUES' => $properties], $fields));
         if ($id <= 0) { throw new SystemException((string)$element->LAST_ERROR); }
         return $id;
+    }
+
+    private static function updateStartQuestion(int $sectionId, int $questionId): void
+    {
+        if ($sectionId <= 0 || $questionId <= 0) {
+            return;
+        }
+
+        $section = new \CIBlockSection();
+        $section->Update($sectionId, ['UF_KK_START_QUESTION' => $questionId]);
     }
 
     private static function updateAnswers(int $iblockId, int $questionId, array $answers): void

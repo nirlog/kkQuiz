@@ -28,16 +28,31 @@ final class QuizStructureDiagnostics
         $messages = [];
         $questionsCount = count($questions);
         $resultsCount = count($results);
-        $startQuestion = $questions === [] ? null : reset($questions);
+        $configuredStartQuestionId = self::getSectionStartQuestionId($iblockId, $sectionId);
+        $fallbackStartQuestion = $questions === [] ? null : reset($questions);
+        $startQuestion = null;
+
+        if ($configuredStartQuestionId > 0 && isset($questions[$configuredStartQuestionId])) {
+            $startQuestion = $questions[$configuredStartQuestionId];
+        } elseif (is_array($fallbackStartQuestion)) {
+            $startQuestion = $fallbackStartQuestion;
+        }
 
         $messages[] = ['type' => $questionsCount > 0 ? 'success' : 'error', 'message' => $questionsCount > 0 ? 'Вопросов: ' . $questionsCount : 'Ошибка: в квизе нет активных вопросов.'];
         $messages[] = ['type' => $resultsCount > 0 ? 'success' : 'error', 'message' => $resultsCount > 0 ? 'Результатов: ' . $resultsCount : 'Ошибка: в квизе нет активных результатов.'];
 
         if (is_array($startQuestion)) {
-            $messages[] = ['type' => 'success', 'message' => 'Стартовый вопрос: ' . $startQuestion['title']];
+            if ($configuredStartQuestionId > 0 && isset($questions[$configuredStartQuestionId])) {
+                $messages[] = ['type' => 'success', 'message' => 'Стартовый вопрос: “' . $startQuestion['title'] . '”'];
+            } elseif ($configuredStartQuestionId > 0) {
+                $messages[] = ['type' => 'warning', 'message' => 'Стартовый вопрос ID ' . $configuredStartQuestionId . ' не найден среди активных вопросов этого квиза. Используется первый активный вопрос по сортировке: “' . $startQuestion['title'] . '”'];
+            } else {
+                $messages[] = ['type' => 'warning', 'message' => 'Стартовый вопрос не задан. Используется первый активный вопрос по сортировке: “' . $startQuestion['title'] . '”'];
+            }
         }
 
         $questionEdges = [];
+        $questionResultEdges = [];
         $usedResultIds = [];
         $graphEdges = [];
 
@@ -88,6 +103,7 @@ final class QuizStructureDiagnostics
             }
 
             $questionEdges[$questionId] = [];
+            $questionResultEdges[$questionId] = [];
             foreach (array_values(array_unique($transitionQuestionIds)) as $targetQuestionId) {
                 if (!isset($questions[$targetQuestionId])) {
                     $messages[] = ['type' => 'warning', 'message' => 'Предупреждение: вопрос “' . $question['title'] . '” ведёт на несуществующий или неактивный вопрос ID ' . $targetQuestionId . '.'];
@@ -103,13 +119,19 @@ final class QuizStructureDiagnostics
                     continue;
                 }
 
-                $usedResultIds[$targetResultId] = true;
+                $questionResultEdges[$questionId][] = $targetResultId;
             }
         }
 
         $reachableQuestionIds = [];
         if (is_array($startQuestion)) {
             $reachableQuestionIds = self::collectReachableQuestionIds((int)$startQuestion['id'], $questionEdges);
+            foreach (array_keys($reachableQuestionIds) as $reachableQuestionId) {
+                foreach ((array)($questionResultEdges[$reachableQuestionId] ?? []) as $targetResultId) {
+                    $usedResultIds[(int)$targetResultId] = true;
+                }
+            }
+
             foreach ($questions as $questionId => $question) {
                 if (!isset($reachableQuestionIds[$questionId])) {
                     $messages[] = ['type' => 'warning', 'message' => 'Предупреждение: вопрос “' . $question['title'] . '” недостижим из стартового вопроса.'];
@@ -130,7 +152,7 @@ final class QuizStructureDiagnostics
                 'start_question_title' => is_array($startQuestion) ? $startQuestion['title'] : '',
             ],
             'items' => $messages,
-            'graph' => self::buildGraph($iblockId, $sectionId, $questions, $results, $graphEdges, is_array($startQuestion) ? (int)$startQuestion['id'] : 0, $reachableQuestionIds, $usedResultIds),
+            'graph' => self::buildGraph($iblockId, $sectionId, $questions, $results, $graphEdges, is_array($startQuestion) ? (int)$startQuestion['id'] : 0, $configuredStartQuestionId, $reachableQuestionIds, $usedResultIds),
         ];
     }
 
@@ -197,6 +219,18 @@ final class QuizStructureDiagnostics
         return $items;
     }
 
+    private static function getSectionStartQuestionId(int $iblockId, int $sectionId): int
+    {
+        $section = \CIBlockSection::GetList(
+            [],
+            ['IBLOCK_ID' => $iblockId, 'ID' => $sectionId],
+            false,
+            ['ID', 'UF_KK_START_QUESTION']
+        )->Fetch();
+
+        return is_array($section) ? self::toPositiveInt($section['UF_KK_START_QUESTION'] ?? null) : 0;
+    }
+
 
     private static function buildGraph(
         int $iblockId,
@@ -205,6 +239,7 @@ final class QuizStructureDiagnostics
         array $results,
         array $edges,
         int $startQuestionId,
+        int $configuredStartQuestionId,
         array $reachableQuestionIds,
         array $usedResultIds
     ): array {
@@ -218,6 +253,7 @@ final class QuizStructureDiagnostics
                 'sort' => (int)($question['sort'] ?? 0),
                 'edit_url' => self::buildElementEditUrl($questionId, $iblockId, $sectionId),
                 'is_start' => $questionId === $startQuestionId,
+                'is_explicit_start' => $configuredStartQuestionId > 0 && $questionId === $startQuestionId,
                 'is_reachable' => isset($reachableQuestionIds[$questionId]),
             ];
         }

@@ -63,7 +63,7 @@ final class SectionFormAssets
             [],
             ['IBLOCK_ID' => $iblockId, 'ID' => $sectionId],
             false,
-            ['ID', 'CODE', 'NAME']
+            ['ID', 'CODE', 'NAME', 'UF_KK_START_QUESTION']
         )->Fetch();
 
         if (!is_array($section)) {
@@ -74,7 +74,48 @@ final class SectionFormAssets
             'id' => (int)$section['ID'],
             'code' => trim((string)($section['CODE'] ?? '')),
             'name' => (string)($section['NAME'] ?? ''),
+            'start_question_id' => (int)($section['UF_KK_START_QUESTION'] ?? 0),
+            'questions' => self::getSectionQuestions($iblockId, $sectionId),
         ];
+    }
+
+    private static function getSectionQuestions(int $iblockId, int $sectionId): array
+    {
+        $questions = [];
+        $elements = \CIBlockElement::GetList(
+            ['SORT' => 'ASC', 'ID' => 'ASC'],
+            [
+                'IBLOCK_ID' => $iblockId,
+                'SECTION_ID' => $sectionId,
+                'ACTIVE' => 'Y',
+                'INCLUDE_SUBSECTIONS' => 'N',
+            ],
+            false,
+            false,
+            ['ID', 'IBLOCK_ID', 'NAME', 'SORT']
+        );
+
+        while ($elementObject = $elements->GetNextElement()) {
+            $fields = $elementObject->GetFields();
+            $properties = $elementObject->GetProperties();
+            $entityType = strtoupper((string)($properties['KK_ENTITY_TYPE']['VALUE_XML_ID'] ?? ''));
+            if ($entityType === '') {
+                $entityType = strtoupper((string)($properties['KK_ENTITY_TYPE']['VALUE'] ?? ''));
+            }
+
+            if ($entityType !== 'QUESTION') {
+                continue;
+            }
+
+            $questions[] = [
+                'id' => (int)$fields['ID'],
+                'name' => (string)($fields['NAME'] ?? ''),
+                'public_title' => (string)($properties['KK_PUBLIC_TITLE']['VALUE'] ?? ''),
+                'sort' => (int)($fields['SORT'] ?? 0),
+            ];
+        }
+
+        return $questions;
     }
 
     private static function renderScript(array $section): string
@@ -196,9 +237,41 @@ final class SectionFormAssets
             . 'insertAfter.insertAdjacentElement("afterend", content);'
             . 'tabsBlock.addEventListener("click", (event) => { if (!event.target.closest(`#${tabId}`)) hideEmbedTab(); });'
             . '};'
-            . 'if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", renderEmbedTab); else renderEmbedTab();'
+            . 'const enhanceStartQuestionField = () => {'
+            . 'const input = document.querySelector("input[name=\"UF_KK_START_QUESTION\"]");'
+            . 'if (!input || document.getElementById("kk-quiz-start-question-select")) return;'
+            . 'const row = input.closest("tr") || input.parentElement;'
+            . 'if (!row) return;'
+            . 'input.type = "hidden";'
+            . 'const select = document.createElement("select");'
+            . 'select.id = "kk-quiz-start-question-select";'
+            . 'select.className = "adm-detail-content-cell-r";'
+            . 'const empty = document.createElement("option");'
+            . 'empty.value = "";'
+            . 'empty.textContent = "Автоматически: первый активный вопрос по сортировке";'
+            . 'select.appendChild(empty);'
+            . '(section.questions || []).forEach((question) => {'
+            . 'const option = document.createElement("option");'
+            . 'option.value = String(question.id);'
+            . 'option.textContent = String(question.public_title || question.name || ("Вопрос #" + question.id));'
+            . 'if (String(question.id) === String(section.start_question_id || "")) option.selected = true;'
+            . 'select.appendChild(option);'
+            . '});'
+            . 'input.value = select.value;'
+            . 'select.addEventListener("change", () => { input.value = select.value; });'
+            . 'input.insertAdjacentElement("afterend", select);'
+            . 'const hint = document.createElement("div");'
+            . 'hint.style.marginTop = "6px";'
+            . 'hint.style.color = "#666";'
+            . 'hint.textContent = "Если не выбран, квиз начнётся с первого активного вопроса по сортировке.";'
+            . 'select.insertAdjacentElement("afterend", hint);'
+            . '};'
+            . 'const init = () => { renderEmbedTab(); enhanceStartQuestionField(); };'
+            . 'if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();'
             . 'setTimeout(renderEmbedTab, 100);'
             . 'setTimeout(renderEmbedTab, 500);'
+            . 'setTimeout(enhanceStartQuestionField, 100);'
+            . 'setTimeout(enhanceStartQuestionField, 500);'
             . '})();';
     }
 
