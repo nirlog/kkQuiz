@@ -367,7 +367,8 @@ const INPUT_TYPES = ['text', 'textarea', 'phone', 'email'];
 const OPTION_TYPES = ['radio', 'checkbox'];
 const TEMPLATE_NAMES = ['image_cards', 'cards', 'list', 'select'];
 let previewState = {
-answers: {}
+answers: {},
+trace: []
 };
 const getQuestionType = (question) => {
 const type = String(question.question_type || 'radio').toLowerCase();
@@ -382,6 +383,41 @@ const getDisplayTemplate = (question) => {
 const template = String(question.display_template || 'list').toLowerCase();
 
 return TEMPLATE_NAMES.includes(template) ? template : 'list';
+};
+const getNodeTitle = (node, fallback) => {
+if (!node) {
+return fallback || '';
+}
+
+return String(
+node.public_title
+|| node.name
+|| node.title
+|| fallback
+|| ''
+);
+};
+const getAnswerTitle = (answer, value) => {
+if (answer && answer.custom === true) {
+return 'Свой вариант: ' + String(answer.value || '').trim();
+}
+
+if (answer && answer.text) {
+return String(answer.text);
+}
+
+if (Array.isArray(value)) {
+return value
+.map((item) => getAnswerTitle(item, item))
+.filter(Boolean)
+.join(', ');
+}
+
+if (value !== undefined && value !== null && String(value).trim() !== '') {
+return String(value).trim();
+}
+
+return 'Без ответа';
 };
 const clear = () => { container.innerHTML = ''; };
 const renderHeader = () => {
@@ -401,7 +437,8 @@ container.appendChild(subtitle);
 };
 const restartPreview = () => {
 previewState = {
-answers: {}
+answers: {},
+trace: []
 };
 
 if (firstQuestion) {
@@ -421,6 +458,49 @@ button.textContent = 'Начать заново';
 button.addEventListener('click', restartPreview);
 container.appendChild(button);
 };
+const renderTrace = () => {
+if (!previewState.trace.length) {
+return;
+}
+
+const block = document.createElement('div');
+block.style.marginTop = '16px';
+block.style.padding = '10px 12px';
+block.style.border = '1px dashed #b8b8b8';
+block.style.borderRadius = '4px';
+block.style.background = '#fafafa';
+
+const title = document.createElement('div');
+title.style.fontWeight = 'bold';
+title.style.marginBottom = '6px';
+title.textContent = 'Цепочка прохождения';
+block.appendChild(title);
+
+previewState.trace.forEach((item, index) => {
+const row = document.createElement('div');
+row.style.marginTop = index === 0 ? '0' : '8px';
+
+const main = document.createElement('div');
+main.textContent = (index + 1) + '. '
++ item.questionTitle
++ ' → '
++ item.answerTitle;
+
+const transition = document.createElement('div');
+transition.style.color = '#666';
+transition.style.fontSize = '12px';
+transition.textContent = 'Переход: '
++ item.transitionType
++ ' → '
++ item.targetTitle;
+
+row.appendChild(main);
+row.appendChild(transition);
+block.appendChild(row);
+});
+
+container.appendChild(block);
+};
 const showFinalForm = () => {
 clear();
 renderHeader();
@@ -431,6 +511,7 @@ message.style.borderRadius = '4px';
 message.textContent = 'Финальная форма заявки. В предпросмотре заявка не отправляется.';
 container.appendChild(message);
 appendRestartButton();
+renderTrace();
 };
 const showResult = (resultId) => {
 clear();
@@ -459,22 +540,83 @@ finish.addEventListener('click', showFinalForm);
 box.appendChild(finish);
 container.appendChild(box);
 appendRestartButton();
+renderTrace();
 };
-const goNext = (question, answer) => {
-const answerResultId = answer && (answer.result_id || answer.score_result_id) ? (answer.result_id || answer.score_result_id) : 0;
+const resolveTransition = (question, answer) => {
+const answerResultId = answer && (answer.result_id || answer.score_result_id)
+? (answer.result_id || answer.score_result_id)
+: 0;
+
 if (answerResultId) {
-showResult(answerResultId);
-return;
+const result = resultMap.get(String(answerResultId));
+
+return {
+type: answer.result_id ? 'answer.result_id' : 'answer.score_result_id',
+targetType: 'result',
+targetId: answerResultId,
+targetTitle: getNodeTitle(result, 'Результат ID ' + answerResultId)
+};
 }
-const nextQuestionId = answer && answer.next_question_id ? answer.next_question_id : question.default_next_question_id;
+
+const nextQuestionId = answer && answer.next_question_id
+? answer.next_question_id
+: question.default_next_question_id;
+
 if (nextQuestionId && questionMap.has(String(nextQuestionId))) {
-showQuestion(questionMap.get(String(nextQuestionId)));
-return;
+const nextQuestion = questionMap.get(String(nextQuestionId));
+
+return {
+type: answer && answer.next_question_id ? 'answer.next_question_id' : 'question.default_next_question_id',
+targetType: 'question',
+targetId: nextQuestionId,
+targetTitle: getNodeTitle(nextQuestion, 'Вопрос ID ' + nextQuestionId)
+};
 }
+
 if (question.default_result_id) {
-showResult(question.default_result_id);
+const result = resultMap.get(String(question.default_result_id));
+
+return {
+type: 'question.default_result_id',
+targetType: 'result',
+targetId: question.default_result_id,
+targetTitle: getNodeTitle(result, 'Результат ID ' + question.default_result_id)
+};
+}
+
+return {
+type: 'final_form',
+targetType: 'form',
+targetId: '',
+targetTitle: 'Финальная форма'
+};
+};
+const pushTrace = (question, answer, value, transition) => {
+previewState.trace.push({
+questionId: question.id || '',
+questionTitle: getNodeTitle(question, 'Вопрос'),
+answerTitle: getAnswerTitle(answer, value),
+transitionType: transition.type || '',
+targetType: transition.targetType || '',
+targetId: transition.targetId || '',
+targetTitle: transition.targetTitle || ''
+});
+};
+const goNext = (question, answer, value) => {
+const transition = resolveTransition(question, answer);
+
+pushTrace(question, answer, value, transition);
+
+if (transition.targetType === 'result') {
+showResult(transition.targetId);
 return;
 }
+
+if (transition.targetType === 'question' && questionMap.has(String(transition.targetId))) {
+showQuestion(questionMap.get(String(transition.targetId)));
+return;
+}
+
 showFinalForm();
 };
 const renderRadioButtons = (question, answers) => {
@@ -487,7 +629,7 @@ button.style.margin = '6px 0';
 button.textContent = String(answer.text || 'Ответ');
 button.addEventListener('click', () => {
 previewState.answers[question.id] = answer;
-goNext(question, answer);
+goNext(question, answer, answer);
 });
 container.appendChild(button);
 });
@@ -524,7 +666,7 @@ return;
 
 const answer = answers[index];
 previewState.answers[question.id] = answer;
-goNext(question, answer);
+goNext(question, answer, answer);
 });
 
 container.appendChild(select);
@@ -571,8 +713,9 @@ firstInput.focus();
 return;
 }
 
-previewState.answers[question.id] = [...selected].map((index) => answers[index]).filter(Boolean);
-goNext(question, null);
+const value = [...selected].map((index) => answers[index]).filter(Boolean);
+previewState.answers[question.id] = value;
+goNext(question, null, value);
 });
 
 container.appendChild(wrap);
@@ -624,7 +767,7 @@ return;
 }
 
 previewState.answers[question.id] = value;
-goNext(question, null);
+goNext(question, null, value);
 });
 
 container.appendChild(next);
@@ -645,6 +788,7 @@ const answers = Array.isArray(question.answers) ? question.answers : [];
 if (INPUT_TYPES.includes(type)) {
 renderInputQuestion(question, type);
 appendRestartButton();
+renderTrace();
 return;
 }
 
@@ -658,26 +802,30 @@ next.type = 'button';
 next.className = 'adm-btn';
 next.style.marginTop = '10px';
 next.textContent = 'Дальше';
-next.addEventListener('click', () => goNext(question, null));
+next.addEventListener('click', () => goNext(question, null, null));
 container.appendChild(next);
 appendRestartButton();
+renderTrace();
 return;
 }
 
 if (type === 'checkbox') {
 renderCheckboxes(question, answers);
 appendRestartButton();
+renderTrace();
 return;
 }
 
 if (type === 'radio' && template === 'select') {
 renderSelectChoice(question, answers);
 appendRestartButton();
+renderTrace();
 return;
 }
 
 renderRadioButtons(question, answers);
 appendRestartButton();
+renderTrace();
 };
 if (firstQuestion) {
 showQuestion(firstQuestion);
