@@ -40,10 +40,12 @@ final class ElementListAssets
             return;
         }
 
+        $sectionId = self::getCurrentSectionId();
         $settings = [
             'entityTypePropertyId' => (int)$entityTypeProperty['ID'],
             'questionEnumId' => self::getEnumId((int)$entityTypeProperty['ID'], 'QUESTION'),
             'resultEnumId' => self::getEnumId((int)$entityTypeProperty['ID'], 'RESULT'),
+            'structureDiagnostics' => $sectionId > 0 ? QuizStructureDiagnostics::build($iblockId, $sectionId) : null,
         ];
 
         Asset::getInstance()->addString('<script>' . self::renderScript($settings) . '</script>');
@@ -61,6 +63,13 @@ final class ElementListAssets
         )->Fetch();
 
         return is_array($iblock);
+    }
+
+    private static function getCurrentSectionId(): int
+    {
+        $sectionId = (int)($_REQUEST['SECTION_ID'] ?? $_REQUEST['find_section_section'] ?? 0);
+
+        return $sectionId > 0 ? $sectionId : 0;
     }
 
     private static function getProperty(int $iblockId, string $code): ?array
@@ -254,6 +263,26 @@ columns.style.marginTop = '4px';
 columns.style.color = '#666';
 columns.textContent = 'Рекомендуемые колонки: Активность, Сортировка, Название, Тип сущности, Заголовок на сайте, Тип вопроса.';
 block.appendChild(columns);
+const diagnostics = settings.structureDiagnostics;
+if (diagnostics && Array.isArray(diagnostics.items) && diagnostics.items.length > 0) {
+const diagnosticsBlock = document.createElement('div');
+diagnosticsBlock.style.marginTop = '8px';
+diagnosticsBlock.style.paddingTop = '8px';
+diagnosticsBlock.style.borderTop = '1px solid #d6d6d6';
+const diagnosticsTitle = document.createElement('div');
+diagnosticsTitle.textContent = 'KK Quiz — проверка структуры';
+diagnosticsTitle.style.fontWeight = 'bold';
+diagnosticsTitle.style.marginBottom = '4px';
+diagnosticsBlock.appendChild(diagnosticsTitle);
+diagnostics.items.forEach((item) => {
+const line = document.createElement('div');
+line.style.margin = '3px 0';
+line.style.color = item.type === 'error' ? '#a40000' : (item.type === 'warning' ? '#6b4e00' : '#267000');
+line.textContent = (item.type === 'error' ? '✕ ' : (item.type === 'warning' ? '⚠ ' : '✓ ')) + String(item.message || '');
+diagnosticsBlock.appendChild(line);
+});
+block.appendChild(diagnosticsBlock);
+}
 return block;
 };
 const refreshElementListHelp = () => {

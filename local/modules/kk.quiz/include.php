@@ -14,6 +14,7 @@ Loader::registerAutoLoadClasses(
         'Kk\\Quiz\\Iblock\\Property\\QuizAnswersProperty' => 'lib/Iblock/Property/QuizAnswersProperty.php',
         'Kk\\Quiz\\Admin\\ElementFormAssets' => 'lib/Admin/ElementFormAssets.php',
         'Kk\\Quiz\\Admin\\ElementListAssets' => 'lib/Admin/ElementListAssets.php',
+        'Kk\\Quiz\\Admin\\QuizStructureDiagnostics' => 'lib/Admin/QuizStructureDiagnostics.php',
         'Kk\\Quiz\\Admin\\SectionFormAssets' => 'lib/Admin/SectionFormAssets.php',
         'Kk\\Quiz\\Repository\\QuizRepository' => 'lib/Repository/QuizRepository.php',
         'Kk\\Quiz\\Repository\\LeadRepository' => 'lib/Repository/LeadRepository.php',
