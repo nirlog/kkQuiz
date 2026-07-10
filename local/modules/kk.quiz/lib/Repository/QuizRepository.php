@@ -234,6 +234,7 @@ final class QuizRepository
             'placeholder' => (string)$this->getElementPropertyValue($properties, 'KK_PLACEHOLDER'),
             'default_next_question_id' => $this->toNullableInt($this->getElementPropertyValue($properties, 'KK_DEFAULT_NEXT_QUESTION')),
             'default_result_id' => $this->toNullableInt($this->getElementPropertyValue($properties, 'KK_DEFAULT_RESULT')),
+            'allow_custom_answer' => $this->toBool($this->getElementPropertyEnumXmlId($properties, 'KK_ALLOW_CUSTOM_ANSWER')),
             'answers' => $this->normalizeAnswers($this->getElementPropertyValue($properties, 'KK_ANSWERS')),
         ];
     }

@@ -601,6 +601,11 @@ final class LeadService
 
     private function normalizeSelectedAnswerItem(array $question, mixed $selectedItem): ?array
     {
+        $custom = $this->normalizeCustomAnswerItem($question, $selectedItem);
+        if ($custom !== null) {
+            return $custom;
+        }
+
         $answer = $this->findConfiguredAnswer($question, $selectedItem);
         if ($answer === null) {
             return null;
@@ -623,6 +628,23 @@ final class LeadService
         }
 
         return $normalized !== [] ? $normalized : null;
+    }
+
+    private function normalizeCustomAnswerItem(array $question, mixed $selectedItem): ?array
+    {
+        if (($question['allow_custom_answer'] ?? false) !== true || !is_array($selectedItem)) {
+            return null;
+        }
+
+        if (($selectedItem['custom'] ?? false) !== true) {
+            return null;
+        }
+
+        $value = $this->cleanString($selectedItem['value'] ?? '');
+
+        return $value !== ''
+            ? ['custom' => true, 'value' => $value]
+            : null;
     }
 
     private function findConfiguredAnswerIndex(array $question, array $targetAnswer): ?int
@@ -706,6 +728,12 @@ final class LeadService
         $texts = [];
 
         foreach ($selectedItems as $selectedItem) {
+            $customText = $this->extractCustomAnswerText($question, $selectedItem);
+            if ($customText !== null) {
+                $texts[] = $customText;
+                continue;
+            }
+
             $answer = $this->findConfiguredAnswer($question, $selectedItem);
             if ($answer === null) {
                 continue;
@@ -718,6 +746,21 @@ final class LeadService
         }
 
         return array_values(array_unique($texts));
+    }
+
+    private function extractCustomAnswerText(array $question, mixed $selectedItem): ?string
+    {
+        if (($question['allow_custom_answer'] ?? false) !== true || !is_array($selectedItem)) {
+            return null;
+        }
+
+        if (($selectedItem['custom'] ?? false) !== true) {
+            return null;
+        }
+
+        $value = $this->cleanString($selectedItem['value'] ?? '');
+
+        return $value !== '' ? 'Свой вариант: ' . $value : null;
     }
 
 
@@ -761,6 +804,10 @@ final class LeadService
                 : [$answerValue];
 
             foreach ($selectedItems as $selectedItem) {
+                if ($this->normalizeCustomAnswerItem($question, $selectedItem) !== null) {
+                    continue;
+                }
+
                 $answer = $this->findConfiguredAnswer($question, $selectedItem);
                 if ($answer === null) {
                     continue;

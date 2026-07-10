@@ -24,6 +24,7 @@ final class ElementFormAssets
         'KK_PLACEHOLDER',
         'KK_DEFAULT_NEXT_QUESTION',
         'KK_DEFAULT_RESULT',
+        'KK_ALLOW_CUSTOM_ANSWER',
     ];
 
     private const RESULT_CODES = [
@@ -81,6 +82,7 @@ final class ElementFormAssets
             'placeholderPropertyId' => $propertyIds['KK_PLACEHOLDER'] ?? 0,
             'defaultNextQuestionPropertyId' => $propertyIds['KK_DEFAULT_NEXT_QUESTION'] ?? 0,
             'defaultResultPropertyId' => $propertyIds['KK_DEFAULT_RESULT'] ?? 0,
+            'allowCustomAnswerPropertyId' => $propertyIds['KK_ALLOW_CUSTOM_ANSWER'] ?? 0,
             'showFormPropertyId' => $propertyIds['KK_RESULT_SHOW_FORM'] ?? 0,
             'catalogSectionsByIblock' => self::getCatalogSectionsByIblock($iblockId),
             'recommendationsEnabled' => $recommendationSettings['enabled'],
@@ -493,6 +495,7 @@ final class ElementFormAssets
             . 'const isChoiceQuestion = ["radio", "checkbox", "select"].includes(questionType);'
             . 'setVisible([settings.answersPropertyId, settings.displayTemplatePropertyId].filter(Boolean), isChoiceQuestion);'
             . 'setVisible([settings.placeholderPropertyId].filter(Boolean), !isChoiceQuestion);'
+            . 'setVisible([settings.allowCustomAnswerPropertyId].filter(Boolean), isChoiceQuestion);'
             . 'setVisible([settings.isRequiredPropertyId, settings.defaultNextQuestionPropertyId].filter(Boolean), true);'
             . '};'
             . 'const hideLegacyOption = (propertyId, legacyValue, normalize) => {'
@@ -569,7 +572,7 @@ final class ElementFormAssets
             . '};'
             . 'const hasPropertyValue = (propertyId) => Number(propertyId || 0) > 0 && getPropertyControls(propertyId).some((control) => getControlValue(control) !== "");'
             . 'const hasControlValueByNames = (names) => names.some((name) => Array.from(document.querySelectorAll(`[name*="${name}"]`)).some((control) => getControlValue(control) !== ""));'
-            . 'const isTruthyValue = (value) => ["1", "Y", "YES", "TRUE", "ON"].includes(String(value || "").trim().toUpperCase());'
+            . 'const isTruthyValue = (value) => ["1", "Y", "YES", "TRUE", "ON", "ДА"].includes(String(value || "").trim().toUpperCase());'
             . 'const isPropertyTruthy = (propertyId) => Number(propertyId || 0) > 0 && getPropertyControls(propertyId).some((control) => isTruthyValue(getControlValue(control)) || (control.tagName === "SELECT" && isTruthyValue(control.options[control.selectedIndex]?.textContent || "")));'
             . 'const hasElementText = () => ["PREVIEW_TEXT", "DETAIL_TEXT"].some((name) => Array.from(document.querySelectorAll(`textarea[name="${name}"], input[name="${name}"]`)).some((control) => getControlValue(control) !== ""));'
             . 'const getDiagnosticsAnchor = () => getPropertyRow(settings.entityTypePropertyId) || document.querySelector("form table.edit-table, form table.adm-detail-content-table, form");'
@@ -622,6 +625,8 @@ final class ElementFormAssets
             . 'if (questionType === "select") diagnostics.push({ type: "warning", message: "Предупреждение: тип вопроса “Выпадающий список” устарел. Используйте “Один вариант ответа” + шаблон “Выпадающий список”." });'
             . 'const hasDefaultNextQuestion = hasPropertyValue(settings.defaultNextQuestionPropertyId);'
             . 'const hasDefaultResult = hasPropertyValue(settings.defaultResultPropertyId);'
+            . 'const hasCustomAnswer = isPropertyTruthy(settings.allowCustomAnswerPropertyId);'
+            . 'if (isChoiceQuestion && hasCustomAnswer && !hasDefaultNextQuestion && !hasDefaultResult) diagnostics.push({ type: "warning", message: "Предупреждение: “Свой вариант ответа” включён, но у вопроса нет “Следующего вопроса по умолчанию” или “Финального результата по умолчанию”. Пользователь с собственным вариантом попадёт на финальную форму без результата." });'
             . 'if (hasDefaultNextQuestion && hasDefaultResult) diagnostics.push({ type: "warning", message: "Предупреждение: одновременно задан “Следующий вопрос по умолчанию” и “Финальный результат по умолчанию”. Сначала будет использован следующий вопрос." });'
             . 'const hasTransitions = hasDefaultNextQuestion || hasDefaultResult || hasControlValueByNames(["default_next_question_id", "default_result_id", "next_question_id", "result_id", "score_result_id"]);'
             . 'if (!hasTransitions) diagnostics.push({ type: "warning", message: "Предупреждение: у вопроса не настроены переходы. Пользователь может не дойти до результата." });'

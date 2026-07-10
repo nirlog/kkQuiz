@@ -43,6 +43,24 @@
         index: Number(index)
     });
 
+    const buildCustomAnswerPayload = (input) => ({
+        custom: true,
+        value: String(input.value || '').trim()
+    });
+
+    const appendCustomAnswerInput = (container) => {
+        const wrap = create('label', 'kk-quiz__field kk-quiz__field--custom-answer');
+        const input = document.createElement('input');
+        input.className = 'kk-quiz__input';
+        input.type = 'text';
+        input.placeholder = 'Введите свой вариант';
+        wrap.hidden = true;
+        wrap.appendChild(input);
+        container.appendChild(wrap);
+
+        return { wrap, input };
+    };
+
     const formatPhoneInput = (value) => {
         const raw = String(value || '');
         const trimmed = raw.trim();
@@ -1044,10 +1062,43 @@
             select.appendChild(option);
         });
 
+        if (question.allow_custom_answer === true) {
+            const customOption = document.createElement('option');
+            customOption.value = '__custom__';
+            customOption.textContent = 'Свой вариант ответа';
+            select.appendChild(customOption);
+        }
+
+        wrapper.appendChild(select);
+
+        const custom = question.allow_custom_answer === true
+            ? appendCustomAnswerInput(wrapper)
+            : { wrap: null, input: null };
+        select.addEventListener('change', () => {
+            if (!custom.wrap) return;
+            custom.wrap.hidden = select.value !== '__custom__';
+            if (custom.wrap.hidden) {
+                custom.input.value = '';
+            } else {
+                custom.input.focus();
+            }
+        });
+
         const next = create('button', 'kk-quiz__button kk-quiz__button--next', 'Далее');
         next.type = 'button';
 
         next.addEventListener('click', () => {
+            if (select.value === '__custom__') {
+                if (custom.input.value.trim() === '') {
+                    custom.input.focus();
+                    return;
+                }
+
+                state.answers[question.id] = buildCustomAnswerPayload(custom.input);
+                goNext(nodes, quiz, state, question, null);
+                return;
+            }
+
             const index = Number.parseInt(select.value, 10);
             if (!Number.isInteger(index) || !question.answers[index]) {
                 select.focus();
@@ -1059,13 +1110,21 @@
             goNext(nodes, quiz, state, question, answer);
         });
 
-        wrapper.appendChild(select);
         nodes.question.appendChild(wrapper);
         nodes.question.appendChild(next);
     };
 
     const renderSingleChoice = (nodes, quiz, state, question, template) => {
         const answers = create('div', 'kk-quiz__answers kk-quiz__answers--' + template);
+        let customInput = null;
+        let customNext = null;
+
+        const deactivateAnswers = () => {
+            answers.querySelectorAll('.kk-quiz__answer--active').forEach((element) => {
+                element.classList.remove('kk-quiz__answer--active');
+            });
+        };
+
         toArray(question.answers).forEach((answer, index) => {
             const button = create('button', 'kk-quiz__answer kk-quiz__answer--' + template);
             button.type = 'button';
@@ -1073,17 +1132,51 @@
             renderAnswerText(button, answer);
             button.addEventListener('click', () => {
                 state.answers[question.id] = buildAnswerPayload(answer, index);
+                deactivateAnswers();
                 button.classList.add('kk-quiz__answer--active');
                 goNext(nodes, quiz, state, question, answer);
             });
             answers.appendChild(button);
         });
+
+        if (question.allow_custom_answer === true) {
+            const customButton = create('button', 'kk-quiz__answer kk-quiz__answer--' + template, 'Свой вариант ответа');
+            customButton.type = 'button';
+            customButton.addEventListener('click', () => {
+                deactivateAnswers();
+                customButton.classList.add('kk-quiz__answer--active');
+                customInput.wrap.hidden = false;
+                customNext.hidden = false;
+                customInput.input.focus();
+            });
+            answers.appendChild(customButton);
+        }
+
         nodes.question.appendChild(answers);
+
+        if (question.allow_custom_answer === true) {
+            customInput = appendCustomAnswerInput(nodes.question);
+            customNext = create('button', 'kk-quiz__button kk-quiz__button--next', 'Далее');
+            customNext.type = 'button';
+            customNext.hidden = true;
+            customNext.addEventListener('click', () => {
+                if (customInput.input.value.trim() === '') {
+                    customInput.input.focus();
+                    return;
+                }
+
+                state.answers[question.id] = buildCustomAnswerPayload(customInput.input);
+                goNext(nodes, quiz, state, question, null);
+            });
+            nodes.question.appendChild(customNext);
+        }
     };
 
     const renderCheckboxes = (nodes, quiz, state, question, template) => {
         const selected = new Set();
         const answers = create('div', 'kk-quiz__answers kk-quiz__answers--' + template);
+        let customInput = null;
+        let customCheckbox = null;
 
         toArray(question.answers).forEach((answer, index) => {
             const label = create('label', 'kk-quiz__answer kk-quiz__answer--' + template);
@@ -1105,14 +1198,50 @@
             answers.appendChild(label);
         });
 
+        if (question.allow_custom_answer === true) {
+            const label = create('label', 'kk-quiz__answer kk-quiz__answer--' + template);
+            customCheckbox = document.createElement('input');
+            customCheckbox.type = 'checkbox';
+            label.appendChild(customCheckbox);
+            label.appendChild(create('span', 'kk-quiz__answer-text', 'Свой вариант ответа'));
+            customCheckbox.addEventListener('change', () => {
+                label.classList.toggle('kk-quiz__answer--active', customCheckbox.checked);
+                customInput.wrap.hidden = !customCheckbox.checked;
+                if (customCheckbox.checked) {
+                    customInput.input.focus();
+                } else {
+                    customInput.input.value = '';
+                }
+            });
+            answers.appendChild(label);
+        }
+
         const next = create('button', 'kk-quiz__button kk-quiz__button--next', 'Далее');
         next.type = 'button';
         next.addEventListener('click', () => {
-            state.answers[question.id] = [...selected].map((index) => buildAnswerPayload(question.answers[index], index));
+            const payload = [...selected].map((index) => buildAnswerPayload(question.answers[index], index));
+            if (customCheckbox && customCheckbox.checked) {
+                if (customInput.input.value.trim() === '') {
+                    customInput.input.focus();
+                    return;
+                }
+                payload.push(buildCustomAnswerPayload(customInput.input));
+            }
+
+            if (question.is_required === true && payload.length === 0) {
+                const firstInput = answers.querySelector('input[type="checkbox"]');
+                if (firstInput) firstInput.focus();
+                return;
+            }
+
+            state.answers[question.id] = payload;
             goNext(nodes, quiz, state, question, null);
         });
 
         nodes.question.appendChild(answers);
+        if (question.allow_custom_answer === true) {
+            customInput = appendCustomAnswerInput(nodes.question);
+        }
         nodes.question.appendChild(next);
     };
 
