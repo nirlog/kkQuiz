@@ -124,6 +124,7 @@ final class ElementListAssets
             . 'link.style.marginRight = "10px";'
             . 'return link;'
             . '};'
+            . 'const createBlock = () => {'
             . 'const block = document.createElement("div");'
             . 'block.id = "kk-quiz-element-list-help";'
             . 'block.style.margin = "0 0 12px 0";'
@@ -152,8 +153,17 @@ final class ElementListAssets
             . 'columns.style.color = "#666";'
             . 'columns.textContent = "Рекомендуемые колонки: Активность, Сортировка, Название, Тип сущности, Заголовок на сайте, Тип вопроса.";'
             . 'block.appendChild(columns);'
+            . 'return block;'
+            . '};'
+            . 'const refreshElementListHelp = () => {'
+            . 'if (document.getElementById("kk-quiz-element-list-help")) return;'
             . 'const anchor = findAnchor();'
-            . 'if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(block, anchor);'
+            . 'if (!anchor || !anchor.parentNode) return;'
+            . 'anchor.parentNode.insertBefore(createBlock(), anchor);'
+            . '};'
+            . 'if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", refreshElementListHelp); else refreshElementListHelp();'
+            . 'setTimeout(refreshElementListHelp, 100);'
+            . 'setTimeout(refreshElementListHelp, 500);'
             . '})();';
     }
 
