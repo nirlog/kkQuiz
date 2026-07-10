@@ -12,7 +12,7 @@ final class KkQuizComponent extends CBitrixComponent
     public function onPrepareComponentParams($arParams): array
     {
         $displayMode = (string)($arParams['DISPLAY_MODE'] ?? 'block');
-        if (!in_array($displayMode, ['block', 'popup', 'button'], true)) {
+        if (!in_array($displayMode, ['block', 'popup', 'button', 'loader'], true)) {
             $displayMode = 'block';
         }
 
@@ -27,8 +27,15 @@ final class KkQuizComponent extends CBitrixComponent
         $this->arResult = [
             'QUIZ' => null,
             'DISPLAY_MODE' => $this->arParams['DISPLAY_MODE'],
+            'IS_LOADER' => $this->arParams['DISPLAY_MODE'] === 'loader',
             'ERROR' => null,
         ];
+
+        if ($this->arParams['DISPLAY_MODE'] === 'loader') {
+            $this->includeComponentTemplate();
+
+            return;
+        }
 
         if (!Loader::includeModule('kk.quiz') || $this->arParams['QUIZ_CODE'] === '') {
             $this->arResult['ERROR'] = 'QUIZ_NOT_FOUND';

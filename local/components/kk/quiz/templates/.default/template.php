@@ -8,6 +8,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) {
 
 $quiz = is_array($arResult['QUIZ'] ?? null) ? $arResult['QUIZ'] : null;
 $displayMode = (string)($arResult['DISPLAY_MODE'] ?? 'block');
+$isLoader = (bool)($arResult['IS_LOADER'] ?? false);
 $error = (string)($arResult['ERROR'] ?? '');
 $title = $quiz !== null ? (string)($quiz['title'] ?? '') : '';
 $subtitle = $quiz !== null ? (string)($quiz['subtitle'] ?? '') : '';
@@ -18,6 +19,10 @@ $isButtonMode = $displayMode === 'button';
 $isPopupMode = $displayMode === 'popup' || $isButtonMode;
 $rootDisplayMode = $isPopupMode ? 'popup' : 'block';
 ?>
+<?php if ($isLoader): ?>
+    <div class="kk-quiz-loader" data-kk-quiz-loader data-kk-quiz-sessid="<?= htmlspecialcharsbx(bitrix_sessid()) ?>"></div>
+    <?php return; ?>
+<?php endif; ?>
 <?php if ($isButtonMode && $quizCode !== ''): ?>
     <button class="kk-quiz__button kk-quiz__popup-trigger" type="button" data-kk-quiz-popup="<?= htmlspecialcharsbx($quizCode) ?>"><?= htmlspecialcharsbx($buttonText) ?></button>
 <?php endif; ?>
