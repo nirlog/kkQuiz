@@ -257,6 +257,38 @@ return link;
 const getAjaxUrl = (action) => {
 return '/bitrix/services/main/ajax.php?mode=ajax&c=kk:api&action=' + encodeURIComponent(action);
 };
+const extractQuizFromResponse = (response) => {
+if (!response || response.status !== 'success') {
+return null;
+}
+const data = response.data;
+if (!data) {
+return null;
+}
+if (data.quiz) {
+return data.quiz;
+}
+if (data.result && data.result.quiz) {
+return data.result.quiz;
+}
+if (data.questions || data.results || data.code) {
+return data;
+}
+if (Array.isArray(data)) {
+for (const item of data) {
+if (item && item.quiz) {
+return item.quiz;
+}
+if (item && item.result && item.result.quiz) {
+return item.result.quiz;
+}
+if (item && (item.questions || item.results || item.code)) {
+return item;
+}
+}
+}
+return null;
+};
 const loadAdminQuiz = (quizCode) => {
 const body = new URLSearchParams();
 body.append('quizCode', quizCode);
@@ -273,9 +305,9 @@ body
 })
 .then((response) => response.json())
 .then((response) => {
-const data = response && response.data ? response.data : null;
-const quiz = data && data.quiz ? data.quiz : data;
-if (!response || response.status !== 'success' || !data || (data.success === false) || !quiz) {
+const quiz = extractQuizFromResponse(response);
+if (!quiz) {
+console.warn('KK Quiz: invalid getQuiz response', response);
 throw new Error('Invalid getQuiz response');
 }
 return quiz;
@@ -453,8 +485,8 @@ content.innerHTML = '<div style="padding:20px;text-align:center;">Загрузк
 loadAdminQuiz(quizCode)
 .then((quiz) => { renderAdminQuizPreview(content, quiz); })
 .catch((error) => {
-content.innerHTML = '<div style="color:#a40000;">Не удалось загрузить квиз.</div>';
-console.warn('KK Quiz: preview load failed', error);
+content.innerHTML = '<div style="color:#a40000;">Не удалось загрузить квиз. Проверьте консоль и Network-ответ getQuiz.</div>';
+console.warn('KK Quiz: preview load failed', { quizCode, error });
 });
 };
 const createPanel = (id) => {
