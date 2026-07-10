@@ -57,7 +57,10 @@ final class QuizService
                 'url' => $quiz['privacy_url'],
                 'required' => $quiz['require_agreement'],
             ],
-            'first_question_id' => $this->getFirstQuestionId($questions),
+            'first_question_id' => $this->resolveFirstQuestionId(
+                $questions,
+                (int)($quiz['start_question_id'] ?? 0)
+            ),
             'questions' => $questions,
             'results' => $results,
         ];
@@ -250,5 +253,18 @@ final class QuizService
         }
 
         return (int)$questions[0]['id'];
+    }
+
+    private function resolveFirstQuestionId(array $questions, int $configuredStartQuestionId): ?int
+    {
+        if ($configuredStartQuestionId > 0) {
+            foreach ($questions as $question) {
+                if ((int)($question['id'] ?? 0) === $configuredStartQuestionId) {
+                    return $configuredStartQuestionId;
+                }
+            }
+        }
+
+        return $this->getFirstQuestionId($questions);
     }
 }

@@ -363,6 +363,62 @@ const resultMap = new Map(results.map((result) => [String(result.id), result]));
 const firstQuestion = quiz.first_question_id && questionMap.has(String(quiz.first_question_id))
 ? questionMap.get(String(quiz.first_question_id))
 : questions[0];
+const INPUT_TYPES = ['text', 'textarea', 'phone', 'email'];
+const OPTION_TYPES = ['radio', 'checkbox'];
+const TEMPLATE_NAMES = ['image_cards', 'cards', 'list', 'select'];
+let previewState = {
+answers: {},
+trace: []
+};
+const getQuestionType = (question) => {
+const type = String(question.question_type || 'radio').toLowerCase();
+
+if (type === 'select') {
+return 'radio';
+}
+
+return [...OPTION_TYPES, ...INPUT_TYPES].includes(type) ? type : 'radio';
+};
+const getDisplayTemplate = (question) => {
+const template = String(question.display_template || 'list').toLowerCase();
+
+return TEMPLATE_NAMES.includes(template) ? template : 'list';
+};
+const getNodeTitle = (node, fallback) => {
+if (!node) {
+return fallback || '';
+}
+
+return String(
+node.public_title
+|| node.name
+|| node.title
+|| fallback
+|| ''
+);
+};
+const getAnswerTitle = (answer, value) => {
+if (answer && answer.custom === true) {
+return 'Свой вариант: ' + String(answer.value || '').trim();
+}
+
+if (answer && answer.text) {
+return String(answer.text);
+}
+
+if (Array.isArray(value)) {
+return value
+.map((item) => getAnswerTitle(item, item))
+.filter(Boolean)
+.join(', ');
+}
+
+if (value !== undefined && value !== null && String(value).trim() !== '') {
+return String(value).trim();
+}
+
+return 'Без ответа';
+};
 const clear = () => { container.innerHTML = ''; };
 const renderHeader = () => {
 const title = document.createElement('div');
@@ -379,6 +435,72 @@ subtitle.textContent = String(quiz.subtitle);
 container.appendChild(subtitle);
 }
 };
+const restartPreview = () => {
+previewState = {
+answers: {},
+trace: []
+};
+
+if (firstQuestion) {
+showQuestion(firstQuestion);
+} else {
+clear();
+renderHeader();
+container.appendChild(document.createTextNode('В квизе нет вопросов.'));
+}
+};
+const appendRestartButton = () => {
+const button = document.createElement('button');
+button.type = 'button';
+button.className = 'adm-btn';
+button.style.marginTop = '12px';
+button.textContent = 'Начать заново';
+button.addEventListener('click', restartPreview);
+container.appendChild(button);
+};
+const renderTrace = () => {
+if (!previewState.trace.length) {
+return;
+}
+
+const block = document.createElement('div');
+block.style.marginTop = '16px';
+block.style.padding = '10px 12px';
+block.style.border = '1px dashed #b8b8b8';
+block.style.borderRadius = '4px';
+block.style.background = '#fafafa';
+
+const title = document.createElement('div');
+title.style.fontWeight = 'bold';
+title.style.marginBottom = '6px';
+title.textContent = 'Цепочка прохождения';
+block.appendChild(title);
+
+previewState.trace.forEach((item, index) => {
+const row = document.createElement('div');
+row.style.marginTop = index === 0 ? '0' : '8px';
+
+const main = document.createElement('div');
+main.textContent = (index + 1) + '. '
++ item.questionTitle
++ ' → '
++ item.answerTitle;
+
+const transition = document.createElement('div');
+transition.style.color = '#666';
+transition.style.fontSize = '12px';
+transition.textContent = 'Переход: '
++ item.transitionType
++ ' → '
++ item.targetTitle;
+
+row.appendChild(main);
+row.appendChild(transition);
+block.appendChild(row);
+});
+
+container.appendChild(block);
+};
 const showFinalForm = () => {
 clear();
 renderHeader();
@@ -388,6 +510,8 @@ message.style.border = '1px solid #d6d6d6';
 message.style.borderRadius = '4px';
 message.textContent = 'Финальная форма заявки. В предпросмотре заявка не отправляется.';
 container.appendChild(message);
+appendRestartButton();
+renderTrace();
 };
 const showResult = (resultId) => {
 clear();
@@ -400,7 +524,7 @@ box.style.borderRadius = '4px';
 const title = document.createElement('div');
 title.style.fontWeight = 'bold';
 title.style.marginBottom = '6px';
-title.textContent = result ? String(result.name || result.public_title || result.title || 'Результат') : 'Результат не найден';
+title.textContent = result ? String(result.public_title || result.name || result.title || 'Результат') : 'Результат не найден';
 box.appendChild(title);
 if (result && result.text) {
 const text = document.createElement('div');
@@ -415,23 +539,238 @@ finish.textContent = 'Перейти к финальной форме';
 finish.addEventListener('click', showFinalForm);
 box.appendChild(finish);
 container.appendChild(box);
+appendRestartButton();
+renderTrace();
 };
-const goNext = (question, answer) => {
-const answerResultId = answer && (answer.result_id || answer.score_result_id) ? (answer.result_id || answer.score_result_id) : 0;
+const resolveTransition = (question, answer) => {
+const answerResultId = answer && (answer.result_id || answer.score_result_id)
+? (answer.result_id || answer.score_result_id)
+: 0;
+
 if (answerResultId) {
-showResult(answerResultId);
-return;
+const result = resultMap.get(String(answerResultId));
+
+return {
+type: answer.result_id ? 'answer.result_id' : 'answer.score_result_id',
+targetType: 'result',
+targetId: answerResultId,
+targetTitle: getNodeTitle(result, 'Результат ID ' + answerResultId)
+};
 }
-const nextQuestionId = answer && answer.next_question_id ? answer.next_question_id : question.default_next_question_id;
+
+const nextQuestionId = answer && answer.next_question_id
+? answer.next_question_id
+: question.default_next_question_id;
+
 if (nextQuestionId && questionMap.has(String(nextQuestionId))) {
-showQuestion(questionMap.get(String(nextQuestionId)));
-return;
+const nextQuestion = questionMap.get(String(nextQuestionId));
+
+return {
+type: answer && answer.next_question_id ? 'answer.next_question_id' : 'question.default_next_question_id',
+targetType: 'question',
+targetId: nextQuestionId,
+targetTitle: getNodeTitle(nextQuestion, 'Вопрос ID ' + nextQuestionId)
+};
 }
+
 if (question.default_result_id) {
-showResult(question.default_result_id);
+const result = resultMap.get(String(question.default_result_id));
+
+return {
+type: 'question.default_result_id',
+targetType: 'result',
+targetId: question.default_result_id,
+targetTitle: getNodeTitle(result, 'Результат ID ' + question.default_result_id)
+};
+}
+
+return {
+type: 'final_form',
+targetType: 'form',
+targetId: '',
+targetTitle: 'Финальная форма'
+};
+};
+const pushTrace = (question, answer, value, transition) => {
+previewState.trace.push({
+questionId: question.id || '',
+questionTitle: getNodeTitle(question, 'Вопрос'),
+answerTitle: getAnswerTitle(answer, value),
+transitionType: transition.type || '',
+targetType: transition.targetType || '',
+targetId: transition.targetId || '',
+targetTitle: transition.targetTitle || ''
+});
+};
+const goNext = (question, answer, value) => {
+const transition = resolveTransition(question, answer);
+
+pushTrace(question, answer, value, transition);
+
+if (transition.targetType === 'result') {
+showResult(transition.targetId);
 return;
 }
+
+if (transition.targetType === 'question' && questionMap.has(String(transition.targetId))) {
+showQuestion(questionMap.get(String(transition.targetId)));
+return;
+}
+
 showFinalForm();
+};
+const renderRadioButtons = (question, answers) => {
+answers.forEach((answer) => {
+const button = document.createElement('button');
+button.type = 'button';
+button.className = 'adm-btn';
+button.style.display = 'block';
+button.style.margin = '6px 0';
+button.textContent = String(answer.text || 'Ответ');
+button.addEventListener('click', () => {
+previewState.answers[question.id] = answer;
+goNext(question, answer, answer);
+});
+container.appendChild(button);
+});
+};
+const renderSelectChoice = (question, answers) => {
+const select = document.createElement('select');
+select.className = 'adm-select';
+select.style.minWidth = '280px';
+
+const placeholder = document.createElement('option');
+placeholder.value = '';
+placeholder.textContent = 'Выберите вариант';
+select.appendChild(placeholder);
+
+answers.forEach((answer, index) => {
+const option = document.createElement('option');
+option.value = String(index);
+option.textContent = String(answer.text || 'Ответ');
+select.appendChild(option);
+});
+
+const next = document.createElement('button');
+next.type = 'button';
+next.className = 'adm-btn';
+next.style.marginLeft = '8px';
+next.textContent = 'Далее';
+
+next.addEventListener('click', () => {
+const index = Number.parseInt(select.value, 10);
+if (!Number.isFinite(index) || !answers[index]) {
+select.focus();
+return;
+}
+
+const answer = answers[index];
+previewState.answers[question.id] = answer;
+goNext(question, answer, answer);
+});
+
+container.appendChild(select);
+container.appendChild(next);
+};
+const renderCheckboxes = (question, answers) => {
+const selected = new Set();
+const wrap = document.createElement('div');
+
+answers.forEach((answer, index) => {
+const label = document.createElement('label');
+label.style.display = 'block';
+label.style.margin = '6px 0';
+
+const input = document.createElement('input');
+input.type = 'checkbox';
+input.value = String(index);
+
+input.addEventListener('change', () => {
+if (input.checked) {
+selected.add(index);
+} else {
+selected.delete(index);
+}
+});
+
+label.appendChild(input);
+label.appendChild(document.createTextNode(' ' + String(answer.text || 'Ответ')));
+wrap.appendChild(label);
+});
+
+const next = document.createElement('button');
+next.type = 'button';
+next.className = 'adm-btn';
+next.style.marginTop = '8px';
+next.textContent = 'Далее';
+
+next.addEventListener('click', () => {
+if (question.is_required === true && selected.size === 0) {
+const firstInput = wrap.querySelector('input[type="checkbox"]');
+if (firstInput) {
+firstInput.focus();
+}
+return;
+}
+
+const value = [...selected].map((index) => answers[index]).filter(Boolean);
+previewState.answers[question.id] = value;
+goNext(question, null, value);
+});
+
+container.appendChild(wrap);
+container.appendChild(next);
+};
+const renderInputQuestion = (question, type) => {
+const label = document.createElement('label');
+label.style.display = 'block';
+
+const input = type === 'textarea'
+? document.createElement('textarea')
+: document.createElement('input');
+
+input.className = 'adm-input';
+input.style.minWidth = '320px';
+input.required = question.is_required === true;
+input.placeholder = String(question.placeholder || '');
+
+if (input.tagName === 'INPUT') {
+input.type = type === 'phone' ? 'tel' : type === 'email' ? 'email' : 'text';
+}
+
+if (type === 'textarea') {
+input.rows = 4;
+input.style.width = '100%';
+input.style.maxWidth = '520px';
+}
+
+label.appendChild(input);
+container.appendChild(label);
+
+const next = document.createElement('button');
+next.type = 'button';
+next.className = 'adm-btn';
+next.style.marginTop = '8px';
+next.textContent = 'Далее';
+
+next.addEventListener('click', () => {
+const value = String(input.value || '').trim();
+
+if (input.required && value === '') {
+input.focus();
+return;
+}
+
+if (type === 'email' && value !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+input.focus();
+return;
+}
+
+previewState.answers[question.id] = value;
+goNext(question, null, value);
+});
+
+container.appendChild(next);
 };
 const showQuestion = (question) => {
 clear();
@@ -440,9 +779,19 @@ const questionTitle = document.createElement('div');
 questionTitle.style.fontSize = '16px';
 questionTitle.style.fontWeight = 'bold';
 questionTitle.style.marginBottom = '10px';
-questionTitle.textContent = String(question.name || question.public_title || question.title || 'Вопрос');
+questionTitle.textContent = String(question.public_title || question.name || question.title || 'Вопрос');
 container.appendChild(questionTitle);
+const type = getQuestionType(question);
+const template = getDisplayTemplate(question);
 const answers = Array.isArray(question.answers) ? question.answers : [];
+
+if (INPUT_TYPES.includes(type)) {
+renderInputQuestion(question, type);
+appendRestartButton();
+renderTrace();
+return;
+}
+
 if (answers.length === 0) {
 const empty = document.createElement('div');
 empty.style.color = '#6b4e00';
@@ -453,20 +802,30 @@ next.type = 'button';
 next.className = 'adm-btn';
 next.style.marginTop = '10px';
 next.textContent = 'Дальше';
-next.addEventListener('click', () => goNext(question, null));
+next.addEventListener('click', () => goNext(question, null, null));
 container.appendChild(next);
+appendRestartButton();
+renderTrace();
 return;
 }
-answers.forEach((answer) => {
-const button = document.createElement('button');
-button.type = 'button';
-button.className = 'adm-btn';
-button.style.display = 'block';
-button.style.margin = '6px 0';
-button.textContent = String(answer.text || 'Ответ');
-button.addEventListener('click', () => goNext(question, answer));
-container.appendChild(button);
-});
+
+if (type === 'checkbox') {
+renderCheckboxes(question, answers);
+appendRestartButton();
+renderTrace();
+return;
+}
+
+if (type === 'radio' && template === 'select') {
+renderSelectChoice(question, answers);
+appendRestartButton();
+renderTrace();
+return;
+}
+
+renderRadioButtons(question, answers);
+appendRestartButton();
+renderTrace();
 };
 if (firstQuestion) {
 showQuestion(firstQuestion);
@@ -604,6 +963,15 @@ const title = document.createElement('span');
 title.textContent = (node.is_start ? '★ ' : '') + String(node.title || ('ID ' + node.id));
 title.style.fontWeight = node.type === 'question' ? 'bold' : 'normal';
 line.appendChild(title);
+if (node.is_start) {
+const start = document.createElement('span');
+start.textContent = ' старт';
+start.style.marginLeft = '6px';
+start.style.color = '#267000';
+start.style.fontSize = '12px';
+start.style.fontWeight = 'bold';
+line.appendChild(start);
+}
 appendEditLink(line, node);
 return line;
 };
