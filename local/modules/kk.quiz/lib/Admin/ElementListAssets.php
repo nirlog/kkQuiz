@@ -234,15 +234,19 @@ applyQuickFilter(enumId);
 });
 return link;
 };
-const createBlock = () => {
+const createPanel = (id) => {
 const block = document.createElement('div');
-block.id = 'kk-quiz-element-list-help';
-block.style.margin = '0 0 12px 0';
+block.id = id;
+block.style.margin = id === 'kk-quiz-element-list-help' ? '0 0 12px 0' : '12px 0 0 0';
 block.style.padding = '10px 12px';
 block.style.border = '1px solid #d6d6d6';
 block.style.borderRadius = '4px';
 block.style.background = '#f7f7f7';
 block.style.color = '#333';
+return block;
+};
+const createTopBlock = () => {
+const block = createPanel('kk-quiz-element-list-help');
 const title = document.createElement('div');
 title.textContent = 'KK Quiz';
 title.style.fontWeight = 'bold';
@@ -258,52 +262,8 @@ block.appendChild(filters);
 const legend = document.createElement('div');
 legend.textContent = 'Q — вопрос, R — результат. NAME — техническое название для админки. “Заголовок на сайте” — текст, который видит пользователь.';
 block.appendChild(legend);
-const columns = document.createElement('div');
-columns.style.marginTop = '4px';
-columns.style.color = '#666';
-columns.textContent = 'Рекомендуемые колонки: Активность, Сортировка, Название, Тип сущности, Заголовок на сайте, Тип вопроса.';
-block.appendChild(columns);
-const diagnostics = settings.structureDiagnostics;
-if (diagnostics && Array.isArray(diagnostics.items) && diagnostics.items.length > 0) {
-const diagnosticsBlock = document.createElement('div');
-diagnosticsBlock.style.marginTop = '8px';
-diagnosticsBlock.style.paddingTop = '8px';
-diagnosticsBlock.style.borderTop = '1px solid #d6d6d6';
-const diagnosticsTitle = document.createElement('div');
-diagnosticsTitle.textContent = 'KK Quiz — проверка структуры';
-diagnosticsTitle.style.fontWeight = 'bold';
-diagnosticsTitle.style.marginBottom = '4px';
-diagnosticsBlock.appendChild(diagnosticsTitle);
-diagnostics.items.forEach((item) => {
-const line = document.createElement('div');
-line.style.margin = '3px 0';
-line.style.color = item.type === 'error' ? '#a40000' : (item.type === 'warning' ? '#6b4e00' : '#267000');
-line.textContent = (item.type === 'error' ? '✕ ' : (item.type === 'warning' ? '⚠ ' : '✓ ')) + String(item.message || '');
-diagnosticsBlock.appendChild(line);
-});
-block.appendChild(diagnosticsBlock);
-}
-const graph = diagnostics && diagnostics.graph ? diagnostics.graph : null;
-if (graph && Array.isArray(graph.nodes) && graph.nodes.length > 0) {
-const maxNodes = 40;
-const visibleNodes = graph.nodes.slice(0, maxNodes);
-const nodeMap = new Map(graph.nodes.map((node) => [String(node.id), node]));
-const graphBlock = document.createElement('div');
-graphBlock.style.marginTop = '8px';
-graphBlock.style.paddingTop = '8px';
-graphBlock.style.borderTop = '1px solid #d6d6d6';
-const graphTitle = document.createElement('div');
-graphTitle.textContent = 'KK Quiz — схема';
-graphTitle.style.fontWeight = 'bold';
-graphTitle.style.marginBottom = '6px';
-graphBlock.appendChild(graphTitle);
-if (graph.nodes.length > maxNodes) {
-const truncated = document.createElement('div');
-truncated.textContent = 'Схема сокращена: показаны первые 40 элементов.';
-truncated.style.color = '#6b4e00';
-truncated.style.marginBottom = '6px';
-graphBlock.appendChild(truncated);
-}
+return block;
+};
 const createBadge = (type) => {
 const badge = document.createElement('span');
 badge.textContent = type === 'result' ? 'R' : 'Q';
@@ -318,48 +278,162 @@ badge.style.background = type === 'result' ? '#e5f6e5' : '#e8eef8';
 badge.style.color = type === 'result' ? '#267000' : '#245493';
 return badge;
 };
+const appendDiagnosticsSection = (block, diagnostics) => {
+if (!diagnostics || !Array.isArray(diagnostics.items) || diagnostics.items.length === 0) return;
+const diagnosticsBlock = document.createElement('div');
+const diagnosticsTitle = document.createElement('div');
+diagnosticsTitle.textContent = 'KK Quiz — проверка структуры';
+diagnosticsTitle.style.fontWeight = 'bold';
+diagnosticsTitle.style.marginBottom = '4px';
+diagnosticsBlock.appendChild(diagnosticsTitle);
+diagnostics.items.forEach((item) => {
+const line = document.createElement('div');
+line.style.margin = '3px 0';
+line.style.color = item.type === 'error' ? '#a40000' : (item.type === 'warning' ? '#6b4e00' : '#267000');
+line.textContent = (item.type === 'error' ? '✕ ' : (item.type === 'warning' ? '⚠ ' : '✓ ')) + String(item.message || '');
+diagnosticsBlock.appendChild(line);
+});
+block.appendChild(diagnosticsBlock);
+};
+const appendGraphSection = (block, diagnostics) => {
+const graph = diagnostics && diagnostics.graph ? diagnostics.graph : null;
+if (!graph || !Array.isArray(graph.nodes) || graph.nodes.length === 0) return;
+const maxNodes = 40;
+let renderedNodes = 0;
+let truncated = false;
+const nodeMap = new Map(graph.nodes.map((node) => [String(node.id), node]));
 const edgesByFrom = new Map();
 (graph.edges || []).forEach((edge) => {
 const key = String(edge.from);
 if (!edgesByFrom.has(key)) edgesByFrom.set(key, []);
 edgesByFrom.get(key).push(edge);
 });
-visibleNodes.forEach((node) => {
-const nodeBlock = document.createElement('div');
-nodeBlock.style.margin = '7px 0';
-nodeBlock.style.opacity = node.is_reachable === false ? '0.55' : '1';
-const nodeLine = document.createElement('div');
-nodeLine.appendChild(createBadge(node.type));
+const graphBlock = document.createElement('div');
+graphBlock.style.marginTop = '10px';
+graphBlock.style.paddingTop = '10px';
+graphBlock.style.borderTop = '1px solid #d6d6d6';
+const graphTitle = document.createElement('div');
+graphTitle.textContent = 'KK Quiz — схема';
+graphTitle.style.fontWeight = 'bold';
+graphTitle.style.marginBottom = '6px';
+graphBlock.appendChild(graphTitle);
+const renderNodeLabel = (node) => {
+const line = document.createElement('div');
+line.appendChild(createBadge(node.type));
 const title = document.createElement('span');
 title.textContent = (node.is_start ? '★ ' : '') + String(node.title || ('ID ' + node.id));
 title.style.fontWeight = node.type === 'question' ? 'bold' : 'normal';
-nodeLine.appendChild(title);
-nodeBlock.appendChild(nodeLine);
-(edgesByFrom.get(String(node.id)) || []).forEach((edge, index, list) => {
-const edgeLine = document.createElement('div');
-edgeLine.style.marginLeft = '26px';
-edgeLine.style.color = edge.is_broken ? '#a40000' : '#555';
-const target = nodeMap.get(String(edge.to));
-const targetType = edge.to_type || (target ? target.type : 'question');
-const prefix = index === list.length - 1 ? '└─ ' : '├─ ';
-edgeLine.appendChild(document.createTextNode(prefix + String(edge.label || 'Ответ') + ' → '));
-edgeLine.appendChild(createBadge(targetType));
-const targetTitle = document.createElement('span');
-targetTitle.textContent = edge.is_broken ? String(edge.to_title || ('ID ' + edge.to + ' не найден')) : String(edge.to_title || (target ? target.title : ('ID ' + edge.to)));
-edgeLine.appendChild(targetTitle);
-nodeBlock.appendChild(edgeLine);
-});
-graphBlock.appendChild(nodeBlock);
-});
-block.appendChild(graphBlock);
+line.appendChild(title);
+return line;
+};
+const renderFlowBranch = (node, depth, visited) => {
+const container = document.createElement('div');
+container.style.margin = depth === 0 ? '8px 0' : '5px 0 5px 22px';
+container.style.padding = '6px 8px';
+container.style.border = '1px solid #e3e3e3';
+container.style.borderRadius = '4px';
+container.style.background = '#fff';
+container.style.opacity = node.is_reachable === false ? '0.55' : '1';
+container.appendChild(renderNodeLabel(node));
+if (renderedNodes >= maxNodes) {
+truncated = true;
+return container;
 }
+renderedNodes += 1;
+if (node.type === 'result') return container;
+const nodeKey = String(node.id);
+if (visited.has(nodeKey)) {
+const cycle = document.createElement('div');
+cycle.style.marginLeft = '26px';
+cycle.style.color = '#6b4e00';
+cycle.textContent = '↳ уже показан выше';
+container.appendChild(cycle);
+return container;
+}
+const nextVisited = new Set(visited);
+nextVisited.add(nodeKey);
+const edges = edgesByFrom.get(nodeKey) || [];
+if (edges.length === 0) {
+const empty = document.createElement('div');
+empty.style.marginLeft = '26px';
+empty.style.color = '#6b4e00';
+empty.textContent = 'Нет переходов';
+container.appendChild(empty);
+return container;
+}
+edges.forEach((edge, index) => {
+const edgeLine = document.createElement('div');
+edgeLine.style.margin = '4px 0 0 26px';
+edgeLine.style.color = edge.is_broken ? '#a40000' : '#555';
+const prefix = index === edges.length - 1 ? '└─ ' : '├─ ';
+edgeLine.appendChild(document.createTextNode(prefix + String(edge.label || 'Ответ') + ' → '));
+if (edge.is_broken) {
+edgeLine.appendChild(document.createTextNode(String(edge.to_title || ('ID ' + edge.to + ' не найден'))));
+container.appendChild(edgeLine);
+return;
+}
+const target = nodeMap.get(String(edge.to));
+if (!target) return;
+edgeLine.appendChild(createBadge(edge.to_type || target.type));
+edgeLine.appendChild(document.createTextNode(String(edge.to_title || target.title || ('ID ' + edge.to))));
+container.appendChild(edgeLine);
+if (renderedNodes < maxNodes) {
+container.appendChild(renderFlowBranch(target, depth + 1, nextVisited));
+} else {
+truncated = true;
+}
+});
+return container;
+};
+const startNode = graph.nodes.find((node) => node.is_start === true) || graph.nodes.find((node) => node.type === 'question') || graph.nodes[0];
+if (startNode) graphBlock.appendChild(renderFlowBranch(startNode, 0, new Set()));
+const unreachable = graph.nodes.filter((node) => node.is_reachable === false);
+if (unreachable.length > 0) {
+const title = document.createElement('div');
+title.textContent = 'Недостижимые элементы';
+title.style.fontWeight = 'bold';
+title.style.margin = '10px 0 4px';
+graphBlock.appendChild(title);
+unreachable.forEach((node) => {
+const line = document.createElement('div');
+line.style.opacity = '0.55';
+line.style.margin = '4px 0';
+line.appendChild(createBadge(node.type));
+line.appendChild(document.createTextNode(String(node.title || ('ID ' + node.id))));
+graphBlock.appendChild(line);
+});
+}
+if (truncated || graph.nodes.length > maxNodes) {
+const notice = document.createElement('div');
+notice.textContent = 'Схема сокращена: показаны первые 40 элементов.';
+notice.style.color = '#6b4e00';
+notice.style.marginTop = '6px';
+graphBlock.appendChild(notice);
+}
+block.appendChild(graphBlock);
+};
+const createDetailsBlock = () => {
+const block = createPanel('kk-quiz-element-list-details');
+const diagnostics = settings.structureDiagnostics;
+appendDiagnosticsSection(block, diagnostics);
+appendGraphSection(block, diagnostics);
 return block;
 };
-const refreshElementListHelp = () => {
+const insertTopBlock = () => {
 if (document.getElementById('kk-quiz-element-list-help')) return;
 const anchor = findAnchor();
 if (!anchor || !anchor.parentNode) return;
-anchor.parentNode.insertBefore(createBlock(), anchor);
+anchor.parentNode.insertBefore(createTopBlock(), anchor);
+};
+const insertDetailsBlock = () => {
+if (!settings.structureDiagnostics || document.getElementById('kk-quiz-element-list-details')) return;
+const anchor = findAnchor();
+if (!anchor || !anchor.parentNode) return;
+anchor.insertAdjacentElement('afterend', createDetailsBlock());
+};
+const refreshElementListHelp = () => {
+insertTopBlock();
+insertDetailsBlock();
 };
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', refreshElementListHelp); else refreshElementListHelp();
 setTimeout(refreshElementListHelp, 100);

@@ -180,7 +180,7 @@ final class QuizStructureDiagnostics
 
             $adminName = (string)($fields['NAME'] ?? '');
             $publicTitle = trim((string)self::getPropertyValue($properties, 'KK_PUBLIC_TITLE'));
-            $answersData = self::decodeAnswers(self::getPropertyValue($properties, 'KK_ANSWERS'));
+            $answersData = self::decodeAnswers(self::getPropertyRawValue($properties, 'KK_ANSWERS'));
 
             $items[] = [
                 'id' => (int)$fields['ID'],
@@ -261,37 +261,80 @@ final class QuizStructureDiagnostics
 
     private static function getAnswerLabel(array $answer): string
     {
-        $text = $answer['text'] ?? $answer['TEXT'] ?? '';
-        if (is_array($text)) {
-            $text = reset($text);
-        }
-
-        $text = is_scalar($text) ? trim((string)$text) : '';
+        $text = self::cleanString($answer['text'] ?? $answer['TEXT'] ?? '');
 
         return $text !== '' ? $text : 'Ответ';
     }
 
     private static function decodeAnswers(mixed $value): array
     {
-        $raw = is_string($value) ? trim($value) : '';
-        if ($raw === '') {
+        if (is_string($value)) {
+            $raw = trim($value);
+            if ($raw === '') {
+                return ['answers' => [], 'invalid' => false];
+            }
+
+            $decoded = json_decode($raw, true);
+            if (!is_array($decoded)) {
+                return ['answers' => [], 'invalid' => true];
+            }
+
+            $value = $decoded;
+        }
+
+        if (!is_array($value)) {
             return ['answers' => [], 'invalid' => false];
         }
 
-        $decoded = json_decode($raw, true);
-        if (!is_array($decoded)) {
-            return ['answers' => [], 'invalid' => true];
+        $rows = $value['rows'] ?? $value;
+        if (!is_array($rows)) {
+            return ['answers' => [], 'invalid' => false];
+        }
+
+        if (
+            isset($rows['text'])
+            || isset($rows['TEXT'])
+            || isset($rows['next_question_id'])
+            || isset($rows['NEXT_QUESTION_ID'])
+            || isset($rows['result_id'])
+            || isset($rows['RESULT_ID'])
+            || isset($rows['score_result_id'])
+            || isset($rows['SCORE_RESULT_ID'])
+        ) {
+            $rows = [$rows];
         }
 
         $answers = [];
-        foreach ($decoded as $answer) {
-            if (is_array($answer)) {
-                $answers[] = $answer;
+        foreach ($rows as $answer) {
+            if (is_string($answer)) {
+                $decoded = json_decode(trim($answer), true);
+                $answer = is_array($decoded) ? $decoded : null;
             }
+
+            if (!is_array($answer)) {
+                continue;
+            }
+
+            $answers[] = [
+                'text' => self::cleanString($answer['text'] ?? $answer['TEXT'] ?? ''),
+                'next_question_id' => self::toPositiveInt($answer['next_question_id'] ?? $answer['NEXT_QUESTION_ID'] ?? null),
+                'result_id' => self::toPositiveInt($answer['result_id'] ?? $answer['RESULT_ID'] ?? null),
+                'score_result_id' => self::toPositiveInt($answer['score_result_id'] ?? $answer['SCORE_RESULT_ID'] ?? null),
+            ];
         }
 
         return ['answers' => $answers, 'invalid' => false];
     }
+
+    private static function cleanString(mixed $value): string
+    {
+        if (is_array($value)) {
+            $value = reset($value);
+        }
+
+        return is_scalar($value) ? trim(strip_tags((string)$value)) : '';
+    }
+
 
     private static function collectReachableQuestionIds(int $startQuestionId, array $edges): array
     {
@@ -313,6 +356,16 @@ final class QuizStructureDiagnostics
         }
 
         return $reachable;
+    }
+
+
+    private static function getPropertyRawValue(array $properties, string $code): mixed
+    {
+        if (!isset($properties[$code]) || !is_array($properties[$code])) {
+            return null;
+        }
+
+        return $properties[$code]['VALUE'] ?? null;
     }
 
     private static function getPropertyValue(array $properties, string $code): mixed
