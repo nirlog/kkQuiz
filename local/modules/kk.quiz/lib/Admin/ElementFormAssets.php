@@ -12,6 +12,7 @@ final class ElementFormAssets
 {
     private const COMMON_CODES = [
         'KK_ENTITY_TYPE',
+        'KK_PUBLIC_TITLE',
         'KK_ADMIN_NOTE',
     ];
 
@@ -393,6 +394,17 @@ final class ElementFormAssets
         return '(() => {'
             . 'const settings = ' . self::json($settings) . ';'
             . 'const allIds = [...settings.common, ...settings.question, ...settings.result];'
+            . 'const addNameHint = () => {'
+            . 'const input = document.querySelector("input[name=\"NAME\"]");'
+            . 'if (!input || document.getElementById("kk-quiz-name-technical-hint")) return;'
+            . 'const hint = document.createElement("div");'
+            . 'hint.id = "kk-quiz-name-technical-hint";'
+            . 'hint.textContent = "Название элемента используется только для удобства в админке. Заголовок на сайте задаётся в поле “Заголовок на сайте”.";'
+            . 'hint.style.marginTop = "6px";'
+            . 'hint.style.color = "#666";'
+            . 'hint.style.fontSize = "12px";'
+            . 'input.insertAdjacentElement("afterend", hint);'
+            . '};'
             . 'const getPropertyRow = (propertyId) => {'
             . 'const byId = document.getElementById(`tr_PROPERTY_${propertyId}`);'
             . 'if (byId) return byId;'
@@ -711,7 +723,7 @@ final class ElementFormAssets
             . 'renderQuizDiagnostics();'
             . '});'
             . 'document.addEventListener("input", () => { updateRecommendationsDisabledHint(); renderQuizDiagnostics(); });'
-            . 'const refreshAdminForm = () => { applyVisibility(); enhanceCatalogSectionSelect(); updateRecommendationsDisabledHint(); renderQuizDiagnostics(); };'
+            . 'const refreshAdminForm = () => { addNameHint(); applyVisibility(); enhanceCatalogSectionSelect(); updateRecommendationsDisabledHint(); renderQuizDiagnostics(); };'
             . 'if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", refreshAdminForm); else { refreshAdminForm(); }'
             . 'setTimeout(refreshAdminForm, 100);'
             . 'setTimeout(refreshAdminForm, 500);'

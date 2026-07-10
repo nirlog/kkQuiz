@@ -590,9 +590,10 @@ final class Installer
     private static function installQuizProperties(int $iblockId): void
     {
         $properties = [
-            ['CODE' => 'KK_ENTITY_TYPE', 'NAME' => 'Тип сущности', 'SORT' => 100, 'PROPERTY_TYPE' => 'L', 'VALUES' => ['QUESTION' => 'QUESTION', 'RESULT' => 'RESULT']],
+            ['CODE' => 'KK_ENTITY_TYPE', 'NAME' => 'Тип сущности', 'SORT' => 100, 'PROPERTY_TYPE' => 'L', 'VALUES' => ['QUESTION' => 'QUESTION', 'RESULT' => 'RESULT'], 'SHOW_IN_LIST' => 'Y', 'LIST_COLUMN_LABEL' => 'Тип сущности', 'LIST_FILTER_LABEL' => 'Тип сущности'],
+            ['CODE' => 'KK_PUBLIC_TITLE', 'NAME' => 'Заголовок на сайте', 'SORT' => 105, 'PROPERTY_TYPE' => 'S', 'SHOW_IN_LIST' => 'Y', 'LIST_COLUMN_LABEL' => 'Заголовок на сайте', 'LIST_FILTER_LABEL' => 'Заголовок на сайте'],
             ['CODE' => 'KK_ADMIN_NOTE', 'NAME' => 'Комментарий администратора', 'SORT' => 900, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
-            ['CODE' => 'KK_QUESTION_TYPE', 'NAME' => 'Тип вопроса', 'SORT' => 200, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getQuestionTypeValues()],
+            ['CODE' => 'KK_QUESTION_TYPE', 'NAME' => 'Тип вопроса', 'SORT' => 200, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getQuestionTypeValues(), 'SHOW_IN_LIST' => 'Y', 'LIST_COLUMN_LABEL' => 'Тип вопроса', 'LIST_FILTER_LABEL' => 'Тип вопроса'],
             ['CODE' => 'KK_DISPLAY_TEMPLATE', 'NAME' => 'Шаблон отображения', 'SORT' => 220, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getDisplayTemplateValues()],
             ['CODE' => 'KK_IS_REQUIRED', 'NAME' => 'Обязательный вопрос', 'SORT' => 230, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
             ['CODE' => 'KK_PLACEHOLDER', 'NAME' => 'Placeholder', 'SORT' => 240, 'PROPERTY_TYPE' => 'S'],
@@ -711,6 +712,12 @@ final class Installer
 
         if (isset($property['NAME'])) {
             $fields['NAME'] = $property['NAME'];
+        }
+
+        foreach (['SHOW_IN_LIST', 'LIST_COLUMN_LABEL', 'LIST_FILTER_LABEL'] as $fieldName) {
+            if (isset($property[$fieldName])) {
+                $fields[$fieldName] = $property[$fieldName];
+            }
         }
 
         if (($property['CODE'] ?? '') === 'KK_ANSWERS') {

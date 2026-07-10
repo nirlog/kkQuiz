@@ -216,10 +216,16 @@ final class QuizRepository
             $rawQuestionType
         );
 
+        $adminName = (string)($element['NAME'] ?? '');
+        $publicTitle = trim((string)$this->getElementPropertyValue($properties, 'KK_PUBLIC_TITLE'));
+        $title = $publicTitle !== '' ? $publicTitle : $adminName;
+
         return [
             'id' => (int)$element['ID'],
             'code' => (string)($element['CODE'] ?? ''),
-            'name' => (string)($element['NAME'] ?? ''),
+            'name' => $title,
+            'public_title' => $publicTitle,
+            'admin_name' => $adminName,
             'hint' => (string)($element['PREVIEW_TEXT'] ?? ''),
             'sort' => (int)($element['SORT'] ?? 0),
             'question_type' => $questionType,
@@ -264,10 +270,16 @@ final class QuizRepository
     {
         $pictureId = $this->toNullableInt($element['PREVIEW_PICTURE'] ?? null) ?? $this->toNullableInt($element['DETAIL_PICTURE'] ?? null);
 
+        $adminName = (string)($element['NAME'] ?? '');
+        $publicTitle = trim((string)$this->getElementPropertyValue($properties, 'KK_PUBLIC_TITLE'));
+        $title = $publicTitle !== '' ? $publicTitle : $adminName;
+
         return [
             'id' => (int)$element['ID'],
             'code' => (string)($element['CODE'] ?? ''),
-            'name' => (string)($element['NAME'] ?? ''),
+            'name' => $title,
+            'public_title' => $publicTitle,
+            'admin_name' => $adminName,
             'preview_text' => (string)($element['PREVIEW_TEXT'] ?? ''),
             'detail_text' => (string)($element['DETAIL_TEXT'] ?? ''),
             'picture_id' => $pictureId,
