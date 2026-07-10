@@ -104,9 +104,31 @@ const table = document.querySelector('.adm-list-table');
 if (table) return table.closest('.adm-list-table-wrap') || table.closest('form') || table;
 return document.querySelector('form[name="form_"]') || document.querySelector('form');
 };
+const normalizeGridId = (value) => {
+const id = String(value || '').trim();
+if (id.endsWith('_search_container')) {
+return id.slice(0, -'_search_container'.length);
+}
+if (id.endsWith('_search')) {
+return id.slice(0, -'_search'.length);
+}
+return id;
+};
 const getGridId = () => {
-const table = document.querySelector('.adm-list-table[id^="tbl_iblock_list_"], table[id^="tbl_iblock_list_"], [id^="tbl_iblock_list_"]');
-return table && table.id ? table.id : '';
+const elements = Array.from(document.querySelectorAll('[id^="tbl_iblock_list_"]'));
+for (const element of elements) {
+const normalized = normalizeGridId(element.id);
+if (normalized && normalized !== element.id) {
+return normalized;
+}
+}
+for (const element of elements) {
+const normalized = normalizeGridId(element.id);
+if (normalized) {
+return normalized;
+}
+}
+return '';
 };
 const applyQuickFilter = (enumId) => {
 const gridId = getGridId();
