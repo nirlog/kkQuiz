@@ -963,6 +963,11 @@
             return;
         }
 
+        if (question.default_result_id) {
+            showResult(nodes, quiz, state, question.default_result_id);
+            return;
+        }
+
         showFinalForm(nodes, quiz, state, null);
     };
 

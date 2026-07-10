@@ -233,6 +233,7 @@ final class QuizRepository
             'is_required' => $this->toBool($this->getElementPropertyEnumXmlId($properties, 'KK_IS_REQUIRED')),
             'placeholder' => (string)$this->getElementPropertyValue($properties, 'KK_PLACEHOLDER'),
             'default_next_question_id' => $this->toNullableInt($this->getElementPropertyValue($properties, 'KK_DEFAULT_NEXT_QUESTION')),
+            'default_result_id' => $this->toNullableInt($this->getElementPropertyValue($properties, 'KK_DEFAULT_RESULT')),
             'answers' => $this->normalizeAnswers($this->getElementPropertyValue($properties, 'KK_ANSWERS')),
         ];
     }

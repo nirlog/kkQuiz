@@ -23,6 +23,7 @@ final class ElementFormAssets
         'KK_IS_REQUIRED',
         'KK_PLACEHOLDER',
         'KK_DEFAULT_NEXT_QUESTION',
+        'KK_DEFAULT_RESULT',
     ];
 
     private const RESULT_CODES = [
@@ -79,6 +80,7 @@ final class ElementFormAssets
             'isRequiredPropertyId' => $propertyIds['KK_IS_REQUIRED'] ?? 0,
             'placeholderPropertyId' => $propertyIds['KK_PLACEHOLDER'] ?? 0,
             'defaultNextQuestionPropertyId' => $propertyIds['KK_DEFAULT_NEXT_QUESTION'] ?? 0,
+            'defaultResultPropertyId' => $propertyIds['KK_DEFAULT_RESULT'] ?? 0,
             'showFormPropertyId' => $propertyIds['KK_RESULT_SHOW_FORM'] ?? 0,
             'catalogSectionsByIblock' => self::getCatalogSectionsByIblock($iblockId),
             'recommendationsEnabled' => $recommendationSettings['enabled'],
@@ -618,7 +620,10 @@ final class ElementFormAssets
             . 'if (["radio", "checkbox"].includes(questionType) && displayTemplate === "input") diagnostics.push({ type: "warning", message: "Предупреждение: шаблон “Поле ввода” устарел и не применяется. Используйте тип вопроса “Текстовое поле”." });'
             . 'if (questionType === "checkbox" && displayTemplate === "select") diagnostics.push({ type: "warning", message: "Предупреждение: шаблон “Выпадающий список” применим только для одного варианта ответа. Для нескольких вариантов будет использован обычный список." });'
             . 'if (questionType === "select") diagnostics.push({ type: "warning", message: "Предупреждение: тип вопроса “Выпадающий список” устарел. Используйте “Один вариант ответа” + шаблон “Выпадающий список”." });'
-            . 'const hasTransitions = hasPropertyValue(settings.defaultNextQuestionPropertyId) || hasControlValueByNames(["default_next_question_id", "next_question_id", "result_id", "score_result_id"]);'
+            . 'const hasDefaultNextQuestion = hasPropertyValue(settings.defaultNextQuestionPropertyId);'
+            . 'const hasDefaultResult = hasPropertyValue(settings.defaultResultPropertyId);'
+            . 'if (hasDefaultNextQuestion && hasDefaultResult) diagnostics.push({ type: "warning", message: "Предупреждение: одновременно задан “Следующий вопрос по умолчанию” и “Финальный результат по умолчанию”. Сначала будет использован следующий вопрос." });'
+            . 'const hasTransitions = hasDefaultNextQuestion || hasDefaultResult || hasControlValueByNames(["default_next_question_id", "default_result_id", "next_question_id", "result_id", "score_result_id"]);'
             . 'if (!hasTransitions) diagnostics.push({ type: "warning", message: "Предупреждение: у вопроса не настроены переходы. Пользователь может не дойти до результата." });'
             . '}'
             . 'if (entityType === "RESULT") {'
