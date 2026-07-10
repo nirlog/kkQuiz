@@ -45,6 +45,7 @@ final class ElementListAssets
             'entityTypePropertyId' => (int)$entityTypeProperty['ID'],
             'questionEnumId' => self::getEnumId((int)$entityTypeProperty['ID'], 'QUESTION'),
             'resultEnumId' => self::getEnumId((int)$entityTypeProperty['ID'], 'RESULT'),
+            'quizCode' => $sectionId > 0 ? self::getSectionCode($iblockId, $sectionId) : '',
             'structureDiagnostics' => $sectionId > 0 ? QuizStructureDiagnostics::build($iblockId, $sectionId) : null,
         ];
 
@@ -70,6 +71,25 @@ final class ElementListAssets
         $sectionId = (int)($_REQUEST['SECTION_ID'] ?? $_REQUEST['find_section_section'] ?? 0);
 
         return $sectionId > 0 ? $sectionId : 0;
+    }
+
+    private static function getSectionCode(int $iblockId, int $sectionId): string
+    {
+        if ($iblockId <= 0 || $sectionId <= 0) {
+            return '';
+        }
+
+        $section = \CIBlockSection::GetList(
+            [],
+            [
+                'IBLOCK_ID' => $iblockId,
+                'ID' => $sectionId,
+            ],
+            false,
+            ['ID', 'CODE']
+        )->Fetch();
+
+        return is_array($section) ? trim((string)($section['CODE'] ?? '')) : '';
     }
 
     private static function getProperty(int $iblockId, string $code): ?array
@@ -234,6 +254,209 @@ applyQuickFilter(enumId);
 });
 return link;
 };
+const getAjaxUrl = (action) => {
+return '/bitrix/services/main/ajax.php?mode=ajax&c=kk:api&action=' + encodeURIComponent(action);
+};
+const loadAdminQuiz = (quizCode) => {
+const body = new URLSearchParams();
+body.append('quizCode', quizCode);
+body.append('sessid', window.BX && BX.bitrix_sessid ? BX.bitrix_sessid() : '');
+return fetch(getAjaxUrl('getQuiz'), {
+method: 'POST',
+credentials: 'include',
+headers: {
+'Content-Type': 'application/x-www-form-urlencoded',
+'BX-Ajax': 'true',
+'X-Bitrix-Csrf-Token': window.BX && BX.bitrix_sessid ? BX.bitrix_sessid() : ''
+},
+body
+})
+.then((response) => response.json())
+.then((response) => {
+const data = response && response.data ? response.data : null;
+const quiz = data && data.quiz ? data.quiz : data;
+if (!response || response.status !== 'success' || !data || (data.success === false) || !quiz) {
+throw new Error('Invalid getQuiz response');
+}
+return quiz;
+});
+};
+const closeAdminQuizPreview = () => {
+const modal = document.getElementById('kk-quiz-admin-preview-modal');
+if (!modal) return;
+modal.style.display = 'none';
+const content = modal.querySelector('.kk-quiz-admin-preview-content');
+if (content) content.innerHTML = '';
+};
+const ensurePreviewModal = () => {
+let modal = document.getElementById('kk-quiz-admin-preview-modal');
+if (modal) return modal;
+modal = document.createElement('div');
+modal.id = 'kk-quiz-admin-preview-modal';
+modal.style.display = 'none';
+modal.style.position = 'fixed';
+modal.style.left = '0';
+modal.style.top = '0';
+modal.style.right = '0';
+modal.style.bottom = '0';
+modal.style.zIndex = '10000';
+modal.style.background = 'rgba(0,0,0,.45)';
+modal.innerHTML = [
+'<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(760px, calc(100vw - 40px));max-height:calc(100vh - 40px);overflow:auto;background:#fff;border-radius:6px;box-shadow:0 10px 40px rgba(0,0,0,.25);">',
+'<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #e5e5e5;">',
+'<strong>Предпросмотр квиза</strong>',
+'<button type="button" class="adm-btn kk-quiz-admin-preview-close">Закрыть</button>',
+'</div>',
+'<div class="kk-quiz-admin-preview-content" style="padding:16px;"></div>',
+'</div>'
+].join('');
+document.body.appendChild(modal);
+modal.addEventListener('click', (event) => {
+if (event.target === modal || event.target.classList.contains('kk-quiz-admin-preview-close')) {
+closeAdminQuizPreview();
+}
+});
+document.addEventListener('keydown', (event) => {
+if (event.key === 'Escape' && modal.style.display !== 'none') {
+closeAdminQuizPreview();
+}
+});
+return modal;
+};
+const renderAdminQuizPreview = (container, quiz) => {
+const questions = Array.isArray(quiz.questions) ? quiz.questions : [];
+const results = Array.isArray(quiz.results) ? quiz.results : [];
+const questionMap = new Map(questions.map((question) => [String(question.id), question]));
+const resultMap = new Map(results.map((result) => [String(result.id), result]));
+const firstQuestion = quiz.first_question_id && questionMap.has(String(quiz.first_question_id))
+? questionMap.get(String(quiz.first_question_id))
+: questions[0];
+const clear = () => { container.innerHTML = ''; };
+const renderHeader = () => {
+const title = document.createElement('div');
+title.style.fontSize = '18px';
+title.style.fontWeight = 'bold';
+title.style.marginBottom = '8px';
+title.textContent = String(quiz.title || quiz.name || 'Квиз');
+container.appendChild(title);
+if (quiz.subtitle) {
+const subtitle = document.createElement('div');
+subtitle.style.marginBottom = '12px';
+subtitle.style.color = '#666';
+subtitle.textContent = String(quiz.subtitle);
+container.appendChild(subtitle);
+}
+};
+const showFinalForm = () => {
+clear();
+renderHeader();
+const message = document.createElement('div');
+message.style.padding = '12px';
+message.style.border = '1px solid #d6d6d6';
+message.style.borderRadius = '4px';
+message.textContent = 'Финальная форма заявки. В предпросмотре заявка не отправляется.';
+container.appendChild(message);
+};
+const showResult = (resultId) => {
+clear();
+renderHeader();
+const result = resultMap.get(String(resultId));
+const box = document.createElement('div');
+box.style.padding = '12px';
+box.style.border = '1px solid #d6d6d6';
+box.style.borderRadius = '4px';
+const title = document.createElement('div');
+title.style.fontWeight = 'bold';
+title.style.marginBottom = '6px';
+title.textContent = result ? String(result.name || result.public_title || result.title || 'Результат') : 'Результат не найден';
+box.appendChild(title);
+if (result && result.text) {
+const text = document.createElement('div');
+text.textContent = String(result.text);
+box.appendChild(text);
+}
+const finish = document.createElement('button');
+finish.type = 'button';
+finish.className = 'adm-btn';
+finish.style.marginTop = '12px';
+finish.textContent = 'Перейти к финальной форме';
+finish.addEventListener('click', showFinalForm);
+box.appendChild(finish);
+container.appendChild(box);
+};
+const goNext = (question, answer) => {
+const answerResultId = answer && (answer.result_id || answer.score_result_id) ? (answer.result_id || answer.score_result_id) : 0;
+if (answerResultId) {
+showResult(answerResultId);
+return;
+}
+const nextQuestionId = answer && answer.next_question_id ? answer.next_question_id : question.default_next_question_id;
+if (nextQuestionId && questionMap.has(String(nextQuestionId))) {
+showQuestion(questionMap.get(String(nextQuestionId)));
+return;
+}
+if (question.default_result_id) {
+showResult(question.default_result_id);
+return;
+}
+showFinalForm();
+};
+const showQuestion = (question) => {
+clear();
+renderHeader();
+const questionTitle = document.createElement('div');
+questionTitle.style.fontSize = '16px';
+questionTitle.style.fontWeight = 'bold';
+questionTitle.style.marginBottom = '10px';
+questionTitle.textContent = String(question.name || question.public_title || question.title || 'Вопрос');
+container.appendChild(questionTitle);
+const answers = Array.isArray(question.answers) ? question.answers : [];
+if (answers.length === 0) {
+const empty = document.createElement('div');
+empty.style.color = '#6b4e00';
+empty.textContent = 'У вопроса нет вариантов ответа.';
+container.appendChild(empty);
+const next = document.createElement('button');
+next.type = 'button';
+next.className = 'adm-btn';
+next.style.marginTop = '10px';
+next.textContent = 'Дальше';
+next.addEventListener('click', () => goNext(question, null));
+container.appendChild(next);
+return;
+}
+answers.forEach((answer) => {
+const button = document.createElement('button');
+button.type = 'button';
+button.className = 'adm-btn';
+button.style.display = 'block';
+button.style.margin = '6px 0';
+button.textContent = String(answer.text || 'Ответ');
+button.addEventListener('click', () => goNext(question, answer));
+container.appendChild(button);
+});
+};
+if (firstQuestion) {
+showQuestion(firstQuestion);
+} else {
+clear();
+renderHeader();
+container.appendChild(document.createTextNode('В квизе нет вопросов.'));
+}
+};
+const openAdminQuizPreview = (quizCode) => {
+const modal = ensurePreviewModal();
+const content = modal.querySelector('.kk-quiz-admin-preview-content');
+if (!content) return;
+modal.style.display = 'block';
+content.innerHTML = '<div style="padding:20px;text-align:center;">Загрузка квиза...</div>';
+loadAdminQuiz(quizCode)
+.then((quiz) => { renderAdminQuizPreview(content, quiz); })
+.catch((error) => {
+content.innerHTML = '<div style="color:#a40000;">Не удалось загрузить квиз.</div>';
+console.warn('KK Quiz: preview load failed', error);
+});
+};
 const createPanel = (id) => {
 const block = document.createElement('div');
 block.id = id;
@@ -259,6 +482,19 @@ filters.appendChild(createLink('Все', 0));
 if (settings.questionEnumId) filters.appendChild(createLink('Только вопросы', settings.questionEnumId));
 if (settings.resultEnumId) filters.appendChild(createLink('Только результаты', settings.resultEnumId));
 block.appendChild(filters);
+if (settings.quizCode) {
+const preview = document.createElement('div');
+preview.style.marginTop = '6px';
+preview.style.marginBottom = '6px';
+preview.appendChild(document.createTextNode('Предпросмотр: '));
+const button = document.createElement('button');
+button.type = 'button';
+button.className = 'adm-btn';
+button.textContent = 'Пройти квиз';
+button.addEventListener('click', () => openAdminQuizPreview(settings.quizCode));
+preview.appendChild(button);
+block.appendChild(preview);
+}
 const legend = document.createElement('div');
 legend.textContent = 'Q — вопрос, R — результат. NAME — техническое название для админки. “Заголовок на сайте” — текст, который видит пользователь.';
 block.appendChild(legend);
