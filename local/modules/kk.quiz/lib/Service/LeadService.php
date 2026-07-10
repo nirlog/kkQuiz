@@ -744,7 +744,15 @@ final class LeadService
         foreach ($answers as $questionId => $answerValue) {
             $questionId = (int)$questionId;
             $question = $questionMap[$questionId] ?? null;
-            if (!is_array($question) || $this->isInputQuestion($question)) {
+            if (!is_array($question)) {
+                continue;
+            }
+
+            if ($this->questionPointsToDefaultResult($question, $targetResultId, $targetResultCode)) {
+                return true;
+            }
+
+            if ($this->isInputQuestion($question)) {
                 continue;
             }
 
@@ -765,6 +773,13 @@ final class LeadService
         }
 
         return false;
+    }
+
+    private function questionPointsToDefaultResult(array $question, int $targetResultId, string $targetResultCode): bool
+    {
+        $defaultResultId = (int)($question['default_result_id'] ?? 0);
+
+        return $targetResultId > 0 && $defaultResultId === $targetResultId;
     }
 
     private function answerPointsToResult(array $answer, int $targetResultId, string $targetResultCode): bool

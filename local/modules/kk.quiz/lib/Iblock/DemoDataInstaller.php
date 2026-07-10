@@ -95,8 +95,9 @@ final class DemoDataInstaller
     {
         $ids = [];
         foreach ($rows as $row) {
-            [$code, $name, $preview, $detail, $priority, $badge, $cta] = $row;
-            $ids[$code] = self::createElement($iblockId, $sectionId, ['CODE' => $code, 'NAME' => $name, 'PREVIEW_TEXT' => $preview, 'DETAIL_TEXT' => $detail], ['KK_ENTITY_TYPE' => self::getPropertyEnumId($iblockId, 'KK_ENTITY_TYPE', 'RESULT'), 'KK_RESULT_PRIORITY' => $priority, 'KK_RESULT_BADGE' => $badge, 'KK_RESULT_SHOW_FORM' => self::getPropertyEnumId($iblockId, 'KK_RESULT_SHOW_FORM', 'Y'), 'KK_RESULT_CTA_TEXT' => $cta, 'KK_RESULT_CTA_LINK' => '#']);
+            [$code, $publicTitle, $preview, $detail, $priority, $badge, $cta] = $row;
+            $technicalName = sprintf('%02d. R: %s', (int)$priority, $badge !== '' ? $badge : $publicTitle);
+            $ids[$code] = self::createElement($iblockId, $sectionId, ['CODE' => $code, 'NAME' => $technicalName, 'PREVIEW_TEXT' => $preview, 'DETAIL_TEXT' => $detail], ['KK_ENTITY_TYPE' => self::getPropertyEnumId($iblockId, 'KK_ENTITY_TYPE', 'RESULT'), 'KK_PUBLIC_TITLE' => $publicTitle, 'KK_RESULT_PRIORITY' => $priority, 'KK_RESULT_BADGE' => $badge, 'KK_RESULT_SHOW_FORM' => self::getPropertyEnumId($iblockId, 'KK_RESULT_SHOW_FORM', 'Y'), 'KK_RESULT_CTA_TEXT' => $cta, 'KK_RESULT_CTA_LINK' => '#']);
         }
         return $ids;
     }
@@ -105,10 +106,16 @@ final class DemoDataInstaller
     {
         $ids = [];
         foreach ($rows as $row) {
-            [$code, $name, $sort] = $row;
-            $ids[$code] = self::createElement($iblockId, $sectionId, ['CODE' => $code, 'NAME' => $name, 'SORT' => $sort], ['KK_ENTITY_TYPE' => self::getPropertyEnumId($iblockId, 'KK_ENTITY_TYPE', 'QUESTION'), 'KK_QUESTION_TYPE' => self::getPropertyEnumId($iblockId, 'KK_QUESTION_TYPE', 'radio'), 'KK_DISPLAY_TEMPLATE' => self::getPropertyEnumId($iblockId, 'KK_DISPLAY_TEMPLATE', 'cards'), 'KK_IS_REQUIRED' => self::getPropertyEnumId($iblockId, 'KK_IS_REQUIRED', 'Y')]);
+            [$code, $publicTitle, $sort] = $row;
+            $technicalName = sprintf('%02d. Q: %s', (int)($sort / 100), self::stripQuestionMark($publicTitle));
+            $ids[$code] = self::createElement($iblockId, $sectionId, ['CODE' => $code, 'NAME' => $technicalName, 'SORT' => $sort], ['KK_ENTITY_TYPE' => self::getPropertyEnumId($iblockId, 'KK_ENTITY_TYPE', 'QUESTION'), 'KK_PUBLIC_TITLE' => $publicTitle, 'KK_QUESTION_TYPE' => self::getPropertyEnumId($iblockId, 'KK_QUESTION_TYPE', 'radio'), 'KK_DISPLAY_TEMPLATE' => self::getPropertyEnumId($iblockId, 'KK_DISPLAY_TEMPLATE', 'cards'), 'KK_IS_REQUIRED' => self::getPropertyEnumId($iblockId, 'KK_IS_REQUIRED', 'Y')]);
         }
         return $ids;
+    }
+
+    private static function stripQuestionMark(string $title): string
+    {
+        return rtrim($title, "?？ ");
     }
 
     private static function answer(string $text, string $code, string $description, int $sort, ?int $nextQuestionId = null, ?int $resultId = null): array
