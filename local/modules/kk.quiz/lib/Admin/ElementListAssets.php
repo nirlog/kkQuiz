@@ -283,6 +283,76 @@ diagnosticsBlock.appendChild(line);
 });
 block.appendChild(diagnosticsBlock);
 }
+const graph = diagnostics && diagnostics.graph ? diagnostics.graph : null;
+if (graph && Array.isArray(graph.nodes) && graph.nodes.length > 0) {
+const maxNodes = 40;
+const visibleNodes = graph.nodes.slice(0, maxNodes);
+const nodeMap = new Map(graph.nodes.map((node) => [String(node.id), node]));
+const graphBlock = document.createElement('div');
+graphBlock.style.marginTop = '8px';
+graphBlock.style.paddingTop = '8px';
+graphBlock.style.borderTop = '1px solid #d6d6d6';
+const graphTitle = document.createElement('div');
+graphTitle.textContent = 'KK Quiz — схема';
+graphTitle.style.fontWeight = 'bold';
+graphTitle.style.marginBottom = '6px';
+graphBlock.appendChild(graphTitle);
+if (graph.nodes.length > maxNodes) {
+const truncated = document.createElement('div');
+truncated.textContent = 'Схема сокращена: показаны первые 40 элементов.';
+truncated.style.color = '#6b4e00';
+truncated.style.marginBottom = '6px';
+graphBlock.appendChild(truncated);
+}
+const createBadge = (type) => {
+const badge = document.createElement('span');
+badge.textContent = type === 'result' ? 'R' : 'Q';
+badge.style.display = 'inline-block';
+badge.style.minWidth = '18px';
+badge.style.marginRight = '6px';
+badge.style.padding = '1px 4px';
+badge.style.borderRadius = '3px';
+badge.style.textAlign = 'center';
+badge.style.fontWeight = 'bold';
+badge.style.background = type === 'result' ? '#e5f6e5' : '#e8eef8';
+badge.style.color = type === 'result' ? '#267000' : '#245493';
+return badge;
+};
+const edgesByFrom = new Map();
+(graph.edges || []).forEach((edge) => {
+const key = String(edge.from);
+if (!edgesByFrom.has(key)) edgesByFrom.set(key, []);
+edgesByFrom.get(key).push(edge);
+});
+visibleNodes.forEach((node) => {
+const nodeBlock = document.createElement('div');
+nodeBlock.style.margin = '7px 0';
+nodeBlock.style.opacity = node.is_reachable === false ? '0.55' : '1';
+const nodeLine = document.createElement('div');
+nodeLine.appendChild(createBadge(node.type));
+const title = document.createElement('span');
+title.textContent = (node.is_start ? '★ ' : '') + String(node.title || ('ID ' + node.id));
+title.style.fontWeight = node.type === 'question' ? 'bold' : 'normal';
+nodeLine.appendChild(title);
+nodeBlock.appendChild(nodeLine);
+(edgesByFrom.get(String(node.id)) || []).forEach((edge, index, list) => {
+const edgeLine = document.createElement('div');
+edgeLine.style.marginLeft = '26px';
+edgeLine.style.color = edge.is_broken ? '#a40000' : '#555';
+const target = nodeMap.get(String(edge.to));
+const targetType = edge.to_type || (target ? target.type : 'question');
+const prefix = index === list.length - 1 ? '└─ ' : '├─ ';
+edgeLine.appendChild(document.createTextNode(prefix + String(edge.label || 'Ответ') + ' → '));
+edgeLine.appendChild(createBadge(targetType));
+const targetTitle = document.createElement('span');
+targetTitle.textContent = edge.is_broken ? String(edge.to_title || ('ID ' + edge.to + ' не найден')) : String(edge.to_title || (target ? target.title : ('ID ' + edge.to)));
+edgeLine.appendChild(targetTitle);
+nodeBlock.appendChild(edgeLine);
+});
+graphBlock.appendChild(nodeBlock);
+});
+block.appendChild(graphBlock);
+}
 return block;
 };
 const refreshElementListHelp = () => {

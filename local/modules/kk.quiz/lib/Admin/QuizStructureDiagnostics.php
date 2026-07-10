@@ -39,6 +39,7 @@ final class QuizStructureDiagnostics
 
         $questionEdges = [];
         $usedResultIds = [];
+        $graphEdges = [];
 
         foreach ($questions as $questionId => $question) {
             $transitionQuestionIds = [];
@@ -50,11 +51,13 @@ final class QuizStructureDiagnostics
             }
 
             foreach ($question['answers'] as $answer) {
+                $label = self::getAnswerLabel($answer);
                 foreach (['next_question_id'] as $field) {
                     $id = self::toPositiveInt($answer[$field] ?? null);
                     if ($id > 0) {
                         $hasTransition = true;
                         $transitionQuestionIds[] = $id;
+                        $graphEdges[] = self::buildEdge($questionId, $id, 'question', $label, 'answer', $questions, $results);
                     }
                 }
 
@@ -63,6 +66,7 @@ final class QuizStructureDiagnostics
                     if ($id > 0) {
                         $hasTransition = true;
                         $transitionResultIds[] = $id;
+                        $graphEdges[] = self::buildEdge($questionId, $id, 'result', $label, 'answer_result', $questions, $results);
                     }
                 }
             }
@@ -70,11 +74,13 @@ final class QuizStructureDiagnostics
             if ($question['default_next_question_id'] > 0) {
                 $hasTransition = true;
                 $transitionQuestionIds[] = $question['default_next_question_id'];
+                $graphEdges[] = self::buildEdge($questionId, $question['default_next_question_id'], 'question', 'По умолчанию', 'default_next', $questions, $results);
             }
 
             if ($question['default_result_id'] > 0) {
                 $hasTransition = true;
                 $transitionResultIds[] = $question['default_result_id'];
+                $graphEdges[] = self::buildEdge($questionId, $question['default_result_id'], 'result', 'Финальный результат по умолчанию', 'default_result', $questions, $results);
             }
 
             if (!$hasTransition) {
@@ -101,6 +107,7 @@ final class QuizStructureDiagnostics
             }
         }
 
+        $reachableQuestionIds = [];
         if (is_array($startQuestion)) {
             $reachableQuestionIds = self::collectReachableQuestionIds((int)$startQuestion['id'], $questionEdges);
             foreach ($questions as $questionId => $question) {
@@ -123,6 +130,7 @@ final class QuizStructureDiagnostics
                 'start_question_title' => is_array($startQuestion) ? $startQuestion['title'] : '',
             ],
             'items' => $messages,
+            'graph' => self::buildGraph($questions, $results, $graphEdges, is_array($startQuestion) ? (int)$startQuestion['id'] : 0, $reachableQuestionIds, $usedResultIds),
         ];
     }
 
@@ -135,6 +143,10 @@ final class QuizStructureDiagnostics
                 'start_question_title' => '',
             ],
             'items' => [],
+            'graph' => [
+                'nodes' => [],
+                'edges' => [],
+            ],
         ];
     }
 
@@ -173,6 +185,7 @@ final class QuizStructureDiagnostics
             $items[] = [
                 'id' => (int)$fields['ID'],
                 'title' => $adminName !== '' ? $adminName : ($publicTitle !== '' ? $publicTitle : 'ID ' . (int)$fields['ID']),
+                'sort' => (int)($fields['SORT'] ?? 0),
                 'entity_type' => $entityType,
                 'answers' => $answersData['answers'],
                 'answers_invalid' => $answersData['invalid'],
@@ -182,6 +195,80 @@ final class QuizStructureDiagnostics
         }
 
         return $items;
+    }
+
+
+    private static function buildGraph(
+        array $questions,
+        array $results,
+        array $edges,
+        int $startQuestionId,
+        array $reachableQuestionIds,
+        array $usedResultIds
+    ): array {
+        $nodes = [];
+
+        foreach ($questions as $questionId => $question) {
+            $nodes[] = [
+                'id' => $questionId,
+                'type' => 'question',
+                'title' => $question['title'],
+                'sort' => (int)($question['sort'] ?? 0),
+                'is_start' => $questionId === $startQuestionId,
+                'is_reachable' => isset($reachableQuestionIds[$questionId]),
+            ];
+        }
+
+        foreach ($results as $resultId => $result) {
+            $nodes[] = [
+                'id' => $resultId,
+                'type' => 'result',
+                'title' => $result['title'],
+                'sort' => (int)($result['sort'] ?? 0),
+                'is_start' => false,
+                'is_reachable' => isset($usedResultIds[$resultId]),
+            ];
+        }
+
+        return [
+            'nodes' => $nodes,
+            'edges' => $edges,
+        ];
+    }
+
+    private static function buildEdge(
+        int $fromQuestionId,
+        int $targetId,
+        string $targetType,
+        string $label,
+        string $kind,
+        array $questions,
+        array $results
+    ): array {
+        $targetMap = $targetType === 'question' ? $questions : $results;
+        $isBroken = !isset($targetMap[$targetId]);
+
+        return [
+            'from' => $fromQuestionId,
+            'to' => $targetId,
+            'to_type' => $targetType,
+            'to_title' => $isBroken ? 'ID ' . $targetId . ' не найден' : (string)$targetMap[$targetId]['title'],
+            'label' => $label !== '' ? $label : 'Ответ',
+            'kind' => $kind,
+            'is_broken' => $isBroken,
+        ];
+    }
+
+    private static function getAnswerLabel(array $answer): string
+    {
+        $text = $answer['text'] ?? $answer['TEXT'] ?? '';
+        if (is_array($text)) {
+            $text = reset($text);
+        }
+
+        $text = is_scalar($text) ? trim((string)$text) : '';
+
+        return $text !== '' ? $text : 'Ответ';
     }
 
     private static function decodeAnswers(mixed $value): array
