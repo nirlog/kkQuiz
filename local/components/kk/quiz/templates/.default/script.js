@@ -10,8 +10,8 @@
     };
 
     const INPUT_TYPES = ['text', 'textarea', 'phone', 'email'];
-    const OPTION_TYPES = ['radio', 'select'];
-    const TEMPLATE_NAMES = ['image_cards', 'cards', 'list'];
+    const OPTION_TYPES = ['radio'];
+    const TEMPLATE_NAMES = ['image_cards', 'cards', 'list', 'select'];
     const loadedQuizzes = new Map();
     const loadingQuizzes = new Map();
 
@@ -108,6 +108,9 @@
 
     const getQuestionType = (question) => {
         const type = String(question.question_type || 'radio').toLowerCase();
+        if (type === 'select') {
+            return 'radio';
+        }
         return [...OPTION_TYPES, 'checkbox', ...INPUT_TYPES].includes(type) ? type : 'radio';
     };
 
@@ -997,18 +1000,64 @@
         nodes.question.appendChild(create('h3', 'kk-quiz__question-title', question.name));
         appendTextBlock(nodes.question, 'kk-quiz__question-hint', question.hint);
 
-        if (OPTION_TYPES.includes(type)) {
+        if (type === 'radio') {
+            if (template === 'select') {
+                renderSelectChoice(nodes, quiz, state, question);
+                return;
+            }
+
             renderSingleChoice(nodes, quiz, state, question, template);
             return;
         }
 
         if (type === 'checkbox') {
-            renderCheckboxes(nodes, quiz, state, question, template);
+            renderCheckboxes(nodes, quiz, state, question, template === 'select' ? 'list' : template);
             return;
         }
 
         renderInputQuestion(nodes, quiz, state, question, type);
     }
+
+    const renderSelectChoice = (nodes, quiz, state, question) => {
+        const wrapper = create('div', 'kk-quiz__select-wrap');
+
+        const select = document.createElement('select');
+        select.className = 'kk-quiz__input';
+        select.required = question.is_required === true;
+
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = 'Выберите вариант';
+        placeholder.disabled = true;
+        placeholder.selected = true;
+        select.appendChild(placeholder);
+
+        toArray(question.answers).forEach((answer, index) => {
+            const option = document.createElement('option');
+            option.value = String(index);
+            option.textContent = String(answer.text || '');
+            select.appendChild(option);
+        });
+
+        const next = create('button', 'kk-quiz__button kk-quiz__button--next', 'Далее');
+        next.type = 'button';
+
+        next.addEventListener('click', () => {
+            const index = Number.parseInt(select.value, 10);
+            if (!Number.isInteger(index) || !question.answers[index]) {
+                select.focus();
+                return;
+            }
+
+            const answer = question.answers[index];
+            state.answers[question.id] = buildAnswerPayload(answer, index);
+            goNext(nodes, quiz, state, question, answer);
+        });
+
+        wrapper.appendChild(select);
+        nodes.question.appendChild(wrapper);
+        nodes.question.appendChild(next);
+    };
 
     const renderSingleChoice = (nodes, quiz, state, question, template) => {
         const answers = create('div', 'kk-quiz__answers kk-quiz__answers--' + template);

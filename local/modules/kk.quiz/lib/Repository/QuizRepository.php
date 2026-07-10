@@ -208,19 +208,56 @@ final class QuizRepository
 
     private function mapQuestion(array $element, array $properties): array
     {
+        $rawQuestionType = $this->getElementPropertyEnumXmlId($properties, 'KK_QUESTION_TYPE');
+        $questionType = $this->normalizeQuestionType($rawQuestionType);
+        $displayTemplate = $this->normalizeDisplayTemplate(
+            $this->getElementPropertyEnumXmlId($properties, 'KK_DISPLAY_TEMPLATE'),
+            $questionType,
+            $rawQuestionType
+        );
+
         return [
             'id' => (int)$element['ID'],
             'code' => (string)($element['CODE'] ?? ''),
             'name' => (string)($element['NAME'] ?? ''),
             'hint' => (string)($element['PREVIEW_TEXT'] ?? ''),
             'sort' => (int)($element['SORT'] ?? 0),
-            'question_type' => $this->getElementPropertyEnumXmlId($properties, 'KK_QUESTION_TYPE'),
-            'display_template' => $this->getElementPropertyEnumXmlId($properties, 'KK_DISPLAY_TEMPLATE'),
+            'question_type' => $questionType,
+            'display_template' => $displayTemplate,
             'is_required' => $this->toBool($this->getElementPropertyEnumXmlId($properties, 'KK_IS_REQUIRED')),
             'placeholder' => (string)$this->getElementPropertyValue($properties, 'KK_PLACEHOLDER'),
             'default_next_question_id' => $this->toNullableInt($this->getElementPropertyValue($properties, 'KK_DEFAULT_NEXT_QUESTION')),
             'answers' => $this->normalizeAnswers($this->getElementPropertyValue($properties, 'KK_ANSWERS')),
         ];
+    }
+
+    private function normalizeQuestionType(?string $questionType): string
+    {
+        $questionType = strtolower(trim((string)$questionType));
+
+        return in_array($questionType, ['radio', 'checkbox', 'text', 'textarea', 'phone', 'email'], true)
+            ? $questionType
+            : 'radio';
+    }
+
+    private function normalizeDisplayTemplate(?string $displayTemplate, string $questionType, ?string $rawQuestionType = null): string
+    {
+        $displayTemplate = strtolower(trim((string)$displayTemplate));
+        $rawQuestionType = strtolower(trim((string)$rawQuestionType));
+
+        if ($rawQuestionType === 'select') {
+            return 'select';
+        }
+
+        if ($questionType === 'radio') {
+            return in_array($displayTemplate, ['list', 'cards', 'image_cards', 'select'], true) ? $displayTemplate : 'list';
+        }
+
+        if ($questionType === 'checkbox') {
+            return in_array($displayTemplate, ['list', 'cards', 'image_cards'], true) ? $displayTemplate : 'list';
+        }
+
+        return '';
     }
 
     private function mapResult(array $element, array $properties): array
