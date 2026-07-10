@@ -216,10 +216,16 @@ final class QuizRepository
             $rawQuestionType
         );
 
+        $adminName = (string)($element['NAME'] ?? '');
+        $publicTitle = trim((string)$this->getElementPropertyValue($properties, 'KK_PUBLIC_TITLE'));
+        $title = $publicTitle !== '' ? $publicTitle : $adminName;
+
         return [
             'id' => (int)$element['ID'],
             'code' => (string)($element['CODE'] ?? ''),
-            'name' => (string)($element['NAME'] ?? ''),
+            'name' => $title,
+            'public_title' => $publicTitle,
+            'admin_name' => $adminName,
             'hint' => (string)($element['PREVIEW_TEXT'] ?? ''),
             'sort' => (int)($element['SORT'] ?? 0),
             'question_type' => $questionType,
@@ -227,6 +233,8 @@ final class QuizRepository
             'is_required' => $this->toBool($this->getElementPropertyEnumXmlId($properties, 'KK_IS_REQUIRED')),
             'placeholder' => (string)$this->getElementPropertyValue($properties, 'KK_PLACEHOLDER'),
             'default_next_question_id' => $this->toNullableInt($this->getElementPropertyValue($properties, 'KK_DEFAULT_NEXT_QUESTION')),
+            'default_result_id' => $this->toNullableInt($this->getElementPropertyValue($properties, 'KK_DEFAULT_RESULT')),
+            'allow_custom_answer' => $this->toBool($this->getElementPropertyEnumXmlId($properties, 'KK_ALLOW_CUSTOM_ANSWER')),
             'answers' => $this->normalizeAnswers($this->getElementPropertyValue($properties, 'KK_ANSWERS')),
         ];
     }
@@ -264,10 +272,16 @@ final class QuizRepository
     {
         $pictureId = $this->toNullableInt($element['PREVIEW_PICTURE'] ?? null) ?? $this->toNullableInt($element['DETAIL_PICTURE'] ?? null);
 
+        $adminName = (string)($element['NAME'] ?? '');
+        $publicTitle = trim((string)$this->getElementPropertyValue($properties, 'KK_PUBLIC_TITLE'));
+        $title = $publicTitle !== '' ? $publicTitle : $adminName;
+
         return [
             'id' => (int)$element['ID'],
             'code' => (string)($element['CODE'] ?? ''),
-            'name' => (string)($element['NAME'] ?? ''),
+            'name' => $title,
+            'public_title' => $publicTitle,
+            'admin_name' => $adminName,
             'preview_text' => (string)($element['PREVIEW_TEXT'] ?? ''),
             'detail_text' => (string)($element['DETAIL_TEXT'] ?? ''),
             'picture_id' => $pictureId,
