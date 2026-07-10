@@ -1068,7 +1068,12 @@
         input.className = 'kk-quiz__input';
         input.required = question.is_required === true;
         input.placeholder = String(question.placeholder || '');
-        input.type = type === 'phone' ? 'tel' : type === 'email' ? 'email' : 'text';
+        if (input.tagName === 'INPUT') {
+            input.type = type === 'phone' ? 'tel' : type === 'email' ? 'email' : 'text';
+        }
+        if (type === 'textarea') {
+            input.rows = 4;
+        }
         label.appendChild(input);
 
         const next = create('button', 'kk-quiz__button kk-quiz__button--next', 'Далее');
