@@ -278,6 +278,18 @@ badge.style.background = type === 'result' ? '#e5f6e5' : '#e8eef8';
 badge.style.color = type === 'result' ? '#267000' : '#245493';
 return badge;
 };
+const appendEditLink = (line, node) => {
+if (!node || !node.edit_url) return;
+const link = document.createElement('a');
+link.href = String(node.edit_url);
+link.textContent = ' ✎';
+link.title = 'Редактировать элемент';
+link.target = '_blank';
+link.rel = 'noopener noreferrer';
+link.style.marginLeft = '4px';
+link.style.textDecoration = 'none';
+line.appendChild(link);
+};
 const appendDiagnosticsSection = (block, diagnostics) => {
 if (!diagnostics || !Array.isArray(diagnostics.items) || diagnostics.items.length === 0) return;
 const diagnosticsBlock = document.createElement('div');
@@ -324,6 +336,7 @@ const title = document.createElement('span');
 title.textContent = (node.is_start ? '★ ' : '') + String(node.title || ('ID ' + node.id));
 title.style.fontWeight = node.type === 'question' ? 'bold' : 'normal';
 line.appendChild(title);
+appendEditLink(line, node);
 return line;
 };
 const renderFlowBranch = (node, depth, visited) => {
@@ -375,7 +388,10 @@ return;
 const target = nodeMap.get(String(edge.to));
 if (!target) return;
 edgeLine.appendChild(createBadge(edge.to_type || target.type));
-edgeLine.appendChild(document.createTextNode(String(edge.to_title || target.title || ('ID ' + edge.to))));
+const targetTitle = document.createElement('span');
+targetTitle.textContent = String(edge.to_title || target.title || ('ID ' + edge.to));
+edgeLine.appendChild(targetTitle);
+appendEditLink(edgeLine, target);
 container.appendChild(edgeLine);
 if (renderedNodes < maxNodes) {
 container.appendChild(renderFlowBranch(target, depth + 1, nextVisited));
@@ -399,7 +415,10 @@ const line = document.createElement('div');
 line.style.opacity = '0.55';
 line.style.margin = '4px 0';
 line.appendChild(createBadge(node.type));
-line.appendChild(document.createTextNode(String(node.title || ('ID ' + node.id))));
+const itemTitle = document.createElement('span');
+itemTitle.textContent = String(node.title || ('ID ' + node.id));
+line.appendChild(itemTitle);
+appendEditLink(line, node);
 graphBlock.appendChild(line);
 });
 }

@@ -130,7 +130,7 @@ final class QuizStructureDiagnostics
                 'start_question_title' => is_array($startQuestion) ? $startQuestion['title'] : '',
             ],
             'items' => $messages,
-            'graph' => self::buildGraph($questions, $results, $graphEdges, is_array($startQuestion) ? (int)$startQuestion['id'] : 0, $reachableQuestionIds, $usedResultIds),
+            'graph' => self::buildGraph($iblockId, $sectionId, $questions, $results, $graphEdges, is_array($startQuestion) ? (int)$startQuestion['id'] : 0, $reachableQuestionIds, $usedResultIds),
         ];
     }
 
@@ -199,6 +199,8 @@ final class QuizStructureDiagnostics
 
 
     private static function buildGraph(
+        int $iblockId,
+        int $sectionId,
         array $questions,
         array $results,
         array $edges,
@@ -214,6 +216,7 @@ final class QuizStructureDiagnostics
                 'type' => 'question',
                 'title' => $question['title'],
                 'sort' => (int)($question['sort'] ?? 0),
+                'edit_url' => self::buildElementEditUrl($questionId, $iblockId, $sectionId),
                 'is_start' => $questionId === $startQuestionId,
                 'is_reachable' => isset($reachableQuestionIds[$questionId]),
             ];
@@ -225,6 +228,7 @@ final class QuizStructureDiagnostics
                 'type' => 'result',
                 'title' => $result['title'],
                 'sort' => (int)($result['sort'] ?? 0),
+                'edit_url' => self::buildElementEditUrl($resultId, $iblockId, $sectionId),
                 'is_start' => false,
                 'is_reachable' => isset($usedResultIds[$resultId]),
             ];
@@ -234,6 +238,28 @@ final class QuizStructureDiagnostics
             'nodes' => $nodes,
             'edges' => $edges,
         ];
+    }
+
+
+    private static function buildElementEditUrl(int $elementId, int $iblockId, int $sectionId): string
+    {
+        if ($elementId <= 0 || $iblockId <= 0) {
+            return '';
+        }
+
+        $params = [
+            'IBLOCK_ID' => $iblockId,
+            'type' => \Kk\Quiz\Iblock\Installer::IBLOCK_TYPE_ID,
+            'ID' => $elementId,
+            'lang' => defined('LANGUAGE_ID') ? LANGUAGE_ID : 'ru',
+        ];
+
+        if ($sectionId > 0) {
+            $params['find_section_section'] = $sectionId;
+            $params['SECTION_ID'] = $sectionId;
+        }
+
+        return '/bitrix/admin/iblock_element_edit.php?' . http_build_query($params);
     }
 
     private static function buildEdge(
