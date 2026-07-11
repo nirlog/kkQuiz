@@ -835,6 +835,49 @@ renderHeader();
 container.appendChild(document.createTextNode('В квизе нет вопросов.'));
 }
 };
+const exportQuizJson = (quizCode, button) => {
+const originalText = button.textContent;
+button.disabled = true;
+button.textContent = 'Экспорт...';
+fetch(getAdminQuizAjaxUrl('kk:quiz.api.exportQuiz'), {
+method: 'POST',
+credentials: 'same-origin',
+headers: {
+'Content-Type': 'application/json'
+},
+body: JSON.stringify({ quizCode })
+})
+.then((response) => response.json())
+.then((response) => {
+const data = response && response.data ? response.data : response;
+const exportData = data && data.export ? data.export : null;
+if (!data || data.success !== true || !exportData) {
+console.warn('KK Quiz: export failed', response);
+throw new Error('EXPORT_FAILED');
+}
+const filename = data.filename || ('kk-quiz-' + quizCode + '.json');
+const blob = new Blob(
+[JSON.stringify(exportData, null, 2)],
+{ type: 'application/json;charset=utf-8' }
+);
+const url = URL.createObjectURL(blob);
+const link = document.createElement('a');
+link.href = url;
+link.download = filename;
+document.body.appendChild(link);
+link.click();
+link.remove();
+setTimeout(() => URL.revokeObjectURL(url), 1000);
+})
+.catch((error) => {
+console.warn('KK Quiz: export failed', { quizCode, error });
+alert('Не удалось экспортировать квиз. Подробности в консоли.');
+})
+.finally(() => {
+button.disabled = false;
+button.textContent = originalText;
+});
+};
 const openAdminQuizPreview = (quizCode) => {
 const modal = ensurePreviewModal();
 const content = modal.querySelector('.kk-quiz-admin-preview-content');
@@ -885,6 +928,17 @@ button.textContent = 'Пройти квиз';
 button.addEventListener('click', () => openAdminQuizPreview(settings.quizCode));
 preview.appendChild(button);
 block.appendChild(preview);
+const exportBlock = document.createElement('div');
+exportBlock.style.marginTop = '6px';
+exportBlock.style.marginBottom = '6px';
+exportBlock.appendChild(document.createTextNode('Экспорт: '));
+const exportButton = document.createElement('button');
+exportButton.type = 'button';
+exportButton.className = 'adm-btn';
+exportButton.textContent = 'Экспорт JSON';
+exportButton.addEventListener('click', () => exportQuizJson(settings.quizCode, exportButton));
+exportBlock.appendChild(exportButton);
+block.appendChild(exportBlock);
 }
 const legend = document.createElement('div');
 legend.textContent = 'Q — вопрос, R — результат. NAME — техническое название для админки. “Заголовок на сайте” — текст, который видит пользователь.';
