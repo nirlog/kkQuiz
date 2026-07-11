@@ -21,6 +21,9 @@ final class Api extends Controller
             'getQuiz' => [
                 'prefilters' => [new Csrf()],
             ],
+            'exportQuiz' => [
+                'prefilters' => [new Csrf()],
+            ],
         ];
     }
 
@@ -53,6 +56,47 @@ final class Api extends Controller
         ];
     }
 
+    public function exportQuizAction(string $quizCode = ''): array
+    {
+        if (!$this->isAdminAllowed()) {
+            return [
+                'success' => false,
+                'errors' => ['ACCESS_DENIED'],
+            ];
+        }
+
+        $quizCode = $this->normalizeQuizCodeFromRequest($quizCode);
+
+        if ($quizCode === '' || !preg_match('/^[a-zA-Z0-9_-]+$/', $quizCode)) {
+            return [
+                'success' => false,
+                'errors' => ['INVALID_QUIZ_CODE'],
+            ];
+        }
+
+        try {
+            $export = (new \Kk\Quiz\Service\QuizExportService())->exportByCode($quizCode);
+        } catch (\Throwable $exception) {
+            return [
+                'success' => false,
+                'errors' => [$exception->getMessage() !== '' ? $exception->getMessage() : 'EXPORT_FAILED'],
+            ];
+        }
+
+        if (!is_array($export)) {
+            return [
+                'success' => false,
+                'errors' => ['QUIZ_NOT_FOUND'],
+            ];
+        }
+
+        return [
+            'success' => true,
+            'filename' => 'kk-quiz-' . $quizCode . '.json',
+            'export' => $export,
+        ];
+    }
+
     public function submitLeadAction(): array
     {
         try {
@@ -65,6 +109,13 @@ final class Api extends Controller
                 'errors' => [$exception->getMessage() !== '' ? $exception->getMessage() : 'Не удалось сохранить заявку'],
             ];
         }
+    }
+
+    private function isAdminAllowed(): bool
+    {
+        global $USER;
+
+        return is_object($USER) && method_exists($USER, 'IsAdmin') && $USER->IsAdmin();
     }
 
     private function normalizeQuizCodeFromRequest(string $quizCode): string
