@@ -24,6 +24,9 @@ final class Api extends Controller
             'exportQuiz' => [
                 'prefilters' => [new Csrf()],
             ],
+            'importQuiz' => [
+                'prefilters' => [new Csrf()],
+            ],
         ];
     }
 
@@ -97,6 +100,31 @@ final class Api extends Controller
         ];
     }
 
+    public function importQuizAction(): array
+    {
+        if (!$this->isAdminAllowed()) {
+            return [
+                'success' => false,
+                'errors' => ['ACCESS_DENIED'],
+            ];
+        }
+
+        try {
+            $payload = $this->getImportPayloadFromRequest();
+            $result = (new \Kk\Quiz\Service\QuizImportService())->import($payload);
+
+            return [
+                'success' => true,
+                'import' => $result,
+            ];
+        } catch (\Throwable $exception) {
+            return [
+                'success' => false,
+                'errors' => [$exception->getMessage() !== '' ? $exception->getMessage() : 'IMPORT_FAILED'],
+            ];
+        }
+    }
+
     public function submitLeadAction(): array
     {
         try {
@@ -149,6 +177,38 @@ final class Api extends Controller
         }
 
         return is_array($decoded) ? trim((string)($decoded['quizCode'] ?? '')) : '';
+    }
+
+    private function getImportPayloadFromRequest(): array
+    {
+        $request = $this->getRequest();
+
+        $postPayload = $request->getPost('export');
+        if (is_array($postPayload)) {
+            return $postPayload;
+        }
+
+        $input = method_exists($request, 'getInput')
+            ? (string)$request->getInput()
+            : (string)file_get_contents('php://input');
+
+        if (trim($input) === '') {
+            return [];
+        }
+
+        try {
+            $decoded = Json::decode($input);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $payload = $decoded['export'] ?? $decoded['payload'] ?? $decoded;
+
+        return is_array($payload) ? $payload : [];
     }
 
     private function getPayloadFromRequest(): array
