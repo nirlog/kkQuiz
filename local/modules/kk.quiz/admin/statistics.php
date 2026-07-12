@@ -25,12 +25,63 @@ if (!is_object($USER) || !$USER->IsAuthorized() || !$USER->IsAdmin()) {
     return;
 }
 
+$getRequestValue = static fn (string $key): string => trim((string)($_GET[$key] ?? ''));
+$allowedPeriods = ['today', '7d', '30d', 'all', 'custom'];
+$period = $getRequestValue('period') ?: '30d';
+if (!in_array($period, $allowedPeriods, true)) {
+    $period = '30d';
+}
+
+$validateDate = static function (string $value): string {
+    if ($value === '' || preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) !== 1) {
+        return '';
+    }
+
+    [$year, $month, $day] = array_map('intval', explode('-', $value));
+
+    return checkdate($month, $day, $year) ? $value : '';
+};
+
+$customDateFrom = $validateDate($getRequestValue('date_from'));
+$customDateTo = $validateDate($getRequestValue('date_to'));
+$dateFrom = null;
+$dateTo = null;
+$today = date('Y-m-d');
+
+switch ($period) {
+    case 'today':
+        $dateFrom = $today;
+        $dateTo = $today;
+        break;
+    case '7d':
+        $dateFrom = date('Y-m-d', strtotime('-7 days') ?: time());
+        $dateTo = $today;
+        break;
+    case 'all':
+        break;
+    case 'custom':
+        $dateFrom = $customDateFrom !== '' ? $customDateFrom : null;
+        $dateTo = $customDateTo !== '' ? $customDateTo : null;
+        break;
+    case '30d':
+    default:
+        $period = '30d';
+        $dateFrom = date('Y-m-d', strtotime('-30 days') ?: time());
+        $dateTo = $today;
+        break;
+}
+
 try {
-    $summary = (new QuizStatisticsService())->getSummary();
+    $summary = (new QuizStatisticsService())->getSummary([
+        'date_from' => $dateFrom,
+        'date_to' => $dateTo,
+    ]);
     $error = '';
 } catch (\Throwable $exception) {
     $summary = [
         'totals' => ['all' => 0, 'today' => 0, 'last_7_days' => 0, 'last_30_days' => 0],
+        'period' => ['date_from' => '', 'date_to' => '', 'label' => ''],
+        'period_total' => 0,
         'by_quiz' => [],
         'by_result' => [],
         'recent' => [],
@@ -43,13 +94,17 @@ try {
 require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_after.php');
 
 $escape = static fn (mixed $value): string => htmlspecialcharsbx((string)$value);
+$lang = defined('LANGUAGE_ID') ? (string)LANGUAGE_ID : 'ru';
+$periodUrl = static fn (string $value): string => '/bitrix/admin/kk_quiz_statistics.php?' . http_build_query(['lang' => $lang, 'period' => $value]);
 $totals = is_array($summary['totals'] ?? null) ? $summary['totals'] : [];
 $cards = [
     'Всего заявок' => (int)($totals['all'] ?? 0),
     'Сегодня' => (int)($totals['today'] ?? 0),
     '7 дней' => (int)($totals['last_7_days'] ?? 0),
     '30 дней' => (int)($totals['last_30_days'] ?? 0),
+    'За выбранный период' => (int)($summary['period_total'] ?? 0),
 ];
+$periodLabel = (string)($summary['period']['label'] ?? '');
 ?>
 <style>
 .kk-quiz-stat-cards{display:flex;flex-wrap:wrap;gap:12px;margin:12px 0 18px;}
@@ -59,6 +114,10 @@ $cards = [
 .kk-quiz-stat-section{margin-top:22px;}
 .kk-quiz-stat-actions{margin:10px 0 16px;}
 .kk-quiz-stat-empty{padding:12px;color:#777;background:#fff;border:1px solid #d6d6d6;}
+.kk-quiz-stat-filter{padding:12px;margin:12px 0 16px;border:1px solid #d6d6d6;background:#fff;border-radius:6px;}
+.kk-quiz-stat-filter__presets{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;}
+.kk-quiz-stat-filter form{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+.kk-quiz-stat-period-label{margin:-6px 0 18px;color:#555;}
 </style>
 
 <?php if ($error !== ''): ?>
@@ -68,6 +127,22 @@ $cards = [
 <?php foreach ((array)($summary['warnings'] ?? []) as $warning): ?>
     <div class="adm-info-message-wrap"><div class="adm-info-message"><?= $escape($warning) ?></div></div>
 <?php endforeach; ?>
+
+<div class="kk-quiz-stat-filter">
+    <div class="kk-quiz-stat-filter__presets">
+        <strong>Период:</strong>
+        <?php foreach (['today' => 'Сегодня', '7d' => '7 дней', '30d' => '30 дней', 'all' => 'Всё время'] as $periodValue => $periodText): ?>
+            <a class="<?= $period === $periodValue ? 'adm-btn-save' : 'adm-btn' ?>" href="<?= $escape($periodUrl($periodValue)) ?>"><?= $escape($periodText) ?></a>
+        <?php endforeach; ?>
+    </div>
+    <form method="get" action="/bitrix/admin/kk_quiz_statistics.php">
+        <input type="hidden" name="lang" value="<?= $escape($lang) ?>">
+        <input type="hidden" name="period" value="custom">
+        <label>С: <input type="date" name="date_from" value="<?= $escape($customDateFrom) ?>"></label>
+        <label>По: <input type="date" name="date_to" value="<?= $escape($customDateTo) ?>"></label>
+        <button type="submit" class="<?= $period === 'custom' ? 'adm-btn-save' : 'adm-btn' ?>">Показать</button>
+    </form>
+</div>
 
 <div class="kk-quiz-stat-actions">
     <?php if ((string)($summary['leads_admin_url'] ?? '') !== ''): ?>
@@ -84,8 +159,10 @@ $cards = [
     <?php endforeach; ?>
 </div>
 
+<div class="kk-quiz-stat-period-label">Период таблиц: <?= $escape($periodLabel !== '' ? $periodLabel : 'всё время') ?></div>
+
 <div class="kk-quiz-stat-section">
-    <h2>По квизам</h2>
+    <h2>По квизам за выбранный период</h2>
     <?php if ((array)($summary['by_quiz'] ?? []) === []): ?>
         <div class="kk-quiz-stat-empty">Нет данных.</div>
     <?php else: ?>
@@ -115,7 +192,7 @@ $cards = [
 </div>
 
 <div class="kk-quiz-stat-section">
-    <h2>По результатам</h2>
+    <h2>По результатам за выбранный период</h2>
     <?php if ((array)($summary['by_result'] ?? []) === []): ?>
         <div class="kk-quiz-stat-empty">Нет данных.</div>
     <?php else: ?>
@@ -143,7 +220,7 @@ $cards = [
 </div>
 
 <div class="kk-quiz-stat-section">
-    <h2>Последние заявки</h2>
+    <h2>Последние заявки за выбранный период</h2>
     <?php if ((array)($summary['recent'] ?? []) === []): ?>
         <div class="kk-quiz-stat-empty">Нет данных.</div>
     <?php else: ?>

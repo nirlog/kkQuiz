@@ -12,7 +12,7 @@ final class QuizStatisticsService
     private const LIMIT = 10000;
     private const RECENT_LIMIT = 20;
 
-    public function getSummary(array $filter = []): array
+    public function getSummary(array $options = []): array
     {
         if (!Loader::includeModule('iblock')) {
             throw new \RuntimeException('LEADS_IBLOCK_NOT_FOUND');
@@ -23,24 +23,57 @@ final class QuizStatisticsService
             throw new \RuntimeException('LEADS_IBLOCK_NOT_FOUND');
         }
 
-        $leadsAdminUrl = $this->buildLeadListUrl($iblockId);
-        $summary = [
-            'totals' => [
-                'all' => 0,
-                'today' => 0,
-                'last_7_days' => 0,
-                'last_30_days' => 0,
-            ],
-            'by_quiz' => [],
-            'by_result' => [],
-            'recent' => [],
-            'leads_admin_url' => $leadsAdminUrl,
-            'warnings' => [],
-        ];
+        $dateFrom = $this->normalizeTimestamp($options['date_from'] ?? null);
+        $dateTo = $this->normalizeTimestamp($options['date_to'] ?? null, true);
+        $periodStats = $this->buildPeriodStats($iblockId, $dateFrom, $dateTo);
 
+        return array_merge(
+            [
+                'totals' => $this->buildTotals($iblockId),
+                'period' => [
+                    'date_from' => $dateFrom !== null ? $this->formatDate($dateFrom) : '',
+                    'date_to' => $dateTo !== null ? $this->formatDate($dateTo) : '',
+                    'label' => $this->buildPeriodLabel($dateFrom, $dateTo),
+                ],
+                'leads_admin_url' => $this->buildLeadListUrl($iblockId),
+            ],
+            $periodStats
+        );
+    }
+
+    private function buildTotals(int $iblockId): array
+    {
         $todayStart = strtotime('today') ?: time();
         $last7Days = strtotime('-7 days') ?: $todayStart;
         $last30Days = strtotime('-30 days') ?: $todayStart;
+
+        return [
+            'all' => $this->countElements(['IBLOCK_ID' => $iblockId]),
+            'today' => $this->countElements([
+                'IBLOCK_ID' => $iblockId,
+                '>=DATE_CREATE' => $this->formatBitrixDate($todayStart),
+            ]),
+            'last_7_days' => $this->countElements([
+                'IBLOCK_ID' => $iblockId,
+                '>=DATE_CREATE' => $this->formatBitrixDate($last7Days),
+            ]),
+            'last_30_days' => $this->countElements([
+                'IBLOCK_ID' => $iblockId,
+                '>=DATE_CREATE' => $this->formatBitrixDate($last30Days),
+            ]),
+        ];
+    }
+
+    private function buildPeriodStats(int $iblockId, ?int $dateFrom, ?int $dateTo): array
+    {
+        $leadsAdminUrl = $this->buildLeadListUrl($iblockId);
+        $stats = [
+            'period_total' => 0,
+            'by_quiz' => [],
+            'by_result' => [],
+            'recent' => [],
+            'warnings' => [],
+        ];
         $byQuiz = [];
         $byResult = [];
         $processed = 0;
@@ -48,7 +81,7 @@ final class QuizStatisticsService
 
         $elements = \CIBlockElement::GetList(
             ['DATE_CREATE' => 'DESC', 'ID' => 'DESC'],
-            array_merge(['IBLOCK_ID' => $iblockId], $filter),
+            $this->buildPeriodFilter($iblockId, $dateFrom, $dateTo),
             false,
             ['nTopCount' => self::LIMIT + 1],
             ['ID', 'IBLOCK_ID', 'NAME', 'DATE_CREATE']
@@ -69,16 +102,7 @@ final class QuizStatisticsService
             $resultCode = $this->getPropertyValue($properties, 'KK_LEAD_RESULT_CODE');
             $resultTitle = $this->getPropertyValue($properties, 'KK_LEAD_RESULT_TITLE');
 
-            $summary['totals']['all']++;
-            if ($leadTimestamp >= $todayStart) {
-                $summary['totals']['today']++;
-            }
-            if ($leadTimestamp >= $last7Days) {
-                $summary['totals']['last_7_days']++;
-            }
-            if ($leadTimestamp >= $last30Days) {
-                $summary['totals']['last_30_days']++;
-            }
+            $stats['period_total']++;
 
             $quizKey = $quizCode !== '' ? $quizCode : 'Без кода';
             if (!isset($byQuiz[$quizKey])) {
@@ -118,9 +142,9 @@ final class QuizStatisticsService
                 $byResult[$resultKey]['result_title'] = $resultTitle;
             }
 
-            if (count($summary['recent']) < self::RECENT_LIMIT) {
+            if (count($stats['recent']) < self::RECENT_LIMIT) {
                 $leadId = (int)($element['ID'] ?? 0);
-                $summary['recent'][] = [
+                $stats['recent'][] = [
                     'id' => $leadId,
                     'date' => (string)($element['DATE_CREATE'] ?? ''),
                     'quiz_name' => $quizName,
@@ -138,20 +162,67 @@ final class QuizStatisticsService
         }
 
         if ($limited) {
-            $summary['warnings'][] = 'Статистика построена по последним 10000 заявкам';
+            $stats['warnings'][] = 'Статистика за выбранный период построена по последним 10000 заявкам.';
         }
 
-        $summary['by_quiz'] = array_values($byQuiz);
-        usort($summary['by_quiz'], static fn (array $left, array $right): int => ($right['count'] <=> $left['count']) ?: strcmp((string)$left['quiz_name'], (string)$right['quiz_name']));
-        foreach ($summary['by_quiz'] as &$quizRow) {
+        $stats['by_quiz'] = array_values($byQuiz);
+        usort($stats['by_quiz'], static fn (array $left, array $right): int => ($right['count'] <=> $left['count']) ?: strcmp((string)$left['quiz_name'], (string)$right['quiz_name']));
+        foreach ($stats['by_quiz'] as &$quizRow) {
             unset($quizRow['last_lead_timestamp']);
         }
         unset($quizRow);
 
-        $summary['by_result'] = array_values($byResult);
-        usort($summary['by_result'], static fn (array $left, array $right): int => ($right['count'] <=> $left['count']) ?: strcmp((string)$left['result_title'], (string)$right['result_title']));
+        $stats['by_result'] = array_values($byResult);
+        usort($stats['by_result'], static fn (array $left, array $right): int => ($right['count'] <=> $left['count']) ?: strcmp((string)$left['result_title'], (string)$right['result_title']));
 
-        return $summary;
+        return $stats;
+    }
+
+    private function normalizeTimestamp(mixed $value, bool $endOfDay = false): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_int($value) || (is_string($value) && ctype_digit($value))) {
+            $timestamp = (int)$value;
+            return $timestamp > 0 ? $timestamp : null;
+        }
+
+        if (!is_scalar($value)) {
+            return null;
+        }
+
+        $value = trim((string)$value);
+        if ($value === '') {
+            return null;
+        }
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) === 1) {
+            $timestamp = strtotime($value . ($endOfDay ? ' 23:59:59' : ' 00:00:00'));
+            return is_int($timestamp) && $timestamp > 0 ? $timestamp : null;
+        }
+
+        $timestamp = strtotime($value);
+        return is_int($timestamp) && $timestamp > 0 ? $timestamp : null;
+    }
+
+    private function buildPeriodFilter(int $iblockId, ?int $dateFrom, ?int $dateTo): array
+    {
+        $filter = ['IBLOCK_ID' => $iblockId];
+        if ($dateFrom !== null) {
+            $filter['>=DATE_CREATE'] = $this->formatBitrixDate($dateFrom);
+        }
+        if ($dateTo !== null) {
+            $filter['<=DATE_CREATE'] = $this->formatBitrixDate($dateTo);
+        }
+
+        return $filter;
+    }
+
+    private function countElements(array $filter): int
+    {
+        return (int)\CIBlockElement::GetList([], $filter, [], false, ['ID']);
     }
 
     private function getLeadsIblockId(): ?int
@@ -193,6 +264,35 @@ final class QuizStatisticsService
         $timestamp = strtotime($date);
 
         return is_int($timestamp) && $timestamp > 0 ? $timestamp : 0;
+    }
+
+    private function formatBitrixDate(int $timestamp): string
+    {
+        if (function_exists('ConvertTimeStamp')) {
+            return (string)ConvertTimeStamp($timestamp, 'FULL');
+        }
+
+        return date('d.m.Y H:i:s', $timestamp);
+    }
+
+    private function formatDate(int $timestamp): string
+    {
+        return date('d.m.Y', $timestamp);
+    }
+
+    private function buildPeriodLabel(?int $dateFrom, ?int $dateTo): string
+    {
+        if ($dateFrom === null && $dateTo === null) {
+            return 'всё время';
+        }
+        if ($dateFrom !== null && $dateTo !== null) {
+            return $this->formatDate($dateFrom) . ' — ' . $this->formatDate($dateTo);
+        }
+        if ($dateFrom !== null) {
+            return 'с ' . $this->formatDate($dateFrom);
+        }
+
+        return 'по ' . $this->formatDate((int)$dateTo);
     }
 
     private function buildLeadListUrl(int $iblockId): string
