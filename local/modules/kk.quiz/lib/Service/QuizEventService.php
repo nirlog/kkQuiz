@@ -17,6 +17,9 @@ final class QuizEventService
     public const EVENT_FORM_SHOW = 'form_show';
     public const EVENT_LEAD_SUCCESS = 'lead_success';
 
+    private const RATE_LIMIT_MAX_EVENTS = 120;
+    private const RATE_LIMIT_WINDOW_SECONDS = 600;
+
     private const DEDUPE_EVENTS = [
         self::EVENT_QUIZ_VIEW,
         self::EVENT_QUIZ_OPEN,
@@ -43,6 +46,13 @@ final class QuizEventService
             return [
                 'success' => false,
                 'errors' => ['INVALID_QUIZ_CODE'],
+            ];
+        }
+
+        if (!$this->checkRateLimit($quizCode)) {
+            return [
+                'success' => false,
+                'errors' => ['RATE_LIMIT'],
             ];
         }
 
@@ -88,6 +98,62 @@ final class QuizEventService
         }
 
         return ['success' => true];
+    }
+
+
+    private function checkRateLimit(string $quizCode): bool
+    {
+        try {
+            if (!class_exists('CPHPCache')) {
+                return true;
+            }
+
+            $ip = trim((string)($_SERVER['REMOTE_ADDR'] ?? ''));
+            if ($ip === '') {
+                $ip = 'unknown';
+            }
+
+            $cacheId = 'kk_quiz_track_' . sha1($ip . '|' . $quizCode);
+            $cacheDir = '/kk.quiz/track-rate-limit';
+            $now = time();
+            $payload = [
+                'count' => 0,
+                'started_at' => $now,
+            ];
+
+            $cache = new \CPHPCache();
+            if ($cache->InitCache(self::RATE_LIMIT_WINDOW_SECONDS, $cacheId, $cacheDir)) {
+                $cachedPayload = $cache->GetVars();
+                if (is_array($cachedPayload)) {
+                    $payload = $cachedPayload;
+                }
+            }
+
+            $startedAt = (int)($payload['started_at'] ?? $now);
+            $count = (int)($payload['count'] ?? 0);
+
+            if ($startedAt <= 0 || $startedAt + self::RATE_LIMIT_WINDOW_SECONDS <= $now) {
+                $startedAt = $now;
+                $count = 0;
+            }
+
+            if ($count >= self::RATE_LIMIT_MAX_EVENTS) {
+                return false;
+            }
+
+            $cache = new \CPHPCache();
+            $cache->Clean($cacheId, $cacheDir);
+            if ($cache->StartDataCache(self::RATE_LIMIT_WINDOW_SECONDS, $cacheId, $cacheDir)) {
+                $cache->EndDataCache([
+                    'count' => $count + 1,
+                    'started_at' => $startedAt,
+                ]);
+            }
+        } catch (\Throwable) {
+            return true;
+        }
+
+        return true;
     }
 
     private function getAllowedEventTypes(): array

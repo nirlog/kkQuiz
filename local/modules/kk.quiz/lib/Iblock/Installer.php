@@ -14,6 +14,7 @@ use Kk\Quiz\Admin\LeadListAssets;
 use Kk\Quiz\Admin\SectionFormAssets;
 use Kk\Quiz\Analytics\QuizEventTable;
 use Kk\Quiz\Iblock\Property\QuizAnswersProperty;
+use Kk\Quiz\Service\QuizEventMaintenanceService;
 
 final class Installer
 {
@@ -30,6 +31,7 @@ final class Installer
         self::registerEventHandlers();
         self::installAdminFiles();
         self::installAnalyticsTables();
+        self::registerMaintenanceAgent();
 
         self::installIblockType();
 
@@ -47,6 +49,7 @@ final class Installer
     public static function uninstall(): void
     {
         self::unregisterEventHandlers();
+        self::unregisterMaintenanceAgent();
         self::uninstallAdminFiles();
 
         // Инфоблоки и пользовательские данные намеренно не удаляются.
@@ -56,6 +59,7 @@ final class Installer
     {
         self::installAdminFiles(false);
         self::installAnalyticsTables(false);
+        self::registerMaintenanceAgent();
 
         self::registerEventHandlerIfMissing(
             'iblock',
@@ -403,6 +407,45 @@ final class Installer
     private static function uninstallAnalyticsTables(): void
     {
         // Analytics events are user data and are intentionally preserved on module uninstall.
+    }
+
+
+    private static function registerMaintenanceAgent(): void
+    {
+        if (!class_exists('CAgent')) {
+            return;
+        }
+
+        $agentName = '\\Kk\\Quiz\\Service\\QuizEventMaintenanceService::runCleanupAgent();';
+
+        try {
+            $existingAgent = \CAgent::GetList([], [
+                'MODULE_ID' => 'kk.quiz',
+                'NAME' => $agentName,
+            ])->Fetch();
+
+            if (is_array($existingAgent)) {
+                return;
+            }
+
+            \CAgent::AddAgent($agentName, 'kk.quiz', 'N', 86400);
+        } catch (\Throwable) {
+        }
+    }
+
+
+    private static function unregisterMaintenanceAgent(): void
+    {
+        if (!class_exists('CAgent')) {
+            return;
+        }
+
+        $agentName = '\\Kk\\Quiz\\Service\\QuizEventMaintenanceService::runCleanupAgent();';
+
+        try {
+            \CAgent::RemoveAgent($agentName, 'kk.quiz');
+        } catch (\Throwable) {
+        }
     }
 
     private static function installIblockType(): void

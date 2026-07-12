@@ -28,6 +28,7 @@ Loader::registerAutoLoadClasses(
         'Kk\\Quiz\\Service\\QuizStatisticsService' => 'lib/Service/QuizStatisticsService.php',
         'Kk\\Quiz\\Service\\QuizFunnelStatisticsService' => 'lib/Service/QuizFunnelStatisticsService.php',
         'Kk\\Quiz\\Service\\QuizEventService' => 'lib/Service/QuizEventService.php',
+        'Kk\\Quiz\\Service\\QuizEventMaintenanceService' => 'lib/Service/QuizEventMaintenanceService.php',
         'Kk\\Quiz\\Service\\ModuleSettingsService' => 'lib/Service/ModuleSettingsService.php',
         'Kk\\Quiz\\Service\\TelegramNotificationService' => 'lib/Service/TelegramNotificationService.php',
         'Kk\\Quiz\\Controller\\Api' => 'lib/Controller/Api.php',

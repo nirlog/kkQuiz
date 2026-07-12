@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Bitrix\Main\Loader;
+use Kk\Quiz\Service\QuizEventMaintenanceService;
 use Kk\Quiz\Service\QuizFunnelStatisticsService;
 use Kk\Quiz\Service\QuizStatisticsService;
 
@@ -108,6 +109,12 @@ try {
     ];
 }
 
+try {
+    $orphanQuizCodes = (new QuizEventMaintenanceService())->getOrphanQuizCodes();
+} catch (\Throwable) {
+    $orphanQuizCodes = [];
+}
+
 require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_after.php');
 
 $escape = static fn (mixed $value): string => htmlspecialcharsbx((string)$value);
@@ -143,6 +150,9 @@ $periodLabel = (string)($summary['period']['label'] ?? '');
 .kk-quiz-insight-card{padding:12px 14px;border:1px solid #d6d6d6;border-radius:6px;background:#fff;}
 .kk-quiz-insight-card__title{font-weight:bold;margin-bottom:8px;}
 .kk-quiz-insight-card__muted{color:#666;}
+.kk-quiz-maintenance{padding:12px;margin:12px 0 18px;border:1px solid #d6d6d6;background:#fff;border-radius:6px;}
+.kk-quiz-maintenance__actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+.kk-quiz-maintenance__note{margin-top:8px;color:#666;font-size:12px;}
 </style>
 
 <?php if ($error !== ''): ?>
@@ -177,6 +187,101 @@ $periodLabel = (string)($summary['period']['label'] ?? '');
         <a class="adm-btn" href="<?= $escape($summary['leads_admin_url']) ?>">Открыть список заявок</a>
     <?php endif; ?>
 </div>
+
+
+<?php
+$orphanQuizCodes = is_array($orphanQuizCodes ?? null) ? $orphanQuizCodes : [];
+$orphanPreview = array_slice($orphanQuizCodes, 0, 10);
+$orphanExtraCount = max(0, count($orphanQuizCodes) - count($orphanPreview));
+?>
+<div class="kk-quiz-maintenance">
+    <h2>Обслуживание статистики</h2>
+    <div>Срок хранения событий: <?= $escape(QuizEventMaintenanceService::DEFAULT_RETENTION_DAYS) ?> дней</div>
+    <?php if ($orphanQuizCodes === []): ?>
+        <div class="kk-quiz-maintenance__note">Статистика удалённых квизов не найдена.</div>
+    <?php else: ?>
+        <div class="kk-quiz-maintenance__note">
+            Найдены события по удалённым квизам: <?= $escape(implode(', ', $orphanPreview)) ?><?= $orphanExtraCount > 0 ? $escape(' и ещё ' . $orphanExtraCount) : '' ?>
+        </div>
+    <?php endif; ?>
+    <div class="kk-quiz-maintenance__actions">
+        <button type="button" class="adm-btn" data-kk-quiz-cleanup="old">Очистить старые события</button>
+        <button type="button" class="adm-btn" data-kk-quiz-cleanup="orphan">Очистить статистику удалённых квизов</button>
+        <button type="button" class="adm-btn adm-btn-save" data-kk-quiz-cleanup="all">Выполнить полную очистку</button>
+    </div>
+</div>
+<script>
+(function () {
+    const messages = {
+        old: 'Очистить старые события аналитики? Это действие нельзя отменить.',
+        orphan: 'Очистить статистику квизов, которые уже удалены? Это действие нельзя отменить.',
+        all: 'Выполнить полную очистку старых событий и статистики удалённых квизов? Это действие нельзя отменить.'
+    };
+
+    const getCleanupUrl = () => {
+        const sessid = window.BX && typeof BX.bitrix_sessid === 'function' ? BX.bitrix_sessid() : '';
+        const params = new URLSearchParams({ action: 'kk:quiz.api.cleanupQuizEvents' });
+        if (sessid !== '') {
+            params.set('sessid', sessid);
+        }
+
+        return '/bitrix/services/main/ajax.php?' + params.toString();
+    };
+
+    const getDeletedCount = (data) => {
+        let deleted = 0;
+        if (data && data.old && Number.isFinite(Number(data.old.deleted))) {
+            deleted += Number(data.old.deleted);
+        }
+        if (data && data.orphan && Number.isFinite(Number(data.orphan.deleted))) {
+            deleted += Number(data.orphan.deleted);
+        }
+
+        return deleted;
+    };
+
+    document.querySelectorAll('[data-kk-quiz-cleanup]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const mode = button.getAttribute('data-kk-quiz-cleanup') || '';
+            if (!messages[mode] || !confirm(messages[mode])) {
+                return;
+            }
+
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = 'Очистка...';
+
+            fetch(getCleanupUrl(), {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ mode })
+            })
+                .then((response) => response.json())
+                .then((response) => {
+                    const data = response && response.data ? response.data : response;
+                    if (!data || data.success !== true) {
+                        console.warn('KK Quiz: cleanup failed', response);
+                        throw new Error('CLEANUP_FAILED');
+                    }
+
+                    alert('Удалено событий: ' + getDeletedCount(data));
+                    window.location.reload();
+                })
+                .catch((error) => {
+                    console.warn('KK Quiz: cleanup failed', { error });
+                    alert('Не удалось выполнить очистку статистики. Подробности в консоли.');
+                })
+                .finally(() => {
+                    button.disabled = false;
+                    button.textContent = originalText;
+                });
+        });
+    });
+})();
+</script>
 
 <div class="kk-quiz-stat-cards">
     <?php foreach ($cards as $label => $value): ?>
