@@ -147,6 +147,12 @@ button.className = 'adm-btn';
 button.textContent = 'Экспорт заявок CSV';
 button.addEventListener('click', () => exportLeadsCsv(button));
 block.appendChild(button);
+const statsLink = document.createElement('a');
+statsLink.className = 'adm-btn';
+statsLink.href = '/bitrix/admin/kk_quiz_statistics.php?lang=' + encodeURIComponent((window.BX && BX.message ? BX.message('LANGUAGE_ID') : '') || 'ru');
+statsLink.textContent = 'Статистика';
+statsLink.style.marginLeft = '8px';
+block.appendChild(statsLink);
 return block;
 };
 const mount = () => {
