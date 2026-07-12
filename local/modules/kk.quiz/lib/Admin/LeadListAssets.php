@@ -21,6 +21,10 @@ final class LeadListAssets
             return;
         }
 
+        if (!self::isAdminAllowed()) {
+            return;
+        }
+
         $scriptName = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
         if (!in_array($scriptName, self::LIST_PAGES, true)) {
             return;
@@ -36,6 +40,17 @@ final class LeadListAssets
         }
 
         Asset::getInstance()->addString('<script>' . self::renderScript() . '</script>');
+    }
+
+    private static function isAdminAllowed(): bool
+    {
+        global $USER;
+
+        return is_object($USER)
+            && method_exists($USER, 'IsAuthorized')
+            && method_exists($USER, 'IsAdmin')
+            && $USER->IsAuthorized()
+            && $USER->IsAdmin();
     }
 
     private static function isLeadsIblock(int $iblockId): bool

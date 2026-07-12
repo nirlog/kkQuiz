@@ -16,6 +16,10 @@ final class SectionFormAssets
             return;
         }
 
+        if (!self::isAdminAllowed()) {
+            return;
+        }
+
         $scriptName = (string)($_SERVER['SCRIPT_NAME'] ?? '');
         if (basename($scriptName) !== 'iblock_section_edit.php') {
             return;
@@ -41,6 +45,17 @@ final class SectionFormAssets
         }
 
         Asset::getInstance()->addString('<script>' . self::renderScript($section) . '</script>');
+    }
+
+    private static function isAdminAllowed(): bool
+    {
+        global $USER;
+
+        return is_object($USER)
+            && method_exists($USER, 'IsAuthorized')
+            && method_exists($USER, 'IsAdmin')
+            && $USER->IsAuthorized()
+            && $USER->IsAdmin();
     }
 
     private static function isQuizIblock(int $iblockId): bool
