@@ -26,6 +26,7 @@ final class Installer
         }
 
         self::registerEventHandlers();
+        self::installAdminFiles();
 
         self::installIblockType();
 
@@ -43,12 +44,15 @@ final class Installer
     public static function uninstall(): void
     {
         self::unregisterEventHandlers();
+        self::uninstallAdminFiles();
 
         // Инфоблоки и пользовательские данные намеренно не удаляются.
     }
 
     public static function ensureEventHandlers(): void
     {
+        self::installAdminFiles(false);
+
         self::registerEventHandlerIfMissing(
             'iblock',
             'OnIBlockPropertyBuildList',
@@ -212,6 +216,69 @@ final class Installer
             SectionFormAssets::class,
             'onProlog'
         );
+    }
+
+    private static function installAdminFiles(bool $throwOnError = true): void
+    {
+        $documentRoot = rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/');
+        if ($documentRoot === '') {
+            if ($throwOnError) {
+                throw new SystemException('DOCUMENT_ROOT is empty.');
+            }
+
+            return;
+        }
+
+        $source = dirname(__DIR__, 2) . '/admin/kk_quiz_statistics.php';
+        $target = $documentRoot . '/bitrix/admin/kk_quiz_statistics.php';
+
+        if (!is_file($source)) {
+            if ($throwOnError) {
+                throw new SystemException('KK Quiz admin statistics stub source not found.');
+            }
+
+            return;
+        }
+
+        $targetDir = dirname($target);
+        if (!is_dir($targetDir)) {
+            if ($throwOnError) {
+                throw new SystemException('/bitrix/admin directory not found.');
+            }
+
+            return;
+        }
+
+        $sourceContent = (string)file_get_contents($source);
+        $targetContent = is_file($target) ? (string)file_get_contents($target) : '';
+
+        if ($targetContent === $sourceContent) {
+            return;
+        }
+
+        if (@file_put_contents($target, $sourceContent) === false && $throwOnError) {
+            throw new SystemException('Cannot write /bitrix/admin/kk_quiz_statistics.php.');
+        }
+    }
+
+    private static function uninstallAdminFiles(): void
+    {
+        $documentRoot = rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/');
+        if ($documentRoot === '') {
+            return;
+        }
+
+        $target = $documentRoot . '/bitrix/admin/kk_quiz_statistics.php';
+
+        if (!is_file($target)) {
+            return;
+        }
+
+        $content = (string)file_get_contents($target);
+
+        if (strpos($content, 'kk.quiz/admin/statistics.php') !== false) {
+            @unlink($target);
+        }
     }
 
     private static function installIblockType(): void
