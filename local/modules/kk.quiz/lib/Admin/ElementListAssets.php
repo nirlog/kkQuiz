@@ -21,6 +21,10 @@ final class ElementListAssets
             return;
         }
 
+        if (!self::isAdminAllowed()) {
+            return;
+        }
+
         $scriptName = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
         if (!in_array($scriptName, self::LIST_PAGES, true)) {
             return;
@@ -50,6 +54,17 @@ final class ElementListAssets
         ];
 
         Asset::getInstance()->addString('<script>' . self::renderScript($settings) . '</script>');
+    }
+
+    private static function isAdminAllowed(): bool
+    {
+        global $USER;
+
+        return is_object($USER)
+            && method_exists($USER, 'IsAuthorized')
+            && method_exists($USER, 'IsAdmin')
+            && $USER->IsAuthorized()
+            && $USER->IsAdmin();
     }
 
     private static function isQuizIblock(int $iblockId): bool
@@ -835,6 +850,122 @@ renderHeader();
 container.appendChild(document.createTextNode('В квизе нет вопросов.'));
 }
 };
+const exportQuizJson = (quizCode, button) => {
+const originalText = button.textContent;
+button.disabled = true;
+button.textContent = 'Экспорт...';
+fetch(getAdminQuizAjaxUrl('kk:quiz.api.exportQuiz'), {
+method: 'POST',
+credentials: 'same-origin',
+headers: {
+'Content-Type': 'application/json'
+},
+body: JSON.stringify({ quizCode })
+})
+.then((response) => response.json())
+.then((response) => {
+const data = response && response.data ? response.data : response;
+const exportData = data && data.export ? data.export : null;
+if (!data || data.success !== true || !exportData) {
+console.warn('KK Quiz: export failed', response);
+throw new Error('EXPORT_FAILED');
+}
+const filename = data.filename || ('kk-quiz-' + quizCode + '.json');
+const blob = new Blob(
+[JSON.stringify(exportData, null, 2)],
+{ type: 'application/json;charset=utf-8' }
+);
+const url = URL.createObjectURL(blob);
+const link = document.createElement('a');
+link.href = url;
+link.download = filename;
+document.body.appendChild(link);
+link.click();
+link.remove();
+setTimeout(() => URL.revokeObjectURL(url), 1000);
+})
+.catch((error) => {
+console.warn('KK Quiz: export failed', { quizCode, error });
+alert('Не удалось экспортировать квиз. Подробности в консоли.');
+})
+.finally(() => {
+button.disabled = false;
+button.textContent = originalText;
+});
+};
+const importQuizJsonFile = (file, button) => {
+const originalText = button.textContent;
+button.disabled = true;
+button.textContent = 'Импорт...';
+const reader = new FileReader();
+reader.onload = () => {
+let payload = null;
+try {
+payload = JSON.parse(String(reader.result || ''));
+} catch (error) {
+button.disabled = false;
+button.textContent = originalText;
+alert('Не удалось прочитать JSON-файл.');
+return;
+}
+fetch(getAdminQuizAjaxUrl('kk:quiz.api.importQuiz'), {
+method: 'POST',
+credentials: 'same-origin',
+headers: {
+'Content-Type': 'application/json'
+},
+body: JSON.stringify({ export: payload })
+})
+.then((response) => response.json())
+.then((response) => {
+const data = response && response.data ? response.data : response;
+if (!data || data.success !== true || !data.import) {
+console.warn('KK Quiz: import failed', response);
+throw new Error('IMPORT_FAILED');
+}
+const result = data.import;
+const warnings = Array.isArray(result.warnings) && result.warnings.length
+? '\n\nПредупреждения:\n- ' + result.warnings.join('\n- ')
+: '';
+const message = 'Квиз импортирован: '
++ (result.quiz_name || result.quiz_code || '')
++ '\nВопросов: ' + (result.questions_count || 0)
++ '\nРезультатов: ' + (result.results_count || 0)
++ warnings
++ '\n\nОткрыть импортированный квиз?';
+if (confirm(message) && result.admin_url) {
+window.location.href = result.admin_url;
+}
+})
+.catch((error) => {
+console.warn('KK Quiz: import failed', { error });
+alert('Не удалось импортировать квиз. Подробности в консоли.');
+})
+.finally(() => {
+button.disabled = false;
+button.textContent = originalText;
+});
+};
+reader.onerror = () => {
+button.disabled = false;
+button.textContent = originalText;
+alert('Не удалось прочитать файл.');
+};
+reader.readAsText(file);
+};
+const selectImportJsonFile = (button) => {
+const input = document.createElement('input');
+input.type = 'file';
+input.accept = '.json,application/json';
+input.addEventListener('change', () => {
+const file = input.files && input.files[0] ? input.files[0] : null;
+if (!file) {
+return;
+}
+importQuizJsonFile(file, button);
+});
+input.click();
+};
 const openAdminQuizPreview = (quizCode) => {
 const modal = ensurePreviewModal();
 const content = modal.querySelector('.kk-quiz-admin-preview-content');
@@ -874,17 +1005,31 @@ if (settings.questionEnumId) filters.appendChild(createLink('Только воп
 if (settings.resultEnumId) filters.appendChild(createLink('Только результаты', settings.resultEnumId));
 block.appendChild(filters);
 if (settings.quizCode) {
-const preview = document.createElement('div');
-preview.style.marginTop = '6px';
-preview.style.marginBottom = '6px';
-preview.appendChild(document.createTextNode('Предпросмотр: '));
-const button = document.createElement('button');
-button.type = 'button';
-button.className = 'adm-btn';
-button.textContent = 'Пройти квиз';
-button.addEventListener('click', () => openAdminQuizPreview(settings.quizCode));
-preview.appendChild(button);
-block.appendChild(preview);
+const actions = document.createElement('div');
+actions.style.display = 'flex';
+actions.style.flexWrap = 'wrap';
+actions.style.gap = '8px';
+actions.style.marginTop = '6px';
+actions.style.marginBottom = '8px';
+const previewButton = document.createElement('button');
+previewButton.type = 'button';
+previewButton.className = 'adm-btn';
+previewButton.textContent = 'Протестировать квиз';
+previewButton.addEventListener('click', () => openAdminQuizPreview(settings.quizCode));
+actions.appendChild(previewButton);
+const exportButton = document.createElement('button');
+exportButton.type = 'button';
+exportButton.className = 'adm-btn';
+exportButton.textContent = 'Экспорт квиза в JSON';
+exportButton.addEventListener('click', () => exportQuizJson(settings.quizCode, exportButton));
+actions.appendChild(exportButton);
+const importButton = document.createElement('button');
+importButton.type = 'button';
+importButton.className = 'adm-btn';
+importButton.textContent = 'Импорт квиза из JSON';
+importButton.addEventListener('click', () => selectImportJsonFile(importButton));
+actions.appendChild(importButton);
+block.appendChild(actions);
 }
 const legend = document.createElement('div');
 legend.textContent = 'Q — вопрос, R — результат. NAME — техническое название для админки. “Заголовок на сайте” — текст, который видит пользователь.';
