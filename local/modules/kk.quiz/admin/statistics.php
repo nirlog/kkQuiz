@@ -99,6 +99,8 @@ try {
     ]);
 } catch (\Throwable) {
     $funnelSummary = [
+        'summary_cards' => [],
+        'insights' => [],
         'funnel_by_quiz' => [],
         'question_dropoff' => [],
         'popular_answers' => [],
@@ -136,6 +138,11 @@ $periodLabel = (string)($summary['period']['label'] ?? '');
 .kk-quiz-stat-period-label{margin:-6px 0 18px;color:#555;}
 .kk-quiz-stat-row-warn{background:#fff8d7;}
 .kk-quiz-stat-row-danger{background:#ffe8e8;}
+.kk-quiz-stat-note{margin:8px 0 14px;color:#666;font-size:12px;}
+.kk-quiz-insight-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin:10px 0 18px;}
+.kk-quiz-insight-card{padding:12px 14px;border:1px solid #d6d6d6;border-radius:6px;background:#fff;}
+.kk-quiz-insight-card__title{font-weight:bold;margin-bottom:8px;}
+.kk-quiz-insight-card__muted{color:#666;}
 </style>
 
 <?php if ($error !== ''): ?>
@@ -181,6 +188,74 @@ $periodLabel = (string)($summary['period']['label'] ?? '');
 </div>
 
 <div class="kk-quiz-stat-period-label">Период таблиц: <?= $escape($periodLabel !== '' ? $periodLabel : 'всё время') ?></div>
+
+<?php
+$funnelCards = is_array($funnelSummary['summary_cards'] ?? null) ? $funnelSummary['summary_cards'] : [];
+$insights = is_array($funnelSummary['insights'] ?? null) ? $funnelSummary['insights'] : [];
+$worstDropoff = is_array($insights['worst_dropoff_question'] ?? null) ? $insights['worst_dropoff_question'] : null;
+$lowestAnswerRate = is_array($insights['lowest_answer_rate_question'] ?? null) ? $insights['lowest_answer_rate_question'] : null;
+$lowestStartToLead = is_array($insights['lowest_start_to_lead_quiz'] ?? null) ? $insights['lowest_start_to_lead_quiz'] : null;
+$funnelCardItems = [
+    'Показов квиза' => (int)($funnelCards['views'] ?? 0),
+    'Начали прохождение' => (int)($funnelCards['starts'] ?? 0),
+    'Дошли до результата' => (int)($funnelCards['results'] ?? 0),
+    'Увидели форму' => (int)($funnelCards['forms'] ?? 0),
+    'Отправили заявку' => (int)($funnelCards['leads'] ?? 0),
+    'View → Lead' => $formatPercent($funnelCards['view_to_lead'] ?? 0),
+    'Start → Lead' => $formatPercent($funnelCards['start_to_lead'] ?? 0),
+];
+?>
+
+<div class="kk-quiz-stat-section">
+    <h2>Сводка по прохождению квиза</h2>
+    <div class="kk-quiz-stat-cards">
+        <?php foreach ($funnelCardItems as $label => $value): ?>
+            <div class="kk-quiz-stat-card">
+                <div class="kk-quiz-stat-card__label"><?= $escape($label) ?></div>
+                <div class="kk-quiz-stat-card__value"><?= $escape($value) ?></div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+    <div class="kk-quiz-stat-note">
+        Показ = событие quiz_view. Старт = первый ответ на первый вопрос. Результат = показ результата. Форма = показ финальной формы. Заявка = успешно сохранённая заявка.
+    </div>
+</div>
+
+<div class="kk-quiz-stat-section">
+    <h2>Главные проблемы</h2>
+    <div class="kk-quiz-insight-grid">
+        <div class="kk-quiz-insight-card">
+            <div class="kk-quiz-insight-card__title">Самый большой отвал</div>
+            <?php if ($worstDropoff !== null): ?>
+                <div><?= $escape($worstDropoff['question_title'] ?? $worstDropoff['question_code'] ?? '') ?></div>
+                <div class="kk-quiz-insight-card__muted">Квиз: <?= $escape($worstDropoff['quiz_name'] ?? $worstDropoff['quiz_code'] ?? '') ?></div>
+                <div class="kk-quiz-insight-card__muted">Шаг: <?= $escape((int)($worstDropoff['step_index'] ?? 0)) ?></div>
+                <div>Показан: <?= $escape((int)($worstDropoff['shown'] ?? 0)) ?>, ответили: <?= $escape((int)($worstDropoff['answered'] ?? 0)) ?>, отвал: <?= $escape((int)($worstDropoff['dropoff'] ?? 0)) ?> (<?= $escape($formatPercent($worstDropoff['dropoff_rate'] ?? 0)) ?>)</div>
+            <?php else: ?>
+                <div class="kk-quiz-insight-card__muted">Критичных отвалов пока нет.</div>
+            <?php endif; ?>
+        </div>
+        <div class="kk-quiz-insight-card">
+            <div class="kk-quiz-insight-card__title">Самая низкая доля ответа</div>
+            <?php if ($lowestAnswerRate !== null): ?>
+                <div><?= $escape($lowestAnswerRate['question_title'] ?? $lowestAnswerRate['question_code'] ?? '') ?></div>
+                <div class="kk-quiz-insight-card__muted">Квиз: <?= $escape($lowestAnswerRate['quiz_name'] ?? $lowestAnswerRate['quiz_code'] ?? '') ?></div>
+                <div>Показан: <?= $escape((int)($lowestAnswerRate['shown'] ?? 0)) ?>, ответили: <?= $escape((int)($lowestAnswerRate['answered'] ?? 0)) ?>, ответили <?= $escape($formatPercent($lowestAnswerRate['answer_rate'] ?? 0)) ?></div>
+            <?php else: ?>
+                <div class="kk-quiz-insight-card__muted">Недостаточно данных для оценки вопросов.</div>
+            <?php endif; ?>
+        </div>
+        <div class="kk-quiz-insight-card">
+            <div class="kk-quiz-insight-card__title">Самая низкая конверсия квиза</div>
+            <?php if ($lowestStartToLead !== null): ?>
+                <div><?= $escape($lowestStartToLead['quiz_name'] ?? $lowestStartToLead['quiz_code'] ?? '') ?></div>
+                <div>Начали: <?= $escape((int)($lowestStartToLead['starts'] ?? 0)) ?>, заявки: <?= $escape((int)($lowestStartToLead['leads'] ?? 0)) ?>, Start→Lead: <?= $escape($formatPercent($lowestStartToLead['start_to_lead'] ?? 0)) ?></div>
+            <?php else: ?>
+                <div class="kk-quiz-insight-card__muted">Недостаточно данных для оценки конверсии.</div>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
 
 <div class="kk-quiz-stat-section">
     <h2>Воронка прохождения квиза</h2>
@@ -260,6 +335,9 @@ $periodLabel = (string)($summary['period']['label'] ?? '');
 
 <div class="kk-quiz-stat-section">
     <h2>Популярные ответы</h2>
+    <div class="kk-quiz-stat-note">
+        Для checkbox-вопросов доля считается среди выбранных вариантов, поэтому сумма по вопросу может отличаться от 100% по пользователям.
+    </div>
     <?php if ((array)($funnelSummary['popular_answers'] ?? []) === []): ?>
         <div class="kk-quiz-stat-empty">Нет данных по событиям квиза за выбранный период.</div>
     <?php else: ?>
@@ -270,7 +348,7 @@ $periodLabel = (string)($summary['period']['label'] ?? '');
                 <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Вопрос</div></td>
                 <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Ответ</div></td>
                 <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Количество</div></td>
-                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Доля</div></td>
+                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Доля среди выбранных ответов</div></td>
             </tr>
             </thead>
             <tbody>

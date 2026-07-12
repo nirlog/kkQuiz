@@ -18,6 +18,8 @@ final class QuizFunnelStatisticsService
     public function getSummary(array $options = []): array
     {
         $summary = [
+            'summary_cards' => $this->createEmptySummaryCards(),
+            'insights' => $this->createEmptyInsights(),
             'funnel_by_quiz' => [],
             'question_dropoff' => [],
             'popular_answers' => [],
@@ -117,11 +119,39 @@ final class QuizFunnelStatisticsService
         }
 
         $meta = $this->loadMetadata(array_keys($quizCodes), array_keys($questionIds), array_keys($questionCodes));
-        $summary['funnel_by_quiz'] = $this->buildFunnelRows($funnel, $meta['quiz_names']);
-        $summary['question_dropoff'] = $this->buildDropoffRows($questionStats, $meta['quiz_names'], $meta['question_titles']);
-        $summary['popular_answers'] = $this->buildPopularAnswerRows($answerStats, $questionAnswerTotals, $meta);
+        $funnelRows = $this->buildFunnelRows($funnel, $meta['quiz_names']);
+        $dropoffRows = $this->buildDropoffRows($questionStats, $meta['quiz_names'], $meta['question_titles']);
+        $popularAnswerRows = $this->buildPopularAnswerRows($answerStats, $questionAnswerTotals, $meta);
+
+        $summary['summary_cards'] = $this->buildSummaryCards($funnel);
+        $summary['funnel_by_quiz'] = $funnelRows;
+        $summary['question_dropoff'] = $dropoffRows;
+        $summary['popular_answers'] = $popularAnswerRows;
+        $summary['insights'] = $this->buildInsights($funnelRows, $dropoffRows);
 
         return $summary;
+    }
+
+    private function createEmptySummaryCards(): array
+    {
+        return [
+            'views' => 0,
+            'starts' => 0,
+            'results' => 0,
+            'forms' => 0,
+            'leads' => 0,
+            'view_to_lead' => 0.0,
+            'start_to_lead' => 0.0,
+        ];
+    }
+
+    private function createEmptyInsights(): array
+    {
+        return [
+            'worst_dropoff_question' => null,
+            'lowest_answer_rate_question' => null,
+            'lowest_start_to_lead_quiz' => null,
+        ];
     }
 
     private function loadEvents(?int $dateFrom, ?int $dateTo, array &$warnings): array
@@ -176,6 +206,112 @@ final class QuizFunnelStatisticsService
             'result_show' => [],
             'form_show' => [],
             'lead_success' => [],
+        ];
+    }
+
+    private function buildSummaryCards(array $funnel): array
+    {
+        $views = [];
+        $starts = [];
+        $results = [];
+        $forms = [];
+        $leads = [];
+
+        foreach ($funnel as $quizCode => $events) {
+            foreach ($events['quiz_view'] ?? [] as $runId => $_) {
+                $views[$quizCode . '|' . $runId] = true;
+            }
+            foreach ($events['quiz_start'] ?? [] as $runId => $_) {
+                $starts[$quizCode . '|' . $runId] = true;
+            }
+            foreach ($events['result_show'] ?? [] as $runId => $_) {
+                $results[$quizCode . '|' . $runId] = true;
+            }
+            foreach ($events['form_show'] ?? [] as $runId => $_) {
+                $forms[$quizCode . '|' . $runId] = true;
+            }
+            foreach ($events['lead_success'] ?? [] as $runId => $_) {
+                $leads[$quizCode . '|' . $runId] = true;
+            }
+        }
+
+        $viewsCount = count($views);
+        $startsCount = count($starts);
+        $leadsCount = count($leads);
+
+        return [
+            'views' => $viewsCount,
+            'starts' => $startsCount,
+            'results' => count($results),
+            'forms' => count($forms),
+            'leads' => $leadsCount,
+            'view_to_lead' => $this->percent($leadsCount, $viewsCount),
+            'start_to_lead' => $this->percent($leadsCount, $startsCount),
+        ];
+    }
+
+    private function buildInsights(array $funnelRows, array $dropoffRows): array
+    {
+        return [
+            'worst_dropoff_question' => $this->findWorstDropoffQuestion($dropoffRows),
+            'lowest_answer_rate_question' => $this->findLowestAnswerRateQuestion($dropoffRows),
+            'lowest_start_to_lead_quiz' => $this->findLowestStartToLeadQuiz($funnelRows),
+        ];
+    }
+
+    private function findWorstDropoffQuestion(array $dropoffRows): ?array
+    {
+        $rows = array_values(array_filter(
+            $dropoffRows,
+            static fn (array $row): bool => (int)($row['dropoff'] ?? 0) > 0
+        ));
+        if ($rows === []) {
+            return null;
+        }
+
+        usort($rows, static fn (array $left, array $right): int => ((int)($right['dropoff'] ?? 0) <=> (int)($left['dropoff'] ?? 0))
+            ?: ((float)($right['dropoff_rate'] ?? 0) <=> (float)($left['dropoff_rate'] ?? 0)));
+
+        return $rows[0];
+    }
+
+    private function findLowestAnswerRateQuestion(array $dropoffRows): ?array
+    {
+        $rows = array_values(array_filter(
+            $dropoffRows,
+            static fn (array $row): bool => (int)($row['shown'] ?? 0) >= 5
+        ));
+        if ($rows === []) {
+            return null;
+        }
+
+        usort($rows, static fn (array $left, array $right): int => ((float)($left['answer_rate'] ?? 0) <=> (float)($right['answer_rate'] ?? 0))
+            ?: ((int)($right['shown'] ?? 0) <=> (int)($left['shown'] ?? 0)));
+
+        return $rows[0];
+    }
+
+    private function findLowestStartToLeadQuiz(array $funnelRows): ?array
+    {
+        $rows = array_values(array_filter(
+            $funnelRows,
+            static fn (array $row): bool => (int)($row['starts'] ?? 0) >= 5
+        ));
+        if ($rows === []) {
+            return null;
+        }
+
+        usort($rows, static fn (array $left, array $right): int => ((float)($left['start_to_lead'] ?? 0) <=> (float)($right['start_to_lead'] ?? 0))
+            ?: ((int)($right['starts'] ?? 0) <=> (int)($left['starts'] ?? 0)));
+
+        $row = $rows[0];
+
+        return [
+            'quiz_code' => (string)($row['quiz_code'] ?? ''),
+            'quiz_name' => (string)($row['quiz_name'] ?? ''),
+            'starts' => (int)($row['starts'] ?? 0),
+            'leads' => (int)($row['leads'] ?? 0),
+            'start_to_lead' => (float)($row['start_to_lead'] ?? 0.0),
         ];
     }
 
