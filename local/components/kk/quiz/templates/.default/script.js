@@ -180,6 +180,7 @@
         state.runId = createRunId();
         state.answers = {};
         state.fields = {};
+        state.stepIndex = 0;
         state.analytics.firstAnswerSent = false;
         state.analytics.resultReachedSent = false;
         state.tracking.quizOpenSent = false;
@@ -207,10 +208,7 @@
             quiz_code: quizCode,
             quiz_section_id: quiz.id || '',
             event_type: eventType,
-            run_id: runId,
-            page_url: window.location.href,
-            referer: document.referrer || '',
-            utm: getUtm()
+            run_id: runId
         }, data || {});
 
         fetch(getAjaxUrl(root, 'kk:quiz.api.trackEvent'), {
@@ -434,28 +432,33 @@
         return String(value || '').trim() !== '';
     };
 
-    const getTrackedAnswerCode = (state, question, answer) => {
+    const getTrackedAnswerCodes = (state, question, answer) => {
         if (answer) {
-            return String(answer.code || '');
+            const code = String(answer.code || '');
+            return code !== '' ? [code] : [];
         }
 
         const value = state.answers[question.id];
         if (Array.isArray(value)) {
             return value
                 .map((item) => item && item.custom ? 'custom' : String(item && item.code ? item.code : ''))
-                .filter((code) => code !== '')
-                .join(',');
+                .filter((code) => code !== '');
         }
 
         if (value && typeof value === 'object' && value.custom) {
-            return 'custom';
+            return ['custom'];
         }
 
-        return '';
+        if (String(value || '').trim() !== '') {
+            return ['custom'];
+        }
+
+        return [];
     };
 
     const buildState = () => ({
         runId: createRunId(),
+        stepIndex: 0,
         answers: {},
         fields: {},
         analytics: {
@@ -730,6 +733,7 @@
         if (!state.tracking.formShowSent) {
             state.tracking.formShowSent = true;
             trackQuizEvent(nodes.root, 'form_show', {
+                step_index: state.stepIndex,
                 result_id: currentResult ? currentResult.id : '',
                 result_code: currentResult ? currentResult.code : ''
             });
@@ -889,6 +893,7 @@
                         message.hidden = false;
                         const analyticsParams = {
                             quiz_code: quiz.code || '',
+                            step_index: state.stepIndex,
                             result_id: currentResult ? currentResult.id : '',
                             result_code: currentResult ? currentResult.code : '',
                             lead_id: result.lead_id || ''
@@ -1007,6 +1012,7 @@
         if (!state.tracking.resultShowCodes[resultCode]) {
             state.tracking.resultShowCodes[resultCode] = true;
             trackQuizEvent(nodes.root, 'result_show', {
+                step_index: state.stepIndex,
                 result_id: result.id || '',
                 result_code: result.code || ''
             });
@@ -1094,18 +1100,22 @@
         ) {
             state.tracking.quizStartSent = true;
             trackQuizEvent(nodes.root, 'quiz_start', {
+                step_index: state.stepIndex,
                 question_id: question.id || '',
                 question_code: question.code || ''
             });
         }
 
         if (question) {
-            const answerPayload = {
-                question_id: question.id || '',
-                question_code: question.code || ''
-            };
-            answerPayload.answer_code = getTrackedAnswerCode(state, question, answer);
-            trackQuizEvent(nodes.root, 'question_answer', answerPayload);
+            const answerCodes = getTrackedAnswerCodes(state, question, answer);
+            answerCodes.forEach((answerCode) => {
+                trackQuizEvent(nodes.root, 'question_answer', {
+                    step_index: state.stepIndex,
+                    question_id: question.id || '',
+                    question_code: question.code || '',
+                    answer_code: answerCode
+                });
+            });
         }
 
         if (answer && answer.result_id) {
@@ -1150,6 +1160,13 @@
             showFinalForm(nodes, quiz, state, null);
             return;
         }
+
+        state.stepIndex += 1;
+        trackQuizEvent(nodes.root, 'question_show', {
+            step_index: state.stepIndex,
+            question_id: question.id || '',
+            question_code: question.code || ''
+        });
 
         hideAll(nodes);
         clear(nodes.question);

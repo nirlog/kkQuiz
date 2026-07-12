@@ -293,17 +293,86 @@ final class Installer
 
             if (!$connection->isTableExists($tableName)) {
                 QuizEventTable::getEntity()->createDbTable();
+            } else {
+                self::addAnalyticsColumnIfMissing($tableName, 'STEP_INDEX', 'int');
+                self::addAnalyticsColumnIfMissing($tableName, 'LEAD_ID', 'int');
+                self::dropAnalyticsColumns($tableName, [
+                    'SESSION_ID',
+                    'PAGE_URL',
+                    'REFERER',
+                    'UTM_SOURCE',
+                    'UTM_MEDIUM',
+                    'UTM_CAMPAIGN',
+                    'UTM_CONTENT',
+                    'UTM_TERM',
+                    'USER_AGENT',
+                    'IP_HASH',
+                ]);
             }
 
             self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_DATE', ['DATE_CREATE']);
             self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_QUIZ_DATE', ['QUIZ_CODE', 'DATE_CREATE']);
             self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_RUN', ['RUN_ID']);
             self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_TYPE_DATE', ['EVENT_TYPE', 'DATE_CREATE']);
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_QUESTION', ['QUIZ_CODE', 'QUESTION_CODE', 'EVENT_TYPE']);
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_RESULT', ['QUIZ_CODE', 'RESULT_CODE', 'EVENT_TYPE']);
         } catch (\Throwable $exception) {
             if ($throwOnError) {
                 throw new SystemException($exception->getMessage());
             }
         }
+    }
+
+    private static function addAnalyticsColumnIfMissing(string $tableName, string $columnName, string $type): void
+    {
+        if (self::analyticsColumnExists($tableName, $columnName)) {
+            return;
+        }
+
+        $connection = Application::getConnection();
+        $helper = $connection->getSqlHelper();
+
+        try {
+            $connection->queryExecute(sprintf(
+                'ALTER TABLE %s ADD %s %s NULL',
+                $helper->quote($tableName),
+                $helper->quote($columnName),
+                $type
+            ));
+        } catch (\Throwable) {
+        }
+    }
+
+    private static function dropAnalyticsColumns(string $tableName, array $columnNames): void
+    {
+        $connection = Application::getConnection();
+        $helper = $connection->getSqlHelper();
+
+        foreach ($columnNames as $columnName) {
+            if (!self::analyticsColumnExists($tableName, (string)$columnName)) {
+                continue;
+            }
+
+            try {
+                $connection->queryExecute(sprintf(
+                    'ALTER TABLE %s DROP COLUMN %s',
+                    $helper->quote($tableName),
+                    $helper->quote((string)$columnName)
+                ));
+            } catch (\Throwable) {
+            }
+        }
+    }
+
+    private static function analyticsColumnExists(string $tableName, string $columnName): bool
+    {
+        try {
+            $fields = Application::getConnection()->getTableFields($tableName);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return array_key_exists($columnName, $fields) || array_key_exists(strtolower($columnName), $fields);
     }
 
     private static function createAnalyticsIndex(string $tableName, string $indexName, array $columns): void

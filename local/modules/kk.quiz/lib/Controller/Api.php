@@ -175,7 +175,7 @@ final class Api extends Controller
         try {
             $payload = $this->getTrackingPayloadFromRequest();
 
-            return (new \Kk\Quiz\Service\QuizEventService())->track($payload, $_SERVER);
+            return (new \Kk\Quiz\Service\QuizEventService())->track($payload);
         } catch (\Throwable) {
             return [
                 'success' => false,
