@@ -160,6 +160,67 @@
         return '/bitrix/services/main/ajax.php?' + params.toString();
     };
 
+    const createRunId = () => {
+        if (window.crypto && crypto.randomUUID) {
+            return crypto.randomUUID().replace(/-/g, '');
+        }
+
+        return 'run_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 12);
+    };
+
+    const ensureRunId = (state) => {
+        if (!state.runId) {
+            state.runId = createRunId();
+        }
+
+        return state.runId;
+    };
+
+    const resetRunState = (state) => {
+        state.runId = createRunId();
+        state.answers = {};
+        state.fields = {};
+        state.analytics.firstAnswerSent = false;
+        state.analytics.resultReachedSent = false;
+        state.tracking.quizOpenSent = false;
+        state.tracking.quizStartSent = false;
+        state.tracking.formShowSent = false;
+        state.tracking.leadSuccessSent = false;
+        state.tracking.resultShowCodes = {};
+    };
+
+    const trackQuizEvent = (root, eventType, data = {}) => {
+        if (!root || !eventType) {
+            return;
+        }
+
+        const state = root.__kkQuizState || null;
+        const quiz = root.__kkQuizData || {};
+        const quizCode = String(root.getAttribute('data-kk-quiz-code') || quiz.code || '').trim();
+        const runId = state ? ensureRunId(state) : (root.__kkQuizRunId || (root.__kkQuizRunId = createRunId()));
+
+        if (quizCode === '' || runId === '') {
+            return;
+        }
+
+        const payload = Object.assign({
+            quiz_code: quizCode,
+            quiz_section_id: quiz.id || '',
+            event_type: eventType,
+            run_id: runId,
+            page_url: window.location.href,
+            referer: document.referrer || '',
+            utm: getUtm()
+        }, data || {});
+
+        fetch(getAjaxUrl(root, 'kk:quiz.api.trackEvent'), {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }).catch(() => {});
+    };
+
     const getErrorMessage = (error) => {
         if (typeof error === 'string') {
             return error;
@@ -373,12 +434,40 @@
         return String(value || '').trim() !== '';
     };
 
+    const getTrackedAnswerCode = (state, question, answer) => {
+        if (answer) {
+            return String(answer.code || '');
+        }
+
+        const value = state.answers[question.id];
+        if (Array.isArray(value)) {
+            return value
+                .map((item) => item && item.custom ? 'custom' : String(item && item.code ? item.code : ''))
+                .filter((code) => code !== '')
+                .join(',');
+        }
+
+        if (value && typeof value === 'object' && value.custom) {
+            return 'custom';
+        }
+
+        return '';
+    };
+
     const buildState = () => ({
+        runId: createRunId(),
         answers: {},
         fields: {},
         analytics: {
             firstAnswerSent: false,
             resultReachedSent: false
+        },
+        tracking: {
+            quizOpenSent: false,
+            quizStartSent: false,
+            formShowSent: false,
+            leadSuccessSent: false,
+            resultShowCodes: {}
         }
     });
 
@@ -414,6 +503,7 @@
         root.hidden = false;
         root.classList.add('kk-quiz--popup-open');
         updatePopupLock();
+        trackQuizEvent(root, 'quiz_open');
 
         const focusTarget = root.querySelector('[data-kk-quiz-popup-close]')
             || root.querySelector('[data-kk-quiz-start-button]')
@@ -637,6 +727,14 @@
         clear(nodes.form);
         nodes.form.hidden = false;
 
+        if (!state.tracking.formShowSent) {
+            state.tracking.formShowSent = true;
+            trackQuizEvent(nodes.root, 'form_show', {
+                result_id: currentResult ? currentResult.id : '',
+                result_code: currentResult ? currentResult.code : ''
+            });
+        }
+
         const formButtonText = String(quiz.form_button_text || '').trim() || 'Получить подборку';
         const formTitle = String(quiz.form_title || '').trim() || 'Получить подборку';
         const formSubtitle = String(quiz.form_subtitle || '').trim();
@@ -797,6 +895,10 @@
                         };
 
                         sendAnalyticsEvent(quiz, 'form_submit', analyticsParams);
+                        if (!state.tracking.leadSuccessSent) {
+                            state.tracking.leadSuccessSent = true;
+                            trackQuizEvent(nodes.root, 'lead_success', analyticsParams);
+                        }
                         return;
                     }
 
@@ -901,6 +1003,15 @@
             });
         }
 
+        const resultCode = String(result.code || result.id || '');
+        if (!state.tracking.resultShowCodes[resultCode]) {
+            state.tracking.resultShowCodes[resultCode] = true;
+            trackQuizEvent(nodes.root, 'result_show', {
+                result_id: result.id || '',
+                result_code: result.code || ''
+            });
+        }
+
         hideAll(nodes);
         clear(nodes.result);
         nodes.result.hidden = false;
@@ -955,6 +1066,11 @@
     };
 
     const goNext = (nodes, quiz, state, question, answer) => {
+        if (!state.tracking.quizOpenSent) {
+            state.tracking.quizOpenSent = true;
+            trackQuizEvent(nodes.root, 'quiz_open');
+        }
+
         if (
             !state.analytics.firstAnswerSent
             && question
@@ -968,6 +1084,28 @@
                 question_id: question.id || '',
                 question_code: question.code || ''
             });
+        }
+
+        if (
+            !state.tracking.quizStartSent
+            && question
+            && toId(question.id) === toId(quiz.first_question_id)
+            && hasQuestionAnswer(state, question, answer)
+        ) {
+            state.tracking.quizStartSent = true;
+            trackQuizEvent(nodes.root, 'quiz_start', {
+                question_id: question.id || '',
+                question_code: question.code || ''
+            });
+        }
+
+        if (question) {
+            const answerPayload = {
+                question_id: question.id || '',
+                question_code: question.code || ''
+            };
+            answerPayload.answer_code = getTrackedAnswerCode(state, question, answer);
+            trackQuizEvent(nodes.root, 'question_answer', answerPayload);
         }
 
         if (answer && answer.result_id) {
@@ -1305,8 +1443,11 @@
         }
 
         const quizCode = getQuizCode(root, quiz);
-        if (root.hasAttribute('data-kk-quiz-popup-root') && quizCode !== '') {
+        if (quizCode !== '') {
             root.setAttribute('data-kk-quiz-code', quizCode);
+        }
+
+        if (root.hasAttribute('data-kk-quiz-popup-root') && quizCode !== '') {
             loadedQuizzes.set(quizCode, quiz);
             root.addEventListener('click', (event) => {
                 if (event.target === root) {
@@ -1319,9 +1460,18 @@
         }
 
         const state = buildState();
+        root.__kkQuizData = quiz;
+        root.__kkQuizState = state;
+        trackQuizEvent(root, 'quiz_view');
+
         const startButton = root.querySelector('[data-kk-quiz-start-button]');
         if (startButton) {
             startButton.addEventListener('click', () => {
+                if (!state.tracking.quizOpenSent) {
+                    state.tracking.quizOpenSent = true;
+                    trackQuizEvent(root, 'quiz_open');
+                }
+
                 const firstQuestionId = toId(quiz.first_question_id);
                 if (firstQuestionId) {
                     showQuestion(nodes, quiz, state, firstQuestionId);

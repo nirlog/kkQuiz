@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kk\Quiz\Iblock;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\SystemException;
@@ -11,6 +12,7 @@ use Kk\Quiz\Admin\ElementFormAssets;
 use Kk\Quiz\Admin\ElementListAssets;
 use Kk\Quiz\Admin\LeadListAssets;
 use Kk\Quiz\Admin\SectionFormAssets;
+use Kk\Quiz\Analytics\QuizEventTable;
 use Kk\Quiz\Iblock\Property\QuizAnswersProperty;
 
 final class Installer
@@ -27,6 +29,7 @@ final class Installer
 
         self::registerEventHandlers();
         self::installAdminFiles();
+        self::installAnalyticsTables();
 
         self::installIblockType();
 
@@ -52,6 +55,7 @@ final class Installer
     public static function ensureEventHandlers(): void
     {
         self::installAdminFiles(false);
+        self::installAnalyticsTables(false);
 
         self::registerEventHandlerIfMissing(
             'iblock',
@@ -279,6 +283,57 @@ final class Installer
         if (strpos($content, 'kk.quiz/admin/statistics.php') !== false) {
             @unlink($target);
         }
+    }
+
+    private static function installAnalyticsTables(bool $throwOnError = true): void
+    {
+        try {
+            $connection = Application::getConnection();
+            $tableName = QuizEventTable::getTableName();
+
+            if (!$connection->isTableExists($tableName)) {
+                QuizEventTable::getEntity()->createDbTable();
+            }
+
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_DATE', ['DATE_CREATE']);
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_QUIZ_DATE', ['QUIZ_CODE', 'DATE_CREATE']);
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_RUN', ['RUN_ID']);
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_TYPE_DATE', ['EVENT_TYPE', 'DATE_CREATE']);
+        } catch (\Throwable $exception) {
+            if ($throwOnError) {
+                throw new SystemException($exception->getMessage());
+            }
+        }
+    }
+
+    private static function createAnalyticsIndex(string $tableName, string $indexName, array $columns): void
+    {
+        $connection = Application::getConnection();
+        if (method_exists($connection, 'isIndexExists') && $connection->isIndexExists($tableName, $columns)) {
+            return;
+        }
+
+        $helper = $connection->getSqlHelper();
+        $quotedColumns = [];
+        foreach ($columns as $column) {
+            $quotedColumns[] = $helper->quote((string)$column);
+        }
+
+        try {
+            $connection->queryExecute(sprintf(
+                'CREATE INDEX %s ON %s (%s)',
+                $helper->quote($indexName),
+                $helper->quote($tableName),
+                implode(', ', $quotedColumns)
+            ));
+        } catch (\Throwable) {
+            // Index may already exist under the requested name after a previous module version.
+        }
+    }
+
+    private static function uninstallAnalyticsTables(): void
+    {
+        // Analytics events are user data and are intentionally preserved on module uninstall.
     }
 
     private static function installIblockType(): void

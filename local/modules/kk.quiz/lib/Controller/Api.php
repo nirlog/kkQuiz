@@ -30,6 +30,9 @@ final class Api extends Controller
             'exportLeads' => [
                 'prefilters' => [new Csrf()],
             ],
+            'trackEvent' => [
+                'prefilters' => [],
+            ],
         ];
     }
 
@@ -167,6 +170,20 @@ final class Api extends Controller
         }
     }
 
+    public function trackEventAction(): array
+    {
+        try {
+            $payload = $this->getTrackingPayloadFromRequest();
+
+            return (new \Kk\Quiz\Service\QuizEventService())->track($payload, $_SERVER);
+        } catch (\Throwable) {
+            return [
+                'success' => false,
+                'errors' => ['TRACK_FAILED'],
+            ];
+        }
+    }
+
     private function isAdminAllowed(): bool
     {
         global $USER;
@@ -277,6 +294,38 @@ final class Api extends Controller
         }
 
         $payload = $decoded['payload'] ?? $decoded;
+
+        return is_array($payload) ? $payload : [];
+    }
+
+    private function getTrackingPayloadFromRequest(): array
+    {
+        $request = $this->getRequest();
+
+        $postPayload = $request->getPost('payload');
+        if (is_array($postPayload)) {
+            return $postPayload;
+        }
+
+        $input = method_exists($request, 'getInput')
+            ? (string)$request->getInput()
+            : (string)file_get_contents('php://input');
+
+        if (trim($input) === '') {
+            return [];
+        }
+
+        try {
+            $decoded = Json::decode($input);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $payload = $decoded['event'] ?? $decoded['payload'] ?? $decoded;
 
         return is_array($payload) ? $payload : [];
     }
