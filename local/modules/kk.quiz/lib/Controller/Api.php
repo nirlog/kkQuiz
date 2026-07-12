@@ -21,6 +21,15 @@ final class Api extends Controller
             'getQuiz' => [
                 'prefilters' => [new Csrf()],
             ],
+            'exportQuiz' => [
+                'prefilters' => [new Csrf()],
+            ],
+            'importQuiz' => [
+                'prefilters' => [new Csrf()],
+            ],
+            'exportLeads' => [
+                'prefilters' => [new Csrf()],
+            ],
         ];
     }
 
@@ -53,6 +62,97 @@ final class Api extends Controller
         ];
     }
 
+    public function exportQuizAction(string $quizCode = ''): array
+    {
+        if (!$this->isAdminAllowed()) {
+            return [
+                'success' => false,
+                'errors' => ['ACCESS_DENIED'],
+            ];
+        }
+
+        $quizCode = $this->normalizeQuizCodeFromRequest($quizCode);
+
+        if ($quizCode === '' || !preg_match('/^[a-zA-Z0-9_-]+$/', $quizCode)) {
+            return [
+                'success' => false,
+                'errors' => ['INVALID_QUIZ_CODE'],
+            ];
+        }
+
+        try {
+            $export = (new \Kk\Quiz\Service\QuizExportService())->exportByCode($quizCode);
+        } catch (\Throwable $exception) {
+            return [
+                'success' => false,
+                'errors' => [$exception->getMessage() !== '' ? $exception->getMessage() : 'EXPORT_FAILED'],
+            ];
+        }
+
+        if (!is_array($export)) {
+            return [
+                'success' => false,
+                'errors' => ['QUIZ_NOT_FOUND'],
+            ];
+        }
+
+        return [
+            'success' => true,
+            'filename' => 'kk-quiz-' . $quizCode . '.json',
+            'export' => $export,
+        ];
+    }
+
+    public function importQuizAction(): array
+    {
+        if (!$this->isAdminAllowed()) {
+            return [
+                'success' => false,
+                'errors' => ['ACCESS_DENIED'],
+            ];
+        }
+
+        try {
+            $payload = $this->getImportPayloadFromRequest();
+            $result = (new \Kk\Quiz\Service\QuizImportService())->import($payload);
+
+            return [
+                'success' => true,
+                'import' => $result,
+            ];
+        } catch (\Throwable $exception) {
+            return [
+                'success' => false,
+                'errors' => [$exception->getMessage() !== '' ? $exception->getMessage() : 'IMPORT_FAILED'],
+            ];
+        }
+    }
+
+    public function exportLeadsAction(): array
+    {
+        if (!$this->isAdminAllowed()) {
+            return [
+                'success' => false,
+                'errors' => ['ACCESS_DENIED'],
+            ];
+        }
+
+        try {
+            $export = (new \Kk\Quiz\Service\LeadExportService())->exportCsv();
+
+            return [
+                'success' => true,
+                'filename' => $export['filename'],
+                'content' => $export['content'],
+            ];
+        } catch (\Throwable $exception) {
+            return [
+                'success' => false,
+                'errors' => [$exception->getMessage() !== '' ? $exception->getMessage() : 'EXPORT_LEADS_FAILED'],
+            ];
+        }
+    }
+
     public function submitLeadAction(): array
     {
         try {
@@ -65,6 +165,13 @@ final class Api extends Controller
                 'errors' => [$exception->getMessage() !== '' ? $exception->getMessage() : 'Не удалось сохранить заявку'],
             ];
         }
+    }
+
+    private function isAdminAllowed(): bool
+    {
+        global $USER;
+
+        return is_object($USER) && method_exists($USER, 'IsAdmin') && $USER->IsAdmin();
     }
 
     private function normalizeQuizCodeFromRequest(string $quizCode): string
@@ -98,6 +205,38 @@ final class Api extends Controller
         }
 
         return is_array($decoded) ? trim((string)($decoded['quizCode'] ?? '')) : '';
+    }
+
+    private function getImportPayloadFromRequest(): array
+    {
+        $request = $this->getRequest();
+
+        $postPayload = $request->getPost('export');
+        if (is_array($postPayload)) {
+            return $postPayload;
+        }
+
+        $input = method_exists($request, 'getInput')
+            ? (string)$request->getInput()
+            : (string)file_get_contents('php://input');
+
+        if (trim($input) === '') {
+            return [];
+        }
+
+        try {
+            $decoded = Json::decode($input);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $payload = $decoded['export'] ?? $decoded['payload'] ?? $decoded;
+
+        return is_array($payload) ? $payload : [];
     }
 
     private function getPayloadFromRequest(): array
