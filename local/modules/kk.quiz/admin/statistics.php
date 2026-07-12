@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Bitrix\Main\Loader;
+use Kk\Quiz\Service\QuizFunnelStatisticsService;
 use Kk\Quiz\Service\QuizStatisticsService;
 
 require_once($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_before.php');
@@ -91,9 +92,24 @@ try {
     $error = $exception->getMessage() !== '' ? $exception->getMessage() : 'STATISTICS_FAILED';
 }
 
+try {
+    $funnelSummary = (new QuizFunnelStatisticsService())->getSummary([
+        'date_from' => $dateFrom,
+        'date_to' => $dateTo,
+    ]);
+} catch (\Throwable) {
+    $funnelSummary = [
+        'funnel_by_quiz' => [],
+        'question_dropoff' => [],
+        'popular_answers' => [],
+        'warnings' => [],
+    ];
+}
+
 require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_after.php');
 
 $escape = static fn (mixed $value): string => htmlspecialcharsbx((string)$value);
+$formatPercent = static fn (mixed $value): string => number_format((float)$value, 1, '.', '') . '%';
 $lang = defined('LANGUAGE_ID') ? (string)LANGUAGE_ID : 'ru';
 $periodUrl = static fn (string $value): string => '/bitrix/admin/kk_quiz_statistics.php?' . http_build_query(['lang' => $lang, 'period' => $value]);
 $totals = is_array($summary['totals'] ?? null) ? $summary['totals'] : [];
@@ -118,6 +134,8 @@ $periodLabel = (string)($summary['period']['label'] ?? '');
 .kk-quiz-stat-filter__presets{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;}
 .kk-quiz-stat-filter form{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
 .kk-quiz-stat-period-label{margin:-6px 0 18px;color:#555;}
+.kk-quiz-stat-row-warn{background:#fff8d7;}
+.kk-quiz-stat-row-danger{background:#ffe8e8;}
 </style>
 
 <?php if ($error !== ''): ?>
@@ -125,6 +143,9 @@ $periodLabel = (string)($summary['period']['label'] ?? '');
 <?php endif; ?>
 
 <?php foreach ((array)($summary['warnings'] ?? []) as $warning): ?>
+    <div class="adm-info-message-wrap"><div class="adm-info-message"><?= $escape($warning) ?></div></div>
+<?php endforeach; ?>
+<?php foreach ((array)($funnelSummary['warnings'] ?? []) as $warning): ?>
     <div class="adm-info-message-wrap"><div class="adm-info-message"><?= $escape($warning) ?></div></div>
 <?php endforeach; ?>
 
@@ -160,6 +181,112 @@ $periodLabel = (string)($summary['period']['label'] ?? '');
 </div>
 
 <div class="kk-quiz-stat-period-label">Период таблиц: <?= $escape($periodLabel !== '' ? $periodLabel : 'всё время') ?></div>
+
+<div class="kk-quiz-stat-section">
+    <h2>Воронка прохождения квиза</h2>
+    <?php if ((array)($funnelSummary['funnel_by_quiz'] ?? []) === []): ?>
+        <div class="kk-quiz-stat-empty">Нет данных по событиям квиза за выбранный период.</div>
+    <?php else: ?>
+        <table class="adm-list-table">
+            <thead>
+            <tr class="adm-list-table-header">
+                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Квиз</div></td>
+                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Показы</div></td>
+                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Открытия</div></td>
+                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Старты</div></td>
+                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Результаты</div></td>
+                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Формы</div></td>
+                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Заявки</div></td>
+                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">View→Lead</div></td>
+                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Start→Lead</div></td>
+            </tr>
+            </thead>
+            <tbody>
+            <?php foreach ((array)$funnelSummary['funnel_by_quiz'] as $row): ?>
+                <tr class="adm-list-table-row">
+                    <td class="adm-list-table-cell"><?= $escape($row['quiz_name'] ?? $row['quiz_code'] ?? '') ?><br><small><?= $escape($row['quiz_code'] ?? '') ?></small></td>
+                    <td class="adm-list-table-cell"><?= $escape((int)($row['views'] ?? 0)) ?></td>
+                    <td class="adm-list-table-cell"><?= $escape((int)($row['opens'] ?? 0)) ?></td>
+                    <td class="adm-list-table-cell"><?= $escape((int)($row['starts'] ?? 0)) ?></td>
+                    <td class="adm-list-table-cell"><?= $escape((int)($row['results'] ?? 0)) ?></td>
+                    <td class="adm-list-table-cell"><?= $escape((int)($row['forms'] ?? 0)) ?></td>
+                    <td class="adm-list-table-cell"><?= $escape((int)($row['leads'] ?? 0)) ?></td>
+                    <td class="adm-list-table-cell"><?= $escape($formatPercent($row['view_to_lead'] ?? 0)) ?></td>
+                    <td class="adm-list-table-cell"><?= $escape($formatPercent($row['start_to_lead'] ?? 0)) ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    <?php endif; ?>
+</div>
+
+<div class="kk-quiz-stat-section">
+    <h2>Отвалы по вопросам</h2>
+    <?php if ((array)($funnelSummary['question_dropoff'] ?? []) === []): ?>
+        <div class="kk-quiz-stat-empty">Нет данных по событиям квиза за выбранный период.</div>
+    <?php else: ?>
+        <table class="adm-list-table">
+            <thead>
+            <tr class="adm-list-table-header">
+                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Квиз</div></td>
+                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Шаг</div></td>
+                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Вопрос</div></td>
+                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Показан</div></td>
+                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Ответили</div></td>
+                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Отвал</div></td>
+                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Отвал %</div></td>
+            </tr>
+            </thead>
+            <tbody>
+            <?php foreach ((array)$funnelSummary['question_dropoff'] as $row): ?>
+                <?php
+                $dropoffRate = (float)($row['dropoff_rate'] ?? 0);
+                $dropoffClass = $dropoffRate >= 50.0 ? ' kk-quiz-stat-row-danger' : ($dropoffRate >= 25.0 ? ' kk-quiz-stat-row-warn' : '');
+                ?>
+                <tr class="adm-list-table-row<?= $escape($dropoffClass) ?>">
+                    <td class="adm-list-table-cell"><?= $escape($row['quiz_name'] ?? $row['quiz_code'] ?? '') ?><br><small><?= $escape($row['quiz_code'] ?? '') ?></small></td>
+                    <td class="adm-list-table-cell"><?= $escape((int)($row['step_index'] ?? 0)) ?></td>
+                    <td class="adm-list-table-cell"><?= $escape($row['question_title'] ?? $row['question_code'] ?? '') ?><br><small><?= $escape($row['question_code'] ?? '') ?></small></td>
+                    <td class="adm-list-table-cell"><?= $escape((int)($row['shown'] ?? 0)) ?></td>
+                    <td class="adm-list-table-cell"><?= $escape((int)($row['answered'] ?? 0)) ?></td>
+                    <td class="adm-list-table-cell"><?= $escape((int)($row['dropoff'] ?? 0)) ?></td>
+                    <td class="adm-list-table-cell"><?= $escape($formatPercent($dropoffRate)) ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    <?php endif; ?>
+</div>
+
+<div class="kk-quiz-stat-section">
+    <h2>Популярные ответы</h2>
+    <?php if ((array)($funnelSummary['popular_answers'] ?? []) === []): ?>
+        <div class="kk-quiz-stat-empty">Нет данных по событиям квиза за выбранный период.</div>
+    <?php else: ?>
+        <table class="adm-list-table">
+            <thead>
+            <tr class="adm-list-table-header">
+                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Квиз</div></td>
+                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Вопрос</div></td>
+                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Ответ</div></td>
+                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Количество</div></td>
+                <td class="adm-list-table-cell"><div class="adm-list-table-cell-inner">Доля</div></td>
+            </tr>
+            </thead>
+            <tbody>
+            <?php foreach ((array)$funnelSummary['popular_answers'] as $row): ?>
+                <tr class="adm-list-table-row">
+                    <td class="adm-list-table-cell"><?= $escape($row['quiz_name'] ?? $row['quiz_code'] ?? '') ?><br><small><?= $escape($row['quiz_code'] ?? '') ?></small></td>
+                    <td class="adm-list-table-cell"><?= $escape($row['question_title'] ?? $row['question_code'] ?? '') ?><br><small><?= $escape($row['question_code'] ?? '') ?></small></td>
+                    <td class="adm-list-table-cell"><?= $escape($row['answer_title'] ?? $row['answer_code'] ?? '') ?><br><small><?= $escape($row['answer_code'] ?? '') ?></small></td>
+                    <td class="adm-list-table-cell"><?= $escape((int)($row['count'] ?? 0)) ?></td>
+                    <td class="adm-list-table-cell"><?= $escape($formatPercent($row['share'] ?? 0)) ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    <?php endif; ?>
+</div>
 
 <div class="kk-quiz-stat-section">
     <h2>По квизам за выбранный период</h2>
