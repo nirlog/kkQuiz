@@ -78,7 +78,13 @@ final class QuizEventMaintenanceService
             }
         } catch (\Throwable $exception) {
             $result['success'] = false;
-            $result['errors'][] = $exception->getMessage() !== '' ? $exception->getMessage() : 'CLEANUP_ORPHAN_EVENTS_FAILED';
+            if ($exception->getMessage() === 'QUIZ_IBLOCK_NOT_AVAILABLE') {
+                $result['deleted'] = 0;
+                $result['quiz_codes'] = [];
+                $result['errors'][] = 'QUIZ_IBLOCK_NOT_AVAILABLE';
+            } else {
+                $result['errors'][] = $exception->getMessage() !== '' ? $exception->getMessage() : 'CLEANUP_ORPHAN_EVENTS_FAILED';
+            }
         }
 
         return $result;
@@ -138,7 +144,7 @@ final class QuizEventMaintenanceService
     private function getExistingQuizCodes(array $quizCodes): array
     {
         if (!Loader::includeModule('iblock')) {
-            return [];
+            throw new \RuntimeException('QUIZ_IBLOCK_NOT_AVAILABLE');
         }
 
         $iblock = \CIBlock::GetList([], [
@@ -147,7 +153,7 @@ final class QuizEventMaintenanceService
         ])->Fetch();
 
         if (!is_array($iblock) || (int)($iblock['ID'] ?? 0) <= 0) {
-            return [];
+            throw new \RuntimeException('QUIZ_IBLOCK_NOT_AVAILABLE');
         }
 
         $existingCodes = [];

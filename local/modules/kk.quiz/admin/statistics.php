@@ -111,8 +111,10 @@ try {
 
 try {
     $orphanQuizCodes = (new QuizEventMaintenanceService())->getOrphanQuizCodes();
+    $orphanQuizCheckFailed = false;
 } catch (\Throwable) {
     $orphanQuizCodes = [];
+    $orphanQuizCheckFailed = true;
 }
 
 require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_after.php');
@@ -191,13 +193,16 @@ $periodLabel = (string)($summary['period']['label'] ?? '');
 
 <?php
 $orphanQuizCodes = is_array($orphanQuizCodes ?? null) ? $orphanQuizCodes : [];
+$orphanQuizCheckFailed = (bool)($orphanQuizCheckFailed ?? false);
 $orphanPreview = array_slice($orphanQuizCodes, 0, 10);
 $orphanExtraCount = max(0, count($orphanQuizCodes) - count($orphanPreview));
 ?>
 <div class="kk-quiz-maintenance">
     <h2>Обслуживание статистики</h2>
     <div>Срок хранения событий: <?= $escape(QuizEventMaintenanceService::DEFAULT_RETENTION_DAYS) ?> дней</div>
-    <?php if ($orphanQuizCodes === []): ?>
+    <?php if ($orphanQuizCheckFailed): ?>
+        <div class="kk-quiz-maintenance__note">Не удалось проверить статистику удалённых квизов.</div>
+    <?php elseif ($orphanQuizCodes === []): ?>
         <div class="kk-quiz-maintenance__note">Статистика удалённых квизов не найдена.</div>
     <?php else: ?>
         <div class="kk-quiz-maintenance__note">
