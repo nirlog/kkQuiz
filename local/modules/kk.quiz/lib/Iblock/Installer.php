@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Kk\Quiz\Iblock;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\SystemException;
 use Kk\Quiz\Admin\ElementFormAssets;
 use Kk\Quiz\Admin\ElementListAssets;
+use Kk\Quiz\Admin\LeadListAssets;
 use Kk\Quiz\Admin\SectionFormAssets;
+use Kk\Quiz\Analytics\QuizEventTable;
 use Kk\Quiz\Iblock\Property\QuizAnswersProperty;
 
 final class Installer
@@ -25,6 +28,8 @@ final class Installer
         }
 
         self::registerEventHandlers();
+        self::installAdminFiles();
+        self::installAnalyticsTables();
 
         self::installIblockType();
 
@@ -42,12 +47,16 @@ final class Installer
     public static function uninstall(): void
     {
         self::unregisterEventHandlers();
+        self::uninstallAdminFiles();
 
         // Инфоблоки и пользовательские данные намеренно не удаляются.
     }
 
     public static function ensureEventHandlers(): void
     {
+        self::installAdminFiles(false);
+        self::installAnalyticsTables(false);
+
         self::registerEventHandlerIfMissing(
             'iblock',
             'OnIBlockPropertyBuildList',
@@ -66,6 +75,13 @@ final class Installer
             'main',
             'OnProlog',
             ElementListAssets::class,
+            'onProlog'
+        );
+
+        self::registerEventHandlerIfMissing(
+            'main',
+            'OnProlog',
+            LeadListAssets::class,
             'onProlog'
         );
 
@@ -150,6 +166,14 @@ final class Installer
             'main',
             'OnProlog',
             'kk.quiz',
+            LeadListAssets::class,
+            'onProlog'
+        );
+
+        EventManager::getInstance()->registerEventHandler(
+            'main',
+            'OnProlog',
+            'kk.quiz',
             SectionFormAssets::class,
             'onProlog'
         );
@@ -185,9 +209,200 @@ final class Installer
             'main',
             'OnProlog',
             'kk.quiz',
+            LeadListAssets::class,
+            'onProlog'
+        );
+
+        EventManager::getInstance()->unRegisterEventHandler(
+            'main',
+            'OnProlog',
+            'kk.quiz',
             SectionFormAssets::class,
             'onProlog'
         );
+    }
+
+    private static function installAdminFiles(bool $throwOnError = true): void
+    {
+        $documentRoot = rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/');
+        if ($documentRoot === '') {
+            if ($throwOnError) {
+                throw new SystemException('DOCUMENT_ROOT is empty.');
+            }
+
+            return;
+        }
+
+        $source = dirname(__DIR__, 2) . '/admin/kk_quiz_statistics.php';
+        $target = $documentRoot . '/bitrix/admin/kk_quiz_statistics.php';
+
+        if (!is_file($source)) {
+            if ($throwOnError) {
+                throw new SystemException('KK Quiz admin statistics stub source not found.');
+            }
+
+            return;
+        }
+
+        $targetDir = dirname($target);
+        if (!is_dir($targetDir)) {
+            if ($throwOnError) {
+                throw new SystemException('/bitrix/admin directory not found.');
+            }
+
+            return;
+        }
+
+        $sourceContent = (string)file_get_contents($source);
+        $targetContent = is_file($target) ? (string)file_get_contents($target) : '';
+
+        if ($targetContent === $sourceContent) {
+            return;
+        }
+
+        if (@file_put_contents($target, $sourceContent) === false && $throwOnError) {
+            throw new SystemException('Cannot write /bitrix/admin/kk_quiz_statistics.php.');
+        }
+    }
+
+    private static function uninstallAdminFiles(): void
+    {
+        $documentRoot = rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/');
+        if ($documentRoot === '') {
+            return;
+        }
+
+        $target = $documentRoot . '/bitrix/admin/kk_quiz_statistics.php';
+
+        if (!is_file($target)) {
+            return;
+        }
+
+        $content = (string)file_get_contents($target);
+
+        if (strpos($content, 'kk.quiz/admin/statistics.php') !== false) {
+            @unlink($target);
+        }
+    }
+
+    private static function installAnalyticsTables(bool $throwOnError = true): void
+    {
+        try {
+            $connection = Application::getConnection();
+            $tableName = QuizEventTable::getTableName();
+
+            if (!$connection->isTableExists($tableName)) {
+                QuizEventTable::getEntity()->createDbTable();
+            } else {
+                self::addAnalyticsColumnIfMissing($tableName, 'STEP_INDEX', 'int');
+                self::addAnalyticsColumnIfMissing($tableName, 'LEAD_ID', 'int');
+                self::dropAnalyticsColumns($tableName, [
+                    'SESSION_ID',
+                    'PAGE_URL',
+                    'REFERER',
+                    'UTM_SOURCE',
+                    'UTM_MEDIUM',
+                    'UTM_CAMPAIGN',
+                    'UTM_CONTENT',
+                    'UTM_TERM',
+                    'USER_AGENT',
+                    'IP_HASH',
+                ]);
+            }
+
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_DATE', ['DATE_CREATE']);
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_QUIZ_DATE', ['QUIZ_CODE', 'DATE_CREATE']);
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_RUN', ['RUN_ID']);
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_TYPE_DATE', ['EVENT_TYPE', 'DATE_CREATE']);
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_QUESTION', ['QUIZ_CODE', 'QUESTION_CODE', 'EVENT_TYPE']);
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_RESULT', ['QUIZ_CODE', 'RESULT_CODE', 'EVENT_TYPE']);
+        } catch (\Throwable $exception) {
+            if ($throwOnError) {
+                throw new SystemException($exception->getMessage());
+            }
+        }
+    }
+
+    private static function addAnalyticsColumnIfMissing(string $tableName, string $columnName, string $type): void
+    {
+        if (self::analyticsColumnExists($tableName, $columnName)) {
+            return;
+        }
+
+        $connection = Application::getConnection();
+        $helper = $connection->getSqlHelper();
+
+        try {
+            $connection->queryExecute(sprintf(
+                'ALTER TABLE %s ADD %s %s NULL',
+                $helper->quote($tableName),
+                $helper->quote($columnName),
+                $type
+            ));
+        } catch (\Throwable) {
+        }
+    }
+
+    private static function dropAnalyticsColumns(string $tableName, array $columnNames): void
+    {
+        $connection = Application::getConnection();
+        $helper = $connection->getSqlHelper();
+
+        foreach ($columnNames as $columnName) {
+            if (!self::analyticsColumnExists($tableName, (string)$columnName)) {
+                continue;
+            }
+
+            try {
+                $connection->queryExecute(sprintf(
+                    'ALTER TABLE %s DROP COLUMN %s',
+                    $helper->quote($tableName),
+                    $helper->quote((string)$columnName)
+                ));
+            } catch (\Throwable) {
+            }
+        }
+    }
+
+    private static function analyticsColumnExists(string $tableName, string $columnName): bool
+    {
+        try {
+            $fields = Application::getConnection()->getTableFields($tableName);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return array_key_exists($columnName, $fields) || array_key_exists(strtolower($columnName), $fields);
+    }
+
+    private static function createAnalyticsIndex(string $tableName, string $indexName, array $columns): void
+    {
+        $connection = Application::getConnection();
+        if (method_exists($connection, 'isIndexExists') && $connection->isIndexExists($tableName, $columns)) {
+            return;
+        }
+
+        $helper = $connection->getSqlHelper();
+        $quotedColumns = [];
+        foreach ($columns as $column) {
+            $quotedColumns[] = $helper->quote((string)$column);
+        }
+
+        try {
+            $connection->queryExecute(sprintf(
+                'CREATE INDEX %s ON %s (%s)',
+                $helper->quote($indexName),
+                $helper->quote($tableName),
+                implode(', ', $quotedColumns)
+            ));
+        } catch (\Throwable) {
+            // Index may already exist under the requested name after a previous module version.
+        }
+    }
+
+    private static function uninstallAnalyticsTables(): void
+    {
+        // Analytics events are user data and are intentionally preserved on module uninstall.
     }
 
     private static function installIblockType(): void
