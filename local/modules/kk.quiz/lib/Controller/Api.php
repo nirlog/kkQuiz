@@ -27,6 +27,9 @@ final class Api extends Controller
             'importQuiz' => [
                 'prefilters' => [new Csrf()],
             ],
+            'exportLeads' => [
+                'prefilters' => [new Csrf()],
+            ],
         ];
     }
 
@@ -121,6 +124,31 @@ final class Api extends Controller
             return [
                 'success' => false,
                 'errors' => [$exception->getMessage() !== '' ? $exception->getMessage() : 'IMPORT_FAILED'],
+            ];
+        }
+    }
+
+    public function exportLeadsAction(): array
+    {
+        if (!$this->isAdminAllowed()) {
+            return [
+                'success' => false,
+                'errors' => ['ACCESS_DENIED'],
+            ];
+        }
+
+        try {
+            $export = (new \Kk\Quiz\Service\LeadExportService())->exportCsv();
+
+            return [
+                'success' => true,
+                'filename' => $export['filename'],
+                'content' => $export['content'],
+            ];
+        } catch (\Throwable $exception) {
+            return [
+                'success' => false,
+                'errors' => [$exception->getMessage() !== '' ? $exception->getMessage() : 'EXPORT_LEADS_FAILED'],
             ];
         }
     }
