@@ -432,21 +432,39 @@
         return String(value || '').trim() !== '';
     };
 
-    const getTrackedAnswerCodes = (state, question, answer) => {
-        if (answer) {
-            const code = String(answer.code || '');
-            return code !== '' ? [code] : [];
+    const getAnswerTrackingCode = (item) => {
+        if (!item || typeof item !== 'object') {
+            return '';
         }
 
+        if (item.custom) {
+            return 'custom';
+        }
+
+        const code = String(item.code || '').trim();
+        if (code !== '') {
+            return code;
+        }
+
+        const index = Number.parseInt(item.index, 10);
+        if (Number.isInteger(index) && index >= 0) {
+            return 'answer_' + String(index + 1);
+        }
+
+        return '';
+    };
+
+    const getTrackedAnswerCodes = (state, question) => {
         const value = state.answers[question.id];
         if (Array.isArray(value)) {
             return value
-                .map((item) => item && item.custom ? 'custom' : String(item && item.code ? item.code : ''))
+                .map(getAnswerTrackingCode)
                 .filter((code) => code !== '');
         }
 
-        if (value && typeof value === 'object' && value.custom) {
-            return ['custom'];
+        if (value && typeof value === 'object') {
+            const code = getAnswerTrackingCode(value);
+            return code !== '' ? [code] : [];
         }
 
         if (String(value || '').trim() !== '') {
@@ -1107,7 +1125,7 @@
         }
 
         if (question) {
-            const answerCodes = getTrackedAnswerCodes(state, question, answer);
+            const answerCodes = getTrackedAnswerCodes(state, question);
             answerCodes.forEach((answerCode) => {
                 trackQuizEvent(nodes.root, 'question_answer', {
                     step_index: state.stepIndex,
