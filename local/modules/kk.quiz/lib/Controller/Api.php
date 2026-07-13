@@ -33,6 +33,9 @@ final class Api extends Controller
             'cleanupQuizEvents' => [
                 'prefilters' => [new Csrf()],
             ],
+            'exportQuizStatistics' => [
+                'prefilters' => [new Csrf()],
+            ],
             'trackEvent' => [
                 'prefilters' => [],
             ],
@@ -159,6 +162,30 @@ final class Api extends Controller
         }
     }
 
+    public function exportQuizStatisticsAction(): array
+    {
+        if (!$this->isAdminAllowed()) {
+            return [
+                'success' => false,
+                'errors' => ['ACCESS_DENIED'],
+            ];
+        }
+
+        try {
+            $export = (new \Kk\Quiz\Service\QuizStatisticsExportService())->exportCsv($this->getStatisticsExportOptionsFromRequest());
+
+            return [
+                'success' => true,
+                'filename' => $export['filename'],
+                'content' => $export['content'],
+            ];
+        } catch (\Throwable) {
+            return [
+                'success' => false,
+                'errors' => ['EXPORT_STATISTICS_FAILED'],
+            ];
+        }
+    }
 
     public function cleanupQuizEventsAction(string $mode = ''): array
     {
@@ -347,6 +374,45 @@ final class Api extends Controller
         return is_array($payload) ? $payload : [];
     }
 
+    private function getStatisticsExportOptionsFromRequest(): array
+    {
+        $request = $this->getRequest();
+        $options = [];
+
+        foreach (['date_from', 'date_to', 'period_label'] as $key) {
+            $value = $request->getPost($key);
+            if (is_scalar($value)) {
+                $options[$key] = trim((string)$value);
+            }
+        }
+
+        $input = method_exists($request, 'getInput')
+            ? (string)$request->getInput()
+            : (string)file_get_contents('php://input');
+
+        if (trim($input) === '') {
+            return $options;
+        }
+
+        try {
+            $decoded = Json::decode($input);
+        } catch (\Throwable) {
+            return $options;
+        }
+
+        if (!is_array($decoded)) {
+            return $options;
+        }
+
+        $payload = is_array($decoded['payload'] ?? null) ? $decoded['payload'] : $decoded;
+        foreach (['date_from', 'date_to', 'period_label'] as $key) {
+            if (isset($payload[$key]) && is_scalar($payload[$key])) {
+                $options[$key] = trim((string)$payload[$key]);
+            }
+        }
+
+        return $options;
+    }
 
     private function getCleanupModeFromRequest(string $mode): string
     {

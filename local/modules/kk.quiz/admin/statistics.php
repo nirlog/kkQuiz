@@ -191,6 +191,7 @@ $periodLabel = (string)($summary['period']['label'] ?? '');
     <?php if ((string)($summary['leads_admin_url'] ?? '') !== ''): ?>
         <a class="adm-btn" href="<?= $escape($summary['leads_admin_url']) ?>">Открыть список заявок</a>
     <?php endif; ?>
+    <button type="button" class="adm-btn" data-kk-quiz-statistics-export>Экспорт статистики CSV</button>
 </div>
 
 
@@ -220,21 +221,28 @@ $orphanExtraCount = max(0, count($orphanQuizCodes) - count($orphanPreview));
 </div>
 <script>
 (function () {
+    const statisticsExportPayload = <?= json_encode([
+        'date_from' => $dateFrom,
+        'date_to' => $dateTo,
+        'period_label' => $periodLabel !== '' ? $periodLabel : 'всё время',
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const messages = {
         old: 'Очистить старые события аналитики? Это действие нельзя отменить.',
         orphan: 'Очистить статистику квизов, которые уже удалены? Это действие нельзя отменить.',
         all: 'Выполнить полную очистку старых событий и статистики удалённых квизов? Это действие нельзя отменить.'
     };
 
-    const getCleanupUrl = () => {
+    const getAdminAjaxUrl = (action) => {
         const sessid = window.BX && typeof BX.bitrix_sessid === 'function' ? BX.bitrix_sessid() : '';
-        const params = new URLSearchParams({ action: 'kk:quiz.api.cleanupQuizEvents' });
+        const params = new URLSearchParams({ action });
         if (sessid !== '') {
             params.set('sessid', sessid);
         }
 
         return '/bitrix/services/main/ajax.php?' + params.toString();
     };
+
+    const getCleanupUrl = () => getAdminAjaxUrl('kk:quiz.api.cleanupQuizEvents');
 
     const getDeletedCount = (data) => {
         let deleted = 0;
@@ -247,6 +255,50 @@ $orphanExtraCount = max(0, count($orphanQuizCodes) - count($orphanPreview));
 
         return deleted;
     };
+
+    document.querySelectorAll('[data-kk-quiz-statistics-export]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = 'Экспорт...';
+
+            fetch(getAdminAjaxUrl('kk:quiz.api.exportQuizStatistics'), {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(statisticsExportPayload)
+            })
+                .then((response) => response.json())
+                .then((response) => {
+                    const data = response && response.data ? response.data : response;
+                    if (!data || data.success !== true || !data.content) {
+                        console.warn('KK Quiz: statistics export failed', response);
+                        throw new Error('EXPORT_STATISTICS_FAILED');
+                    }
+
+                    const filename = data.filename || 'kk-quiz-statistics.csv';
+                    const blob = new Blob([data.content], { type: 'text/csv;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                })
+                .catch((error) => {
+                    console.warn('KK Quiz: statistics export failed', { error });
+                    alert('Не удалось экспортировать статистику');
+                })
+                .finally(() => {
+                    button.disabled = false;
+                    button.textContent = originalText;
+                });
+        });
+    });
 
     document.querySelectorAll('[data-kk-quiz-cleanup]').forEach((button) => {
         button.addEventListener('click', () => {
