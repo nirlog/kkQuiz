@@ -30,6 +30,7 @@ $checkboxOptions = [
     'email_admin_link_enabled',
     'telegram_enabled',
     'bitrix24_enabled',
+    'webhook_enabled',
     'yandex_metrika_enabled',
     'google_analytics_enabled',
     'save_answers_data',
@@ -39,7 +40,7 @@ $checkboxOptions = [
     'debug_enabled',
     'log_notification_errors',
 ];
-$numericOptions = ['rate_limit_ttl', 'rate_limit_max', 'bitrix24_assigned_by_id', 'telegram_message_thread_id', 'analytics_retention_days'];
+$numericOptions = ['rate_limit_ttl', 'rate_limit_max', 'bitrix24_assigned_by_id', 'telegram_message_thread_id', 'analytics_retention_days', 'webhook_timeout'];
 $secretOptions = ModuleSettingsService::SECRET_OPTIONS;
 
 $sanitizeText = static function (mixed $value): string {
@@ -61,6 +62,12 @@ $sanitizeNumber = static function (string $name, mixed $value): string {
         $allowed = [0, 90, 180, 365];
 
         return in_array($value, $allowed, true) ? (string)$value : '365';
+    }
+
+    if ($name === 'webhook_timeout') {
+        $allowed = [3, 5, 10, 15];
+
+        return in_array($value, $allowed, true) ? (string)$value : '5';
     }
 
     if ($name === 'bitrix24_assigned_by_id') {
@@ -104,6 +111,12 @@ $buildSettingsFromPost = static function () use ($checkboxOptions, $numericOptio
         }
 
         $postedValue = $_POST[$name] ?? $defaultValue;
+        if ($name === 'webhook_url') {
+            $url = $sanitizeText($postedValue);
+            $settings[$name] = ($url === '' || preg_match('#^https?://#i', $url) === 1) ? $url : '';
+            continue;
+        }
+
         $settings[$name] = in_array($name, $numericOptions, true)
             ? $sanitizeNumber($name, $postedValue)
             : $sanitizeText($postedValue);
@@ -251,9 +264,27 @@ if ($message !== null) {
     $renderInput('bitrix24_assigned_by_id', 'ID ответственного', 'number');
     $renderInput('bitrix24_source_id', 'Источник');
     ?>
-
-    <?php $tabControl->BeginNextTab(); ?>
+    <tr class="heading"><td colspan="2">Webhook-интеграция</td></tr>
     <?php
+    $renderCheckbox('webhook_enabled', 'Включить webhook');
+    $renderInput('webhook_url', 'URL webhook', 'text', 'Разрешены только http:// и https:// URL.');
+    $renderSecretInput('webhook_secret', 'Секретный ключ webhook');
+    $renderSelect('webhook_timeout', 'Таймаут webhook, сек.', [
+        '3' => '3',
+        '5' => '5',
+        '10' => '10',
+        '15' => '15',
+    ]);
+    ?>
+    <tr>
+        <td width="40%"></td>
+        <td width="60%">
+            <button type="button" class="adm-btn" data-kk-quiz-test-webhook>Проверить webhook</button>
+            <span style="margin-left:10px;" data-kk-quiz-test-webhook-result></span>
+        </td>
+    </tr>
+    <?php
+    $tabControl->BeginNextTab();
     $renderCheckbox('yandex_metrika_enabled', 'Включить Яндекс.Метрику');
     $renderInput('yandex_metrika_counter_id', 'ID счётчика Яндекс.Метрики');
     $renderInput('yandex_metrika_first_answer_goal', 'Цель Метрики: ответил на первый вопрос');
@@ -335,6 +366,62 @@ if ($message !== null) {
             input.type = 'password';
             button.textContent = 'Показать';
         }
+    });
+
+    document.addEventListener('click', function (event) {
+        var button = event.target.closest('[data-kk-quiz-test-webhook]');
+        if (!button) {
+            return;
+        }
+
+        var resultNode = document.querySelector('[data-kk-quiz-test-webhook-result]');
+        var originalText = button.textContent;
+        var sessid = window.BX && typeof BX.bitrix_sessid === 'function' ? BX.bitrix_sessid() : '';
+        var params = new URLSearchParams({ action: 'kk:quiz.api.testWebhook' });
+        if (sessid !== '') {
+            params.set('sessid', sessid);
+        }
+
+        button.disabled = true;
+        button.textContent = 'Отправка...';
+        if (resultNode) {
+            resultNode.textContent = '';
+        }
+
+        fetch('/bitrix/services/main/ajax.php?' + params.toString(), {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}'
+        })
+            .then(function (response) { return response.json(); })
+            .then(function (response) {
+                var data = response && response.data ? response.data : response;
+                var message = 'Ошибка отправки webhook';
+                if (data && data.skipped && data.reason === 'WEBHOOK_DISABLED') {
+                    message = 'Webhook выключен.';
+                } else if (data && data.error === 'WEBHOOK_URL_EMPTY') {
+                    message = 'URL webhook не задан.';
+                } else if (data && data.success === true) {
+                    message = 'Успешно отправлено. HTTP ' + String(data.status || 200) + '.';
+                } else if (data && data.error) {
+                    message = 'Ошибка отправки: ' + data.error;
+                }
+                if (resultNode) {
+                    resultNode.textContent = message;
+                } else {
+                    alert(message);
+                }
+            })
+            .catch(function () {
+                if (resultNode) {
+                    resultNode.textContent = 'Ошибка отправки webhook';
+                }
+            })
+            .finally(function () {
+                button.disabled = false;
+                button.textContent = originalText;
+            });
     });
 })();
 </script>

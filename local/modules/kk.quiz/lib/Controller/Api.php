@@ -39,6 +39,9 @@ final class Api extends Controller
             'trackEvent' => [
                 'prefilters' => [],
             ],
+            'testWebhook' => [
+                'prefilters' => [new Csrf()],
+            ],
         ];
     }
 
@@ -260,6 +263,47 @@ final class Api extends Controller
             return [
                 'success' => false,
                 'errors' => ['TRACK_FAILED'],
+            ];
+        }
+    }
+
+    public function testWebhookAction(): array
+    {
+        if (!$this->isAdminAllowed()) {
+            return [
+                'success' => false,
+                'errors' => ['ACCESS_DENIED'],
+            ];
+        }
+
+        $payload = [
+            'event' => 'kk_quiz_webhook_test',
+            'module' => 'kk.quiz',
+            'version' => 1,
+            'created_at' => date('c'),
+            'test' => true,
+            'lead' => [
+                'id' => 0,
+                'quiz' => [
+                    'code' => 'test',
+                    'name' => 'Тестовый квиз',
+                ],
+                'client' => [
+                    'name' => 'Тест',
+                    'phone' => '+70000000000',
+                    'email' => 'test@example.com',
+                ],
+                'answers_text' => 'Тестовая отправка webhook',
+            ],
+        ];
+
+        try {
+            return (new \Kk\Quiz\Service\LeadWebhookService())->send($payload);
+        } catch (\Throwable) {
+            return [
+                'success' => false,
+                'status' => 0,
+                'error' => 'WEBHOOK_TEST_FAILED',
             ];
         }
     }

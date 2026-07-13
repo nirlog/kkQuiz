@@ -60,6 +60,7 @@ final class Installer
         self::installAdminFiles(false);
         self::installAnalyticsTables(false);
         self::registerMaintenanceAgent();
+        self::ensureLeadProperties();
 
         self::registerEventHandlerIfMissing(
             'iblock',
@@ -95,6 +96,24 @@ final class Installer
             SectionFormAssets::class,
             'onProlog'
         );
+    }
+
+    private static function ensureLeadProperties(): void
+    {
+        try {
+            if (!Loader::includeModule('iblock')) {
+                return;
+            }
+
+            $iblock = \CIBlock::GetList([], [
+                'TYPE' => self::IBLOCK_TYPE_ID,
+                'CODE' => self::LEADS_IBLOCK_CODE,
+            ])->Fetch();
+            if (is_array($iblock) && (int)($iblock['ID'] ?? 0) > 0) {
+                self::installLeadProperties((int)$iblock['ID']);
+            }
+        } catch (\Throwable) {
+        }
     }
 
     private static function registerEventHandlerIfMissing(
@@ -948,6 +967,10 @@ final class Installer
             ['CODE' => 'KK_LEAD_TELEGRAM_SENT', 'NAME' => 'Telegram отправлен', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
             ['CODE' => 'KK_LEAD_TELEGRAM_SENT_AT', 'NAME' => 'Дата отправки Telegram', 'PROPERTY_TYPE' => 'S', 'USER_TYPE' => 'DateTime'],
             ['CODE' => 'KK_LEAD_TELEGRAM_ERROR', 'NAME' => 'Ошибка Telegram', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
+            ['CODE' => 'KK_LEAD_WEBHOOK_SENT', 'NAME' => 'Webhook отправлен', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
+            ['CODE' => 'KK_LEAD_WEBHOOK_SENT_AT', 'NAME' => 'Webhook отправлен в', 'PROPERTY_TYPE' => 'S', 'USER_TYPE' => 'DateTime'],
+            ['CODE' => 'KK_LEAD_WEBHOOK_STATUS', 'NAME' => 'Webhook статус', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_WEBHOOK_ERROR', 'NAME' => 'Webhook ошибка', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
         ];
 
         self::addIblockProperties($iblockId, $properties);
@@ -1083,6 +1106,10 @@ final class Installer
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_TELEGRAM_SENT'), 'Telegram отправлен'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_TELEGRAM_SENT_AT'), 'Дата отправки Telegram'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_TELEGRAM_ERROR'), 'Ошибка Telegram'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_WEBHOOK_SENT'), 'Webhook отправлен'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_WEBHOOK_SENT_AT'), 'Webhook отправлен в'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_WEBHOOK_STATUS'), 'Webhook статус'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_WEBHOOK_ERROR'), 'Webhook ошибка'],
                 ],
             ],
         ];

@@ -115,13 +115,32 @@ final class LeadService
 
         $lead = $this->buildLead($payload, $quiz, $result, $cleanFields);
         $leadId = $this->leadRepository->add($lead);
+        $lead['id'] = $leadId;
+        $lead['created_at'] = date('c');
+        $lead['name'] = 'Заявка квиза #' . $leadId;
         if ($this->sendEmail($quiz, $lead, $leadId)) {
             $this->leadRepository->markEmailSent($leadId);
         }
 
         $this->sendTelegram($lead, $leadId);
+        $this->sendWebhook($lead, $leadId);
 
         return ['success' => true, 'lead_id' => $leadId];
+    }
+
+    private function sendWebhook(array $lead, int $leadId): void
+    {
+        try {
+            $payload = (new LeadPayloadBuilder())->build($lead);
+            $result = (new LeadWebhookService())->send($payload);
+            $this->leadRepository->markWebhookResult($leadId, $result);
+        } catch (\Throwable) {
+            $this->leadRepository->markWebhookResult($leadId, [
+                'success' => false,
+                'status' => 0,
+                'error' => 'WEBHOOK_SEND_FAILED',
+            ]);
+        }
     }
 
 
@@ -519,6 +538,10 @@ final class LeadService
             'telegram_sent' => 'N',
             'telegram_sent_at' => '',
             'telegram_error' => '',
+            'webhook_sent' => 'N',
+            'webhook_sent_at' => '',
+            'webhook_status' => '',
+            'webhook_error' => '',
         ];
     }
 

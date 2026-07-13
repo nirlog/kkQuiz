@@ -43,6 +43,14 @@ final class LeadRepository
             ) ?? $properties['KK_LEAD_TELEGRAM_SENT'];
         }
 
+        if (isset($properties['KK_LEAD_WEBHOOK_SENT'])) {
+            $properties['KK_LEAD_WEBHOOK_SENT'] = $this->getEnumId(
+                $iblockId,
+                'KK_LEAD_WEBHOOK_SENT',
+                (string)$properties['KK_LEAD_WEBHOOK_SENT']
+            ) ?? $properties['KK_LEAD_WEBHOOK_SENT'];
+        }
+
         $element = new \CIBlockElement();
         $id = (int)$element->Add([
             'IBLOCK_ID' => $iblockId,
@@ -119,6 +127,38 @@ final class LeadRepository
         ]);
     }
 
+    public function markWebhookResult(int $leadId, array $result): void
+    {
+        if ($leadId <= 0 || !Loader::includeModule('iblock')) {
+            return;
+        }
+
+        $iblockId = $this->getLeadsIblockId();
+        if ($iblockId === null) {
+            return;
+        }
+
+        $skipped = (bool)($result['skipped'] ?? false);
+        $success = (bool)($result['success'] ?? false) && !$skipped;
+        $status = $skipped
+            ? 'skipped'
+            : ((int)($result['status'] ?? 0) > 0 ? 'HTTP_' . (int)$result['status'] : 'ERROR');
+        $error = $skipped
+            ? (string)($result['reason'] ?? 'WEBHOOK_DISABLED')
+            : ($success ? '' : (string)($result['error'] ?? 'WEBHOOK_SEND_FAILED'));
+
+        $error = trim(strip_tags($error));
+        $error = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $error) ?? $error;
+        $error = mb_substr(trim($error), 0, 1000);
+
+        \CIBlockElement::SetPropertyValuesEx($leadId, $iblockId, [
+            'KK_LEAD_WEBHOOK_SENT' => $this->getEnumId($iblockId, 'KK_LEAD_WEBHOOK_SENT', $success ? 'Y' : 'N') ?? ($success ? 'Y' : 'N'),
+            'KK_LEAD_WEBHOOK_SENT_AT' => $success ? date('d.m.Y H:i:s') : '',
+            'KK_LEAD_WEBHOOK_STATUS' => $status,
+            'KK_LEAD_WEBHOOK_ERROR' => $error,
+        ]);
+    }
+
     public function getLeadsIblockId(): ?int
     {
         $iblock = \CIBlock::GetList([], [
@@ -164,6 +204,10 @@ final class LeadRepository
             'telegram_sent' => 'KK_LEAD_TELEGRAM_SENT',
             'telegram_sent_at' => 'KK_LEAD_TELEGRAM_SENT_AT',
             'telegram_error' => 'KK_LEAD_TELEGRAM_ERROR',
+            'webhook_sent' => 'KK_LEAD_WEBHOOK_SENT',
+            'webhook_sent_at' => 'KK_LEAD_WEBHOOK_SENT_AT',
+            'webhook_status' => 'KK_LEAD_WEBHOOK_STATUS',
+            'webhook_error' => 'KK_LEAD_WEBHOOK_ERROR',
         ];
     }
 

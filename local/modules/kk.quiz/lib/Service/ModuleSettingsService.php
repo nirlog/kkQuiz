@@ -14,6 +14,7 @@ final class ModuleSettingsService
         'telegram_bot_token',
         'telegram_proxy_url',
         'bitrix24_webhook_url',
+        'webhook_secret',
     ];
 
     public static function getDefaults(): array
@@ -33,6 +34,11 @@ final class ModuleSettingsService
             'bitrix24_webhook_url' => '',
             'bitrix24_assigned_by_id' => '',
             'bitrix24_source_id' => 'WEB',
+
+            'webhook_enabled' => 'N',
+            'webhook_url' => '',
+            'webhook_secret' => '',
+            'webhook_timeout' => '5',
 
             'yandex_metrika_enabled' => 'N',
             'yandex_metrika_counter_id' => '',
