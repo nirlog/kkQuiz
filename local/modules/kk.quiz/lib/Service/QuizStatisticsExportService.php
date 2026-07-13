@@ -11,14 +11,18 @@ final class QuizStatisticsExportService
         $dateFrom = $this->normalizeDate($options['date_from'] ?? null);
         $dateTo = $this->normalizeDate($options['date_to'] ?? null);
         $periodLabel = trim((string)($options['period_label'] ?? ''));
+        $quizCode = $this->normalizeQuizCode($options['quiz_code'] ?? '');
+        $quizLabel = trim((string)($options['quiz_label'] ?? ''));
 
         $summary = (new QuizStatisticsService())->getSummary([
             'date_from' => $dateFrom,
             'date_to' => $dateTo,
+            'quiz_code' => $quizCode,
         ]);
         $funnelSummary = (new QuizFunnelStatisticsService())->getSummary([
             'date_from' => $dateFrom,
             'date_to' => $dateTo,
+            'quiz_code' => $quizCode,
         ]);
 
         if ($periodLabel === '') {
@@ -33,6 +37,7 @@ final class QuizStatisticsExportService
         fwrite($handle, "\xEF\xBB\xBF");
         $this->putRow($handle, ['Отчёт', 'Статистика KK Quiz']);
         $this->putRow($handle, ['Период', $periodLabel !== '' ? $periodLabel : 'всё время']);
+        $this->putRow($handle, ['Квиз', $this->buildQuizLabel($quizCode, $quizLabel)]);
         $this->putRow($handle, ['Дата экспорта', date('d.m.Y H:i:s')]);
         $this->putRow($handle, []);
 
@@ -48,7 +53,7 @@ final class QuizStatisticsExportService
         fclose($handle);
 
         return [
-            'filename' => $this->buildFilename($dateFrom, $dateTo),
+            'filename' => $this->buildFilename($dateFrom, $dateTo, $quizCode),
             'content' => $content,
         ];
     }
@@ -59,14 +64,18 @@ final class QuizStatisticsExportService
         $dateFrom = $this->normalizeDate($options['date_from'] ?? null);
         $dateTo = $this->normalizeDate($options['date_to'] ?? null);
         $periodLabel = trim((string)($options['period_label'] ?? ''));
+        $quizCode = $this->normalizeQuizCode($options['quiz_code'] ?? '');
+        $quizLabel = trim((string)($options['quiz_label'] ?? ''));
 
         $summary = (new QuizStatisticsService())->getSummary([
             'date_from' => $dateFrom,
             'date_to' => $dateTo,
+            'quiz_code' => $quizCode,
         ]);
         $funnelSummary = (new QuizFunnelStatisticsService())->getSummary([
             'date_from' => $dateFrom,
             'date_to' => $dateTo,
+            'quiz_code' => $quizCode,
         ]);
 
         if ($periodLabel === '') {
@@ -78,6 +87,7 @@ final class QuizStatisticsExportService
             . '</head><body>';
         $html .= '<h1>Статистика KK Quiz</h1>';
         $html .= '<div class="report-meta">Период: ' . $this->escapeHtml($periodLabel !== '' ? $periodLabel : 'всё время')
+            . '<br>Квиз: ' . $this->escapeHtml($this->escapeSpreadsheetValue($this->buildQuizLabel($quizCode, $quizLabel)))
             . '<br>Дата экспорта: ' . $this->escapeHtml(date('d.m.Y H:i:s')) . '</div>';
 
         $html .= $this->renderSummaryTable($funnelSummary);
@@ -89,7 +99,7 @@ final class QuizStatisticsExportService
         $html .= '</body></html>';
 
         return [
-            'filename' => $this->buildHtmlXlsFilename($dateFrom, $dateTo),
+            'filename' => $this->buildHtmlXlsFilename($dateFrom, $dateTo, $quizCode),
             'content' => $html,
         ];
     }
@@ -398,21 +408,39 @@ final class QuizStatisticsExportService
         return checkdate($month, $day, $year) ? $value : null;
     }
 
-    private function buildFilename(?string $dateFrom, ?string $dateTo): string
+    private function normalizeQuizCode(mixed $value): string
     {
-        if ($dateFrom !== null && $dateTo !== null) {
-            return 'kk-quiz-statistics-' . $dateFrom . '--' . $dateTo . '.csv';
-        }
+        $value = trim((string)$value);
 
-        return 'kk-quiz-statistics-' . date('Y-m-d') . '.csv';
+        return preg_match('/^[a-zA-Z0-9_-]+$/', $value) === 1 ? $value : '';
     }
 
-    private function buildHtmlXlsFilename(?string $dateFrom, ?string $dateTo): string
+    private function buildQuizLabel(string $quizCode, string $quizLabel): string
     {
-        if ($dateFrom !== null && $dateTo !== null) {
-            return 'kk-quiz-statistics-report-' . $dateFrom . '--' . $dateTo . '.xls';
+        if ($quizCode === '') {
+            return 'Все квизы';
         }
 
-        return 'kk-quiz-statistics-report-' . date('Y-m-d') . '.xls';
+        return $quizLabel !== '' ? $quizLabel : $quizCode;
+    }
+
+    private function buildFilename(?string $dateFrom, ?string $dateTo, string $quizCode = ''): string
+    {
+        $prefix = 'kk-quiz-statistics-' . ($quizCode !== '' ? $quizCode . '-' : '');
+        if ($dateFrom !== null && $dateTo !== null) {
+            return $prefix . $dateFrom . '--' . $dateTo . '.csv';
+        }
+
+        return $prefix . date('Y-m-d') . '.csv';
+    }
+
+    private function buildHtmlXlsFilename(?string $dateFrom, ?string $dateTo, string $quizCode = ''): string
+    {
+        $prefix = 'kk-quiz-statistics-report-' . ($quizCode !== '' ? $quizCode . '-' : '');
+        if ($dateFrom !== null && $dateTo !== null) {
+            return $prefix . $dateFrom . '--' . $dateTo . '.xls';
+        }
+
+        return $prefix . date('Y-m-d') . '.xls';
     }
 }

@@ -33,6 +33,10 @@ $period = $getRequestValue('period') ?: '30d';
 if (!in_array($period, $allowedPeriods, true)) {
     $period = '30d';
 }
+$quizCode = $getRequestValue('quiz_code');
+if ($quizCode !== '' && preg_match('/^[a-zA-Z0-9_-]+$/', $quizCode) !== 1) {
+    $quizCode = '';
+}
 
 $validateDate = static function (string $value): string {
     if ($value === '' || preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) !== 1) {
@@ -77,6 +81,7 @@ try {
     $summary = (new QuizStatisticsService())->getSummary([
         'date_from' => $dateFrom,
         'date_to' => $dateTo,
+        'quiz_code' => $quizCode,
     ]);
     $error = '';
 } catch (\Throwable $exception) {
@@ -93,10 +98,12 @@ try {
     $error = $exception->getMessage() !== '' ? $exception->getMessage() : 'STATISTICS_FAILED';
 }
 
+$funnelService = new QuizFunnelStatisticsService();
 try {
-    $funnelSummary = (new QuizFunnelStatisticsService())->getSummary([
+    $funnelSummary = $funnelService->getSummary([
         'date_from' => $dateFrom,
         'date_to' => $dateTo,
+        'quiz_code' => $quizCode,
     ]);
 } catch (\Throwable) {
     $funnelSummary = [
@@ -107,6 +114,12 @@ try {
         'popular_answers' => [],
         'warnings' => [],
     ];
+}
+
+try {
+    $availableQuizzes = $funnelService->getAvailableQuizzes();
+} catch (\Throwable) {
+    $availableQuizzes = [];
 }
 
 try {
@@ -125,7 +138,35 @@ require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_a
 $escape = static fn (mixed $value): string => htmlspecialcharsbx((string)$value);
 $formatPercent = static fn (mixed $value): string => number_format((float)$value, 1, '.', '') . '%';
 $lang = defined('LANGUAGE_ID') ? (string)LANGUAGE_ID : 'ru';
-$periodUrl = static fn (string $value): string => '/bitrix/admin/kk_quiz_statistics.php?' . http_build_query(['lang' => $lang, 'period' => $value]);
+$periodUrl = static function (string $value) use ($lang, $quizCode): string {
+    $query = ['lang' => $lang, 'period' => $value];
+    if ($quizCode !== '') {
+        $query['quiz_code'] = $quizCode;
+    }
+
+    return '/bitrix/admin/kk_quiz_statistics.php?' . http_build_query($query);
+};
+$availableQuizzes = is_array($availableQuizzes ?? null) ? $availableQuizzes : [];
+$hasSelectedQuizOption = false;
+foreach ($availableQuizzes as $availableQuiz) {
+    if ((string)($availableQuiz['code'] ?? '') === $quizCode) {
+        $hasSelectedQuizOption = true;
+        break;
+    }
+}
+if ($quizCode !== '' && !$hasSelectedQuizOption) {
+    $availableQuizzes[] = ['code' => $quizCode, 'name' => $quizCode];
+}
+$selectedQuizLabel = 'все квизы';
+foreach ($availableQuizzes as $availableQuiz) {
+    if ((string)($availableQuiz['code'] ?? '') === $quizCode) {
+        $selectedQuizLabel = (string)($availableQuiz['name'] ?? $quizCode);
+        break;
+    }
+}
+if ($quizCode !== '' && $selectedQuizLabel === 'все квизы') {
+    $selectedQuizLabel = $quizCode;
+}
 $totals = is_array($summary['totals'] ?? null) ? $summary['totals'] : [];
 $cards = [
     'Всего заявок' => (int)($totals['all'] ?? 0),
@@ -180,9 +221,23 @@ $periodLabel = (string)($summary['period']['label'] ?? '');
     </div>
     <form method="get" action="/bitrix/admin/kk_quiz_statistics.php">
         <input type="hidden" name="lang" value="<?= $escape($lang) ?>">
-        <input type="hidden" name="period" value="custom">
-        <label>С: <input type="date" name="date_from" value="<?= $escape($customDateFrom) ?>"></label>
-        <label>По: <input type="date" name="date_to" value="<?= $escape($customDateTo) ?>"></label>
+        <input type="hidden" name="period" value="<?= $escape($period) ?>" data-kk-quiz-period-input>
+        <label>Квиз:
+            <select name="quiz_code">
+                <option value="">Все квизы</option>
+                <?php foreach ($availableQuizzes as $availableQuiz): ?>
+                    <?php
+                    $availableQuizCode = (string)($availableQuiz['code'] ?? '');
+                    $availableQuizName = (string)($availableQuiz['name'] ?? $availableQuizCode);
+                    ?>
+                    <?php if ($availableQuizCode !== ''): ?>
+                        <option value="<?= $escape($availableQuizCode) ?>"<?= $availableQuizCode === $quizCode ? ' selected' : '' ?>><?= $escape($availableQuizName . ' (' . $availableQuizCode . ')') ?></option>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            </select>
+        </label>
+        <label>С: <input type="date" name="date_from" value="<?= $escape($customDateFrom) ?>" data-kk-quiz-custom-date></label>
+        <label>По: <input type="date" name="date_to" value="<?= $escape($customDateTo) ?>" data-kk-quiz-custom-date></label>
         <button type="submit" class="<?= $period === 'custom' ? 'adm-btn-save' : 'adm-btn' ?>">Показать</button>
     </form>
 </div>
@@ -226,12 +281,23 @@ $orphanExtraCount = max(0, count($orphanQuizCodes) - count($orphanPreview));
         'date_from' => $dateFrom,
         'date_to' => $dateTo,
         'period_label' => $periodLabel !== '' ? $periodLabel : 'всё время',
+        'quiz_code' => $quizCode,
+        'quiz_label' => $selectedQuizLabel,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const messages = {
         old: 'Очистить старые события аналитики? Это действие нельзя отменить.',
         orphan: 'Очистить статистику квизов, которые уже удалены? Это действие нельзя отменить.',
         all: 'Выполнить полную очистку старых событий и статистики удалённых квизов? Это действие нельзя отменить.'
     };
+
+    const periodInput = document.querySelector('[data-kk-quiz-period-input]');
+    document.querySelectorAll('[data-kk-quiz-custom-date]').forEach((input) => {
+        input.addEventListener('change', () => {
+            if (periodInput) {
+                periodInput.value = 'custom';
+            }
+        });
+    });
 
     const getAdminAjaxUrl = (action) => {
         const sessid = window.BX && typeof BX.bitrix_sessid === 'function' ? BX.bitrix_sessid() : '';
@@ -355,7 +421,10 @@ $orphanExtraCount = max(0, count($orphanQuizCodes) - count($orphanPreview));
     <?php endforeach; ?>
 </div>
 
-<div class="kk-quiz-stat-period-label">Период таблиц: <?= $escape($periodLabel !== '' ? $periodLabel : 'всё время') ?></div>
+<div class="kk-quiz-stat-period-label">
+    Период таблиц: <?= $escape($periodLabel !== '' ? $periodLabel : 'всё время') ?><br>
+    Квиз: <?= $escape($selectedQuizLabel) ?>
+</div>
 
 <?php
 $funnelCards = is_array($funnelSummary['summary_cards'] ?? null) ? $funnelSummary['summary_cards'] : [];

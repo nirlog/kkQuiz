@@ -383,7 +383,7 @@ final class Api extends Controller
         $request = $this->getRequest();
         $options = [];
 
-        foreach (['date_from', 'date_to', 'period_label', 'format'] as $key) {
+        foreach (['date_from', 'date_to', 'period_label', 'format', 'quiz_code', 'quiz_label'] as $key) {
             $value = $request->getPost($key);
             if (is_scalar($value)) {
                 $options[$key] = trim((string)$value);
@@ -403,7 +403,7 @@ final class Api extends Controller
 
             if (is_array($decoded)) {
                 $payload = is_array($decoded['payload'] ?? null) ? $decoded['payload'] : $decoded;
-                foreach (['date_from', 'date_to', 'period_label', 'format'] as $key) {
+                foreach (['date_from', 'date_to', 'period_label', 'format', 'quiz_code', 'quiz_label'] as $key) {
                     if (isset($payload[$key]) && is_scalar($payload[$key])) {
                         $options[$key] = trim((string)$payload[$key]);
                     }
@@ -412,6 +412,8 @@ final class Api extends Controller
         }
 
         $options['format'] = in_array(($options['format'] ?? 'csv'), ['csv', 'xls'], true) ? ($options['format'] ?? 'csv') : 'csv';
+        $quizCode = trim((string)($options['quiz_code'] ?? ''));
+        $options['quiz_code'] = preg_match('/^[a-zA-Z0-9_-]+$/', $quizCode) === 1 ? $quizCode : '';
 
         return $options;
     }

@@ -36,7 +36,8 @@ final class QuizFunnelStatisticsService
 
         $dateFrom = $this->normalizeTimestamp($options['date_from'] ?? null);
         $dateTo = $this->normalizeTimestamp($options['date_to'] ?? null, true);
-        $events = $this->loadEvents($dateFrom, $dateTo, $summary['warnings']);
+        $quizCode = $this->normalizeQuizCode($options['quiz_code'] ?? '');
+        $events = $this->loadEvents($dateFrom, $dateTo, $quizCode, $summary['warnings']);
         if ($events === []) {
             return $summary;
         }
@@ -132,6 +133,48 @@ final class QuizFunnelStatisticsService
         return $summary;
     }
 
+    public function getAvailableQuizzes(): array
+    {
+        try {
+            if (!Application::getConnection()->isTableExists(QuizEventTable::getTableName())) {
+                return [];
+            }
+
+            $codes = [];
+            $result = QuizEventTable::getList([
+                'select' => ['QUIZ_CODE'],
+                'group' => ['QUIZ_CODE'],
+                'order' => ['QUIZ_CODE' => 'ASC'],
+            ]);
+            while ($row = $result->fetch()) {
+                $code = $this->normalizeQuizCode($row['QUIZ_CODE'] ?? '');
+                if ($code !== '') {
+                    $codes[$code] = $code;
+                }
+            }
+        } catch (\Throwable) {
+            return [];
+        }
+
+        if ($codes === []) {
+            return [];
+        }
+
+        $meta = $this->loadMetadata(array_values($codes), [], []);
+        $quizzes = [];
+        foreach (array_values($codes) as $code) {
+            $quizzes[] = [
+                'code' => $code,
+                'name' => (string)($meta['quiz_names'][$code] ?? $code),
+            ];
+        }
+
+        usort($quizzes, static fn (array $left, array $right): int => strcmp((string)$left['name'], (string)$right['name'])
+            ?: strcmp((string)$left['code'], (string)$right['code']));
+
+        return $quizzes;
+    }
+
     private function createEmptySummaryCards(): array
     {
         return [
@@ -154,7 +197,7 @@ final class QuizFunnelStatisticsService
         ];
     }
 
-    private function loadEvents(?int $dateFrom, ?int $dateTo, array &$warnings): array
+    private function loadEvents(?int $dateFrom, ?int $dateTo, string $quizCode, array &$warnings): array
     {
         $filter = [];
         if ($dateFrom !== null) {
@@ -162,6 +205,9 @@ final class QuizFunnelStatisticsService
         }
         if ($dateTo !== null) {
             $filter['<=DATE_CREATE'] = DateTime::createFromTimestamp($dateTo);
+        }
+        if ($quizCode !== '') {
+            $filter['=QUIZ_CODE'] = $quizCode;
         }
 
         $events = [];
@@ -648,5 +694,12 @@ final class QuizFunnelStatisticsService
 
         $timestamp = strtotime($value);
         return is_int($timestamp) && $timestamp > 0 ? $timestamp : null;
+    }
+
+    private function normalizeQuizCode(mixed $value): string
+    {
+        $value = trim((string)$value);
+
+        return preg_match('/^[a-zA-Z0-9_-]+$/', $value) === 1 ? $value : '';
     }
 }

@@ -25,11 +25,12 @@ final class QuizStatisticsService
 
         $dateFrom = $this->normalizeTimestamp($options['date_from'] ?? null);
         $dateTo = $this->normalizeTimestamp($options['date_to'] ?? null, true);
-        $periodStats = $this->buildPeriodStats($iblockId, $dateFrom, $dateTo);
+        $quizCode = $this->normalizeQuizCode($options['quiz_code'] ?? '');
+        $periodStats = $this->buildPeriodStats($iblockId, $dateFrom, $dateTo, $quizCode);
 
         return array_merge(
             [
-                'totals' => $this->buildTotals($iblockId),
+                'totals' => $this->buildTotals($iblockId, $quizCode),
                 'period' => [
                     'date_from' => $dateFrom !== null ? $this->formatDate($dateFrom) : '',
                     'date_to' => $dateTo !== null ? $this->formatDate($dateTo) : '',
@@ -41,30 +42,27 @@ final class QuizStatisticsService
         );
     }
 
-    private function buildTotals(int $iblockId): array
+    private function buildTotals(int $iblockId, string $quizCode = ''): array
     {
         $todayStart = strtotime('today') ?: time();
         $last7Days = strtotime('-7 days') ?: $todayStart;
         $last30Days = strtotime('-30 days') ?: $todayStart;
 
         return [
-            'all' => $this->countElements(['IBLOCK_ID' => $iblockId]),
-            'today' => $this->countElements([
-                'IBLOCK_ID' => $iblockId,
+            'all' => $this->countElements($this->buildLeadFilter($iblockId, $quizCode)),
+            'today' => $this->countElements($this->buildLeadFilter($iblockId, $quizCode, [
                 '>=DATE_CREATE' => $this->formatBitrixDate($todayStart),
-            ]),
-            'last_7_days' => $this->countElements([
-                'IBLOCK_ID' => $iblockId,
+            ])),
+            'last_7_days' => $this->countElements($this->buildLeadFilter($iblockId, $quizCode, [
                 '>=DATE_CREATE' => $this->formatBitrixDate($last7Days),
-            ]),
-            'last_30_days' => $this->countElements([
-                'IBLOCK_ID' => $iblockId,
+            ])),
+            'last_30_days' => $this->countElements($this->buildLeadFilter($iblockId, $quizCode, [
                 '>=DATE_CREATE' => $this->formatBitrixDate($last30Days),
-            ]),
+            ])),
         ];
     }
 
-    private function buildPeriodStats(int $iblockId, ?int $dateFrom, ?int $dateTo): array
+    private function buildPeriodStats(int $iblockId, ?int $dateFrom, ?int $dateTo, string $quizCode = ''): array
     {
         $leadsAdminUrl = $this->buildLeadListUrl($iblockId);
         $stats = [
@@ -81,7 +79,7 @@ final class QuizStatisticsService
 
         $elements = \CIBlockElement::GetList(
             ['DATE_CREATE' => 'DESC', 'ID' => 'DESC'],
-            $this->buildPeriodFilter($iblockId, $dateFrom, $dateTo),
+            $this->buildPeriodFilter($iblockId, $dateFrom, $dateTo, $quizCode),
             false,
             ['nTopCount' => self::LIMIT + 1],
             ['ID', 'IBLOCK_ID', 'NAME', 'DATE_CREATE']
@@ -207,9 +205,9 @@ final class QuizStatisticsService
         return is_int($timestamp) && $timestamp > 0 ? $timestamp : null;
     }
 
-    private function buildPeriodFilter(int $iblockId, ?int $dateFrom, ?int $dateTo): array
+    private function buildPeriodFilter(int $iblockId, ?int $dateFrom, ?int $dateTo, string $quizCode = ''): array
     {
-        $filter = ['IBLOCK_ID' => $iblockId];
+        $filter = $this->buildLeadFilter($iblockId, $quizCode);
         if ($dateFrom !== null) {
             $filter['>=DATE_CREATE'] = $this->formatBitrixDate($dateFrom);
         }
@@ -218,6 +216,23 @@ final class QuizStatisticsService
         }
 
         return $filter;
+    }
+
+    private function buildLeadFilter(int $iblockId, string $quizCode = '', array $filter = []): array
+    {
+        $filter['IBLOCK_ID'] = $iblockId;
+        if ($quizCode !== '') {
+            $filter['=PROPERTY_KK_LEAD_QUIZ_CODE'] = $quizCode;
+        }
+
+        return $filter;
+    }
+
+    private function normalizeQuizCode(mixed $value): string
+    {
+        $value = trim((string)$value);
+
+        return preg_match('/^[a-zA-Z0-9_-]+$/', $value) === 1 ? $value : '';
     }
 
     private function countElements(array $filter): int
