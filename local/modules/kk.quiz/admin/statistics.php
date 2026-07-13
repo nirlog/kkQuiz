@@ -191,7 +191,8 @@ $periodLabel = (string)($summary['period']['label'] ?? '');
     <?php if ((string)($summary['leads_admin_url'] ?? '') !== ''): ?>
         <a class="adm-btn" href="<?= $escape($summary['leads_admin_url']) ?>">Открыть список заявок</a>
     <?php endif; ?>
-    <button type="button" class="adm-btn" data-kk-quiz-statistics-export>Экспорт статистики CSV</button>
+    <button type="button" class="adm-btn" data-kk-quiz-statistics-export="csv">Экспорт статистики CSV</button>
+    <button type="button" class="adm-btn adm-btn-save" data-kk-quiz-statistics-export="xls">Экспорт отчёта Excel</button>
 </div>
 
 
@@ -258,6 +259,7 @@ $orphanExtraCount = max(0, count($orphanQuizCodes) - count($orphanPreview));
 
     document.querySelectorAll('[data-kk-quiz-statistics-export]').forEach((button) => {
         button.addEventListener('click', () => {
+            const format = button.getAttribute('data-kk-quiz-statistics-export') === 'xls' ? 'xls' : 'csv';
             const originalText = button.textContent;
             button.disabled = true;
             button.textContent = 'Экспорт...';
@@ -268,7 +270,7 @@ $orphanExtraCount = max(0, count($orphanQuizCodes) - count($orphanPreview));
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(statisticsExportPayload)
+                body: JSON.stringify(Object.assign({}, statisticsExportPayload, { format }))
             })
                 .then((response) => response.json())
                 .then((response) => {
@@ -278,8 +280,9 @@ $orphanExtraCount = max(0, count($orphanQuizCodes) - count($orphanPreview));
                         throw new Error('EXPORT_STATISTICS_FAILED');
                     }
 
-                    const filename = data.filename || 'kk-quiz-statistics.csv';
-                    const blob = new Blob([data.content], { type: 'text/csv;charset=utf-8' });
+                    const filename = data.filename || (format === 'xls' ? 'kk-quiz-statistics-report.xls' : 'kk-quiz-statistics.csv');
+                    const contentType = format === 'xls' ? 'application/vnd.ms-excel;charset=utf-8' : 'text/csv;charset=utf-8';
+                    const blob = new Blob([data.content], { type: contentType });
                     const url = URL.createObjectURL(blob);
                     const link = document.createElement('a');
                     link.href = url;

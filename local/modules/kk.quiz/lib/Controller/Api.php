@@ -172,7 +172,11 @@ final class Api extends Controller
         }
 
         try {
-            $export = (new \Kk\Quiz\Service\QuizStatisticsExportService())->exportCsv($this->getStatisticsExportOptionsFromRequest());
+            $options = $this->getStatisticsExportOptionsFromRequest();
+            $exportService = new \Kk\Quiz\Service\QuizStatisticsExportService();
+            $export = ($options['format'] ?? 'csv') === 'xls'
+                ? $exportService->exportHtmlXls($options)
+                : $exportService->exportCsv($options);
 
             return [
                 'success' => true,
@@ -379,7 +383,7 @@ final class Api extends Controller
         $request = $this->getRequest();
         $options = [];
 
-        foreach (['date_from', 'date_to', 'period_label'] as $key) {
+        foreach (['date_from', 'date_to', 'period_label', 'format'] as $key) {
             $value = $request->getPost($key);
             if (is_scalar($value)) {
                 $options[$key] = trim((string)$value);
@@ -390,26 +394,24 @@ final class Api extends Controller
             ? (string)$request->getInput()
             : (string)file_get_contents('php://input');
 
-        if (trim($input) === '') {
-            return $options;
-        }
+        if (trim($input) !== '') {
+            try {
+                $decoded = Json::decode($input);
+            } catch (\Throwable) {
+                $decoded = null;
+            }
 
-        try {
-            $decoded = Json::decode($input);
-        } catch (\Throwable) {
-            return $options;
-        }
-
-        if (!is_array($decoded)) {
-            return $options;
-        }
-
-        $payload = is_array($decoded['payload'] ?? null) ? $decoded['payload'] : $decoded;
-        foreach (['date_from', 'date_to', 'period_label'] as $key) {
-            if (isset($payload[$key]) && is_scalar($payload[$key])) {
-                $options[$key] = trim((string)$payload[$key]);
+            if (is_array($decoded)) {
+                $payload = is_array($decoded['payload'] ?? null) ? $decoded['payload'] : $decoded;
+                foreach (['date_from', 'date_to', 'period_label', 'format'] as $key) {
+                    if (isset($payload[$key]) && is_scalar($payload[$key])) {
+                        $options[$key] = trim((string)$payload[$key]);
+                    }
+                }
             }
         }
+
+        $options['format'] = in_array(($options['format'] ?? 'csv'), ['csv', 'xls'], true) ? ($options['format'] ?? 'csv') : 'csv';
 
         return $options;
     }
