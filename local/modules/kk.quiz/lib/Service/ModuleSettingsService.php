@@ -50,6 +50,8 @@ final class ModuleSettingsService
             'google_analytics_product_click_event_name' => 'kk_quiz_recommendation_click',
             'google_analytics_event_name' => 'generate_lead',
 
+            'analytics_retention_days' => '365',
+
             'default_lead_status' => 'new',
             'save_answers_data' => 'Y',
 
