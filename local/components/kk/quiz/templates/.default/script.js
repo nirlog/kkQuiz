@@ -176,6 +176,13 @@
         return state.runId;
     };
 
+    const isTrackingDisabled = () => {
+        const params = new URLSearchParams(window.location.search);
+        const value = String(params.get('kkquiz_nostat') || '').toUpperCase();
+
+        return value === 'Y' || value === '1' || value === 'YES' || value === 'TRUE';
+    };
+
     const resetRunState = (state) => {
         state.runId = createRunId();
         state.answers = {};
@@ -192,6 +199,10 @@
     };
 
     const trackQuizEvent = (root, eventType, data = {}) => {
+        if (isTrackingDisabled()) {
+            return;
+        }
+
         if (!root || !eventType) {
             return;
         }

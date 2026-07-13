@@ -33,6 +33,14 @@ final class QuizEventService
 
     public function track(array $payload): array
     {
+        if ($this->isAdminUser()) {
+            return [
+                'success' => true,
+                'skipped' => true,
+                'reason' => 'ADMIN_USER',
+            ];
+        }
+
         $eventType = $this->normalizeString($payload['event_type'] ?? '', 50);
         if (!in_array($eventType, $this->getAllowedEventTypes(), true)) {
             return [
@@ -100,6 +108,16 @@ final class QuizEventService
         return ['success' => true];
     }
 
+    private function isAdminUser(): bool
+    {
+        global $USER;
+
+        return is_object($USER)
+            && method_exists($USER, 'IsAuthorized')
+            && method_exists($USER, 'IsAdmin')
+            && $USER->IsAuthorized()
+            && $USER->IsAdmin();
+    }
 
     private function checkRateLimit(string $quizCode): bool
     {
