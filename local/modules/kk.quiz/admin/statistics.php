@@ -77,6 +77,50 @@ switch ($period) {
         break;
 }
 
+$buildPreviousPeriod = static function (string $period, ?string $dateFrom, ?string $dateTo): array {
+    if ($period === 'all' || $dateFrom === null || $dateTo === null) {
+        return [
+            'available' => false,
+            'date_from' => null,
+            'date_to' => null,
+            'label' => '',
+        ];
+    }
+
+    $fromTimestamp = strtotime($dateFrom . ' 00:00:00');
+    $toTimestamp = strtotime($dateTo . ' 00:00:00');
+    if (!is_int($fromTimestamp) || !is_int($toTimestamp) || $fromTimestamp <= 0 || $toTimestamp <= 0 || $toTimestamp < $fromTimestamp) {
+        return [
+            'available' => false,
+            'date_from' => null,
+            'date_to' => null,
+            'label' => '',
+        ];
+    }
+
+    $periodDays = max(1, (int)floor(($toTimestamp - $fromTimestamp) / 86400) + 1);
+    $previousToTimestamp = strtotime('-1 day', $fromTimestamp);
+    $previousFromTimestamp = strtotime('-' . ($periodDays - 1) . ' days', (int)$previousToTimestamp);
+    if (!is_int($previousToTimestamp) || !is_int($previousFromTimestamp) || $previousToTimestamp <= 0 || $previousFromTimestamp <= 0) {
+        return [
+            'available' => false,
+            'date_from' => null,
+            'date_to' => null,
+            'label' => '',
+        ];
+    }
+
+    $previousFrom = date('Y-m-d', $previousFromTimestamp);
+    $previousTo = date('Y-m-d', $previousToTimestamp);
+
+    return [
+        'available' => true,
+        'date_from' => $previousFrom,
+        'date_to' => $previousTo,
+        'label' => date('d.m.Y', $previousFromTimestamp) . ' — ' . date('d.m.Y', $previousToTimestamp),
+    ];
+};
+
 try {
     $summary = (new QuizStatisticsService())->getSummary([
         'date_from' => $dateFrom,
@@ -114,6 +158,29 @@ try {
         'popular_answers' => [],
         'warnings' => [],
     ];
+}
+
+$previousPeriod = $buildPreviousPeriod($period, $dateFrom, $dateTo);
+$previousSummary = null;
+$previousFunnelSummary = null;
+$comparisonError = '';
+if ((bool)($previousPeriod['available'] ?? false)) {
+    try {
+        $previousSummary = (new QuizStatisticsService())->getSummary([
+            'date_from' => $previousPeriod['date_from'],
+            'date_to' => $previousPeriod['date_to'],
+            'quiz_code' => $quizCode,
+        ]);
+        $previousFunnelSummary = $funnelService->getSummary([
+            'date_from' => $previousPeriod['date_from'],
+            'date_to' => $previousPeriod['date_to'],
+            'quiz_code' => $quizCode,
+        ]);
+    } catch (\Throwable) {
+        $previousSummary = null;
+        $previousFunnelSummary = null;
+        $comparisonError = 'Не удалось рассчитать сравнение с предыдущим периодом.';
+    }
 }
 
 try {
@@ -196,6 +263,9 @@ $periodLabel = (string)($summary['period']['label'] ?? '');
 .kk-quiz-insight-card{padding:12px 14px;border:1px solid #d6d6d6;border-radius:6px;background:#fff;}
 .kk-quiz-insight-card__title{font-weight:bold;margin-bottom:8px;}
 .kk-quiz-insight-card__muted{color:#666;}
+.kk-quiz-delta--up{color:#167a3a;font-weight:bold;}
+.kk-quiz-delta--down{color:#a62323;font-weight:bold;}
+.kk-quiz-delta--neutral{color:#777;}
 .kk-quiz-maintenance{padding:12px;margin:12px 0 18px;border:1px solid #d6d6d6;background:#fff;border-radius:6px;}
 .kk-quiz-maintenance__actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
 .kk-quiz-maintenance__note{margin-top:8px;color:#666;font-size:12px;}
@@ -441,6 +511,47 @@ $funnelCardItems = [
     'View → Lead' => $formatPercent($funnelCards['view_to_lead'] ?? 0),
     'Start → Lead' => $formatPercent($funnelCards['start_to_lead'] ?? 0),
 ];
+$previousFunnelCards = is_array($previousFunnelSummary['summary_cards'] ?? null) ? $previousFunnelSummary['summary_cards'] : [];
+$formatSignedNumber = static fn (float $value): string => ($value > 0 ? '+' : '') . number_format($value, 1, '.', '');
+$buildComparisonDelta = static function (float $current, float $previous, bool $isPercent) use ($formatSignedNumber): array {
+    $delta = $current - $previous;
+    if (abs($delta) < 0.00001) {
+        return [
+            'text' => 'без изменений',
+            'class' => 'kk-quiz-delta--neutral',
+        ];
+    }
+
+    if ($isPercent) {
+        return [
+            'text' => $formatSignedNumber($delta) . ' п.п.',
+            'class' => $delta > 0 ? 'kk-quiz-delta--up' : 'kk-quiz-delta--down',
+        ];
+    }
+
+    if ($previous <= 0.0) {
+        return [
+            'text' => $current > 0.0 ? 'новое значение' : 'без изменений',
+            'class' => $current > 0.0 ? 'kk-quiz-delta--up' : 'kk-quiz-delta--neutral',
+        ];
+    }
+
+    $deltaPercent = $delta / $previous * 100;
+
+    return [
+        'text' => ($delta > 0 ? '+' : '') . (string)(int)$delta . ' (' . $formatSignedNumber($deltaPercent) . '%)',
+        'class' => $delta > 0 ? 'kk-quiz-delta--up' : 'kk-quiz-delta--down',
+    ];
+};
+$comparisonMetrics = [
+    ['key' => 'views', 'label' => 'Показы', 'percent' => false],
+    ['key' => 'starts', 'label' => 'Старты', 'percent' => false],
+    ['key' => 'results', 'label' => 'Результаты', 'percent' => false],
+    ['key' => 'forms', 'label' => 'Формы', 'percent' => false],
+    ['key' => 'leads', 'label' => 'Заявки', 'percent' => false],
+    ['key' => 'view_to_lead', 'label' => 'View → Lead', 'percent' => true],
+    ['key' => 'start_to_lead', 'label' => 'Start → Lead', 'percent' => true],
+];
 ?>
 
 <div class="kk-quiz-stat-section">
@@ -456,6 +567,49 @@ $funnelCardItems = [
     <div class="kk-quiz-stat-note">
         Показ = событие quiz_view. Старт = первый ответ на первый вопрос. Результат = показ результата. Форма = показ финальной формы. Заявка = успешно сохранённая заявка.
     </div>
+</div>
+
+<div class="kk-quiz-stat-section">
+    <h2>Сравнение с предыдущим периодом</h2>
+    <?php if ($period === 'all'): ?>
+        <div class="kk-quiz-stat-empty">Для периода “всё время” сравнение недоступно.</div>
+    <?php elseif ($comparisonError !== ''): ?>
+        <div class="kk-quiz-stat-empty"><?= $escape($comparisonError) ?></div>
+    <?php elseif (!(bool)($previousPeriod['available'] ?? false)): ?>
+        <div class="kk-quiz-stat-empty">Сравнение с предыдущим периодом недоступно для выбранного периода.</div>
+    <?php else: ?>
+        <div class="kk-quiz-stat-note">
+            Текущий период: <?= $escape($periodLabel !== '' ? $periodLabel : 'всё время') ?><br>
+            Предыдущий период: <?= $escape((string)($previousPeriod['label'] ?? '')) ?>
+        </div>
+        <table class="adm-list-table">
+            <thead>
+            <tr>
+                <th class="adm-list-table-cell">Показатель</th>
+                <th class="adm-list-table-cell">Текущий период</th>
+                <th class="adm-list-table-cell">Предыдущий период</th>
+                <th class="adm-list-table-cell">Изменение</th>
+            </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($comparisonMetrics as $metric): ?>
+                <?php
+                $metricKey = (string)$metric['key'];
+                $isPercentMetric = (bool)$metric['percent'];
+                $currentValue = (float)($funnelCards[$metricKey] ?? 0);
+                $previousValue = (float)($previousFunnelCards[$metricKey] ?? 0);
+                $delta = $buildComparisonDelta($currentValue, $previousValue, $isPercentMetric);
+                ?>
+                <tr>
+                    <td class="adm-list-table-cell"><?= $escape($metric['label']) ?></td>
+                    <td class="adm-list-table-cell"><?= $escape($isPercentMetric ? $formatPercent($currentValue) : (int)$currentValue) ?></td>
+                    <td class="adm-list-table-cell"><?= $escape($isPercentMetric ? $formatPercent($previousValue) : (int)$previousValue) ?></td>
+                    <td class="adm-list-table-cell <?= $escape($delta['class']) ?>"><?= $escape($delta['text']) ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    <?php endif; ?>
 </div>
 
 <div class="kk-quiz-stat-section">
