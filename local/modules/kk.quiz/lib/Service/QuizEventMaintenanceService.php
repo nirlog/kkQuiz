@@ -15,9 +15,17 @@ final class QuizEventMaintenanceService
     public const DEFAULT_RETENTION_DAYS = 365;
     public const DELETE_BATCH_SIZE = 5000;
 
+
+    public function getRetentionDays(): int
+    {
+        $value = (int)ModuleSettingsService::get('analytics_retention_days');
+
+        return in_array($value, [0, 90, 180, 365], true) ? $value : self::DEFAULT_RETENTION_DAYS;
+    }
+
     public function cleanupOldEvents(?int $retentionDays = null): array
     {
-        $retentionDays = $retentionDays ?? self::DEFAULT_RETENTION_DAYS;
+        $retentionDays = $retentionDays ?? $this->getRetentionDays();
         $retentionDays = max(0, (int)$retentionDays);
         $result = [
             'deleted' => 0,

@@ -110,9 +110,12 @@ try {
 }
 
 try {
-    $orphanQuizCodes = (new QuizEventMaintenanceService())->getOrphanQuizCodes();
+    $maintenanceService = new QuizEventMaintenanceService();
+    $retentionDays = $maintenanceService->getRetentionDays();
+    $orphanQuizCodes = $maintenanceService->getOrphanQuizCodes();
     $orphanQuizCheckFailed = false;
 } catch (\Throwable) {
+    $retentionDays = QuizEventMaintenanceService::DEFAULT_RETENTION_DAYS;
     $orphanQuizCodes = [];
     $orphanQuizCheckFailed = true;
 }
@@ -199,7 +202,7 @@ $orphanExtraCount = max(0, count($orphanQuizCodes) - count($orphanPreview));
 ?>
 <div class="kk-quiz-maintenance">
     <h2>Обслуживание статистики</h2>
-    <div>Срок хранения событий: <?= $escape(QuizEventMaintenanceService::DEFAULT_RETENTION_DAYS) ?> дней</div>
+    <div>Срок хранения событий: <?= (int)($retentionDays ?? QuizEventMaintenanceService::DEFAULT_RETENTION_DAYS) > 0 ? $escape((int)$retentionDays . ' дней') : 'не удалять автоматически' ?></div>
     <?php if ($orphanQuizCheckFailed): ?>
         <div class="kk-quiz-maintenance__note">Не удалось проверить статистику удалённых квизов.</div>
     <?php elseif ($orphanQuizCodes === []): ?>

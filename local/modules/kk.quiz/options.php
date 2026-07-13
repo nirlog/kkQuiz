@@ -39,7 +39,7 @@ $checkboxOptions = [
     'debug_enabled',
     'log_notification_errors',
 ];
-$numericOptions = ['rate_limit_ttl', 'rate_limit_max', 'bitrix24_assigned_by_id', 'telegram_message_thread_id'];
+$numericOptions = ['rate_limit_ttl', 'rate_limit_max', 'bitrix24_assigned_by_id', 'telegram_message_thread_id', 'analytics_retention_days'];
 $secretOptions = ModuleSettingsService::SECRET_OPTIONS;
 
 $sanitizeText = static function (mixed $value): string {
@@ -55,6 +55,12 @@ $sanitizeNumber = static function (string $name, mixed $value): string {
 
     if ($name === 'rate_limit_max') {
         return (string)min(100, max(1, $value));
+    }
+
+    if ($name === 'analytics_retention_days') {
+        $allowed = [0, 90, 180, 365];
+
+        return in_array($value, $allowed, true) ? (string)$value : '365';
     }
 
     if ($name === 'bitrix24_assigned_by_id') {
@@ -185,14 +191,18 @@ $renderSecretInput = static function (string $name, string $label) use (&$values
     echo '</td></tr>';
 };
 
-$renderSelect = static function (string $name, string $label, array $items) use (&$values, $e): void {
+$renderSelect = static function (string $name, string $label, array $items, string $note = '') use (&$values, $e): void {
     echo '<tr><td width="40%"><label for="' . $e($name) . '">' . $e($label) . '</label></td><td width="60%">';
     echo '<select id="' . $e($name) . '" name="' . $e($name) . '">';
     foreach ($items as $value => $title) {
         $selected = (string)($values[$name] ?? '') === (string)$value ? ' selected' : '';
         echo '<option value="' . $e($value) . '"' . $selected . '>' . $e($title) . '</option>';
     }
-    echo '</select></td></tr>';
+    echo '</select>';
+    if ($note !== '') {
+        echo '<br><small>' . $e($note) . '</small>';
+    }
+    echo '</td></tr>';
 };
 
 $APPLICATION->SetTitle('Настройки модуля KK Quiz');
@@ -251,6 +261,12 @@ if ($message !== null) {
     $renderInput('yandex_metrika_result_cta_click_goal', 'Yandex.Metrika: цель клика по CTA результата');
     $renderInput('yandex_metrika_product_click_goal', 'Yandex.Metrika: цель клика по рекомендации');
     $renderInput('yandex_metrika_goal', 'Цель Метрики: отправил форму');
+    $renderSelect('analytics_retention_days', 'Срок хранения событий внутренней аналитики', [
+        '90' => '90 дней',
+        '180' => '180 дней',
+        '365' => '365 дней',
+        '0' => 'Не удалять автоматически',
+    ], 'События внутренней аналитики используются для воронки, отвалов по вопросам и популярных ответов. UTM, IP и User-Agent здесь не хранятся.');
     $renderCheckbox('google_analytics_enabled', 'Включить Google Analytics');
     $renderInput('google_analytics_measurement_id', 'Google Measurement ID');
     $renderInput('google_analytics_first_answer_event_name', 'GA4 event: ответил на первый вопрос');
