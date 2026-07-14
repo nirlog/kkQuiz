@@ -283,18 +283,7 @@ final class Installer
             return;
         }
 
-        $source = dirname(__DIR__, 2) . '/admin/kk_quiz_statistics.php';
-        $target = $documentRoot . '/bitrix/admin/kk_quiz_statistics.php';
-
-        if (!is_file($source)) {
-            if ($throwOnError) {
-                throw new SystemException('KK Quiz admin statistics stub source not found.');
-            }
-
-            return;
-        }
-
-        $targetDir = dirname($target);
+        $targetDir = $documentRoot . '/bitrix/admin';
         if (!is_dir($targetDir)) {
             if ($throwOnError) {
                 throw new SystemException('/bitrix/admin directory not found.');
@@ -303,15 +292,40 @@ final class Installer
             return;
         }
 
-        $sourceContent = (string)file_get_contents($source);
-        $targetContent = is_file($target) ? (string)file_get_contents($target) : '';
+        $files = [
+            [
+                'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_statistics.php',
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_statistics.php',
+                'missing' => 'KK Quiz admin statistics stub source not found.',
+                'write' => 'Cannot write /bitrix/admin/kk_quiz_statistics.php.',
+            ],
+            [
+                'source' => dirname(__DIR__, 2) . '/install/admin/kk_quiz_help.php',
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_help.php',
+                'missing' => 'KK Quiz admin help stub source not found.',
+                'write' => 'Cannot write /bitrix/admin/kk_quiz_help.php.',
+            ],
+        ];
 
-        if ($targetContent === $sourceContent) {
-            return;
-        }
+        foreach ($files as $file) {
+            if (!is_file($file['source'])) {
+                if ($throwOnError) {
+                    throw new SystemException($file['missing']);
+                }
 
-        if (@file_put_contents($target, $sourceContent) === false && $throwOnError) {
-            throw new SystemException('Cannot write /bitrix/admin/kk_quiz_statistics.php.');
+                continue;
+            }
+
+            $sourceContent = (string)file_get_contents($file['source']);
+            $targetContent = is_file($file['target']) ? (string)file_get_contents($file['target']) : '';
+
+            if ($targetContent === $sourceContent) {
+                continue;
+            }
+
+            if (@file_put_contents($file['target'], $sourceContent) === false && $throwOnError) {
+                throw new SystemException($file['write']);
+            }
         }
     }
 
@@ -322,16 +336,27 @@ final class Installer
             return;
         }
 
-        $target = $documentRoot . '/bitrix/admin/kk_quiz_statistics.php';
+        $files = [
+            [
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_statistics.php',
+                'marker' => 'kk.quiz/admin/statistics.php',
+            ],
+            [
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_help.php',
+                'marker' => 'kk.quiz/admin/help.php',
+            ],
+        ];
 
-        if (!is_file($target)) {
-            return;
-        }
+        foreach ($files as $file) {
+            if (!is_file($file['target'])) {
+                continue;
+            }
 
-        $content = (string)file_get_contents($target);
+            $content = (string)file_get_contents($file['target']);
 
-        if (strpos($content, 'kk.quiz/admin/statistics.php') !== false) {
-            @unlink($target);
+            if (strpos($content, $file['marker']) !== false) {
+                @unlink($file['target']);
+            }
         }
     }
 
