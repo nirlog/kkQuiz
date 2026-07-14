@@ -14,6 +14,7 @@ final class ModuleSettingsService
         'telegram_bot_token',
         'telegram_proxy_url',
         'bitrix24_webhook_url',
+        'webhook_secret',
     ];
 
     public static function getDefaults(): array
@@ -34,6 +35,11 @@ final class ModuleSettingsService
             'bitrix24_assigned_by_id' => '',
             'bitrix24_source_id' => 'WEB',
 
+            'webhook_enabled' => 'N',
+            'webhook_url' => '',
+            'webhook_secret' => '',
+            'webhook_timeout' => '5',
+
             'yandex_metrika_enabled' => 'N',
             'yandex_metrika_counter_id' => '',
             'yandex_metrika_first_answer_goal' => 'kk_quiz_first_answer',
@@ -49,6 +55,8 @@ final class ModuleSettingsService
             'google_analytics_result_cta_click_event_name' => 'kk_quiz_result_cta_click',
             'google_analytics_product_click_event_name' => 'kk_quiz_recommendation_click',
             'google_analytics_event_name' => 'generate_lead',
+
+            'analytics_retention_days' => '365',
 
             'default_lead_status' => 'new',
             'save_answers_data' => 'Y',
