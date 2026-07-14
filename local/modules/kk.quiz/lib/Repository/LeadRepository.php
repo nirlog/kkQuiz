@@ -43,6 +43,22 @@ final class LeadRepository
             ) ?? $properties['KK_LEAD_TELEGRAM_SENT'];
         }
 
+        if (isset($properties['KK_LEAD_WEBHOOK_SENT'])) {
+            $properties['KK_LEAD_WEBHOOK_SENT'] = $this->getEnumId(
+                $iblockId,
+                'KK_LEAD_WEBHOOK_SENT',
+                (string)$properties['KK_LEAD_WEBHOOK_SENT']
+            ) ?? $properties['KK_LEAD_WEBHOOK_SENT'];
+        }
+
+        if (isset($properties['KK_LEAD_BITRIX24_SENT'])) {
+            $properties['KK_LEAD_BITRIX24_SENT'] = $this->getEnumId(
+                $iblockId,
+                'KK_LEAD_BITRIX24_SENT',
+                (string)$properties['KK_LEAD_BITRIX24_SENT']
+            ) ?? $properties['KK_LEAD_BITRIX24_SENT'];
+        }
+
         $element = new \CIBlockElement();
         $id = (int)$element->Add([
             'IBLOCK_ID' => $iblockId,
@@ -119,6 +135,121 @@ final class LeadRepository
         ]);
     }
 
+    public function markWebhookResult(int $leadId, array $result): void
+    {
+        if ($leadId <= 0 || !Loader::includeModule('iblock')) {
+            return;
+        }
+
+        $iblockId = $this->getLeadsIblockId();
+        if ($iblockId === null) {
+            return;
+        }
+
+        $skipped = (bool)($result['skipped'] ?? false);
+        $success = (bool)($result['success'] ?? false) && !$skipped;
+        $status = trim((string)($result['status_label'] ?? ''));
+        if ($status === '') {
+            $status = $skipped
+                ? 'skipped'
+                : ((int)($result['status'] ?? 0) > 0 ? 'HTTP_' . (int)$result['status'] : 'ERROR');
+        }
+        $error = $skipped
+            ? (string)($result['reason'] ?? 'WEBHOOK_DISABLED')
+            : ($success ? '' : (string)($result['error'] ?? 'WEBHOOK_SEND_FAILED'));
+
+        $error = trim(strip_tags($error));
+        $error = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $error) ?? $error;
+        $error = mb_substr(trim($error), 0, 1000);
+
+        \CIBlockElement::SetPropertyValuesEx($leadId, $iblockId, [
+            'KK_LEAD_WEBHOOK_SENT' => $this->getEnumId($iblockId, 'KK_LEAD_WEBHOOK_SENT', $success ? 'Y' : 'N') ?? ($success ? 'Y' : 'N'),
+            'KK_LEAD_WEBHOOK_SENT_AT' => $success ? date('d.m.Y H:i:s') : '',
+            'KK_LEAD_WEBHOOK_STATUS' => $status,
+            'KK_LEAD_WEBHOOK_ERROR' => $error,
+        ]);
+    }
+
+
+    public function markBitrix24Result(int $leadId, array $result): void
+    {
+        if ($leadId <= 0 || !Loader::includeModule('iblock')) {
+            return;
+        }
+
+        $iblockId = $this->getLeadsIblockId();
+        if ($iblockId === null) {
+            return;
+        }
+
+        $skipped = (bool)($result['skipped'] ?? false);
+        $success = (bool)($result['success'] ?? false) && !$skipped;
+        $status = trim((string)($result['status_label'] ?? ''));
+        if ($status === '') {
+            $status = $skipped
+                ? 'skipped'
+                : ((int)($result['status'] ?? 0) > 0 ? 'HTTP_' . (int)$result['status'] : 'ERROR');
+        }
+        $error = $skipped
+            ? (string)($result['reason'] ?? 'BITRIX24_DISABLED')
+            : ($success ? '' : (string)($result['error'] ?? 'BITRIX24_SEND_FAILED'));
+
+        $error = trim(strip_tags($error));
+        $error = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $error) ?? $error;
+        $error = mb_substr(trim($error), 0, 1000);
+
+        \CIBlockElement::SetPropertyValuesEx($leadId, $iblockId, [
+            'KK_LEAD_BITRIX24_SENT' => $this->getEnumId($iblockId, 'KK_LEAD_BITRIX24_SENT', $success ? 'Y' : 'N') ?? ($success ? 'Y' : 'N'),
+            'KK_LEAD_BITRIX24_SENT_AT' => $success ? date('d.m.Y H:i:s') : '',
+            'KK_LEAD_BITRIX24_STATUS' => $status,
+            'KK_LEAD_BITRIX24_ERROR' => $error,
+            'KK_LEAD_BITRIX24_LEAD_ID' => $success ? (string)($result['external_id'] ?? '') : '',
+        ]);
+    }
+
+
+    public function getLeadDataById(int $leadId): ?array
+    {
+        if ($leadId <= 0 || !Loader::includeModule('iblock')) {
+            return null;
+        }
+
+        $iblockId = $this->getLeadsIblockId();
+        if ($iblockId === null) {
+            return null;
+        }
+
+        $select = ['ID', 'NAME', 'DATE_CREATE', 'DETAIL_TEXT'];
+        foreach ($this->getPropertyMap() as $propertyCode) {
+            $select[] = 'PROPERTY_' . $propertyCode;
+        }
+
+        $element = \CIBlockElement::GetList(
+            [],
+            ['IBLOCK_ID' => $iblockId, 'ID' => $leadId],
+            false,
+            ['nTopCount' => 1],
+            $select
+        )->Fetch();
+
+        if (!is_array($element)) {
+            return null;
+        }
+
+        $lead = [
+            'id' => (int)$element['ID'],
+            'name' => (string)($element['NAME'] ?? ''),
+            'created_at' => (string)($element['DATE_CREATE'] ?? ''),
+            'detail_text' => (string)($element['DETAIL_TEXT'] ?? ''),
+        ];
+
+        foreach ($this->getPropertyMap() as $leadKey => $propertyCode) {
+            $lead[$leadKey] = $this->getElementPropertyValue($element, $propertyCode);
+        }
+
+        return $lead;
+    }
+
     public function getLeadsIblockId(): ?int
     {
         $iblock = \CIBlock::GetList([], [
@@ -128,6 +259,28 @@ final class LeadRepository
         ])->Fetch();
 
         return is_array($iblock) ? (int)$iblock['ID'] : null;
+    }
+
+
+    private function getElementPropertyValue(array $element, string $propertyCode): string
+    {
+        foreach ([
+            'PROPERTY_' . $propertyCode . '_VALUE',
+            '~PROPERTY_' . $propertyCode . '_VALUE',
+        ] as $key) {
+            if (!array_key_exists($key, $element)) {
+                continue;
+            }
+
+            $value = $element[$key];
+            if (is_array($value)) {
+                $value = reset($value);
+            }
+
+            return is_scalar($value) ? (string)$value : '';
+        }
+
+        return '';
     }
 
     private function getPropertyMap(): array
@@ -164,6 +317,15 @@ final class LeadRepository
             'telegram_sent' => 'KK_LEAD_TELEGRAM_SENT',
             'telegram_sent_at' => 'KK_LEAD_TELEGRAM_SENT_AT',
             'telegram_error' => 'KK_LEAD_TELEGRAM_ERROR',
+            'webhook_sent' => 'KK_LEAD_WEBHOOK_SENT',
+            'webhook_sent_at' => 'KK_LEAD_WEBHOOK_SENT_AT',
+            'webhook_status' => 'KK_LEAD_WEBHOOK_STATUS',
+            'webhook_error' => 'KK_LEAD_WEBHOOK_ERROR',
+            'bitrix24_sent' => 'KK_LEAD_BITRIX24_SENT',
+            'bitrix24_sent_at' => 'KK_LEAD_BITRIX24_SENT_AT',
+            'bitrix24_status' => 'KK_LEAD_BITRIX24_STATUS',
+            'bitrix24_error' => 'KK_LEAD_BITRIX24_ERROR',
+            'bitrix24_lead_id' => 'KK_LEAD_BITRIX24_LEAD_ID',
         ];
     }
 

@@ -4,13 +4,19 @@ declare(strict_types=1);
 
 namespace Kk\Quiz\Iblock;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\SystemException;
 use Kk\Quiz\Admin\ElementFormAssets;
 use Kk\Quiz\Admin\ElementListAssets;
+use Kk\Quiz\Admin\LeadFormAssets;
+use Kk\Quiz\Admin\LeadListAssets;
 use Kk\Quiz\Admin\SectionFormAssets;
+use Kk\Quiz\Analytics\LeadDeliveryLogTable;
+use Kk\Quiz\Analytics\QuizEventTable;
 use Kk\Quiz\Iblock\Property\QuizAnswersProperty;
+use Kk\Quiz\Service\QuizEventMaintenanceService;
 
 final class Installer
 {
@@ -25,6 +31,10 @@ final class Installer
         }
 
         self::registerEventHandlers();
+        self::installAdminFiles();
+        self::installAnalyticsTables();
+        self::installLeadDeliveryLogTable();
+        self::registerMaintenanceAgent();
 
         self::installIblockType();
 
@@ -42,12 +52,20 @@ final class Installer
     public static function uninstall(): void
     {
         self::unregisterEventHandlers();
+        self::unregisterMaintenanceAgent();
+        self::uninstallAdminFiles();
 
         // Инфоблоки и пользовательские данные намеренно не удаляются.
     }
 
     public static function ensureEventHandlers(): void
     {
+        self::installAdminFiles(false);
+        self::installAnalyticsTables(false);
+        self::installLeadDeliveryLogTable(false);
+        self::registerMaintenanceAgent();
+        self::ensureLeadProperties();
+
         self::registerEventHandlerIfMissing(
             'iblock',
             'OnIBlockPropertyBuildList',
@@ -72,9 +90,41 @@ final class Installer
         self::registerEventHandlerIfMissing(
             'main',
             'OnProlog',
+            LeadListAssets::class,
+            'onProlog'
+        );
+
+        self::registerEventHandlerIfMissing(
+            'main',
+            'OnProlog',
+            LeadFormAssets::class,
+            'onProlog'
+        );
+
+        self::registerEventHandlerIfMissing(
+            'main',
+            'OnProlog',
             SectionFormAssets::class,
             'onProlog'
         );
+    }
+
+    private static function ensureLeadProperties(): void
+    {
+        try {
+            if (!Loader::includeModule('iblock')) {
+                return;
+            }
+
+            $iblock = \CIBlock::GetList([], [
+                'TYPE' => self::IBLOCK_TYPE_ID,
+                'CODE' => self::LEADS_IBLOCK_CODE,
+            ])->Fetch();
+            if (is_array($iblock) && (int)($iblock['ID'] ?? 0) > 0) {
+                self::installLeadProperties((int)$iblock['ID']);
+            }
+        } catch (\Throwable) {
+        }
     }
 
     private static function registerEventHandlerIfMissing(
@@ -150,6 +200,22 @@ final class Installer
             'main',
             'OnProlog',
             'kk.quiz',
+            LeadListAssets::class,
+            'onProlog'
+        );
+
+        EventManager::getInstance()->registerEventHandler(
+            'main',
+            'OnProlog',
+            'kk.quiz',
+            LeadFormAssets::class,
+            'onProlog'
+        );
+
+        EventManager::getInstance()->registerEventHandler(
+            'main',
+            'OnProlog',
+            'kk.quiz',
             SectionFormAssets::class,
             'onProlog'
         );
@@ -185,9 +251,268 @@ final class Installer
             'main',
             'OnProlog',
             'kk.quiz',
+            LeadListAssets::class,
+            'onProlog'
+        );
+
+        EventManager::getInstance()->unRegisterEventHandler(
+            'main',
+            'OnProlog',
+            'kk.quiz',
+            LeadFormAssets::class,
+            'onProlog'
+        );
+
+        EventManager::getInstance()->unRegisterEventHandler(
+            'main',
+            'OnProlog',
+            'kk.quiz',
             SectionFormAssets::class,
             'onProlog'
         );
+    }
+
+    private static function installAdminFiles(bool $throwOnError = true): void
+    {
+        $documentRoot = rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/');
+        if ($documentRoot === '') {
+            if ($throwOnError) {
+                throw new SystemException('DOCUMENT_ROOT is empty.');
+            }
+
+            return;
+        }
+
+        $source = dirname(__DIR__, 2) . '/admin/kk_quiz_statistics.php';
+        $target = $documentRoot . '/bitrix/admin/kk_quiz_statistics.php';
+
+        if (!is_file($source)) {
+            if ($throwOnError) {
+                throw new SystemException('KK Quiz admin statistics stub source not found.');
+            }
+
+            return;
+        }
+
+        $targetDir = dirname($target);
+        if (!is_dir($targetDir)) {
+            if ($throwOnError) {
+                throw new SystemException('/bitrix/admin directory not found.');
+            }
+
+            return;
+        }
+
+        $sourceContent = (string)file_get_contents($source);
+        $targetContent = is_file($target) ? (string)file_get_contents($target) : '';
+
+        if ($targetContent === $sourceContent) {
+            return;
+        }
+
+        if (@file_put_contents($target, $sourceContent) === false && $throwOnError) {
+            throw new SystemException('Cannot write /bitrix/admin/kk_quiz_statistics.php.');
+        }
+    }
+
+    private static function uninstallAdminFiles(): void
+    {
+        $documentRoot = rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/');
+        if ($documentRoot === '') {
+            return;
+        }
+
+        $target = $documentRoot . '/bitrix/admin/kk_quiz_statistics.php';
+
+        if (!is_file($target)) {
+            return;
+        }
+
+        $content = (string)file_get_contents($target);
+
+        if (strpos($content, 'kk.quiz/admin/statistics.php') !== false) {
+            @unlink($target);
+        }
+    }
+
+    private static function installAnalyticsTables(bool $throwOnError = true): void
+    {
+        try {
+            $connection = Application::getConnection();
+            $tableName = QuizEventTable::getTableName();
+
+            if (!$connection->isTableExists($tableName)) {
+                QuizEventTable::getEntity()->createDbTable();
+            } else {
+                self::addAnalyticsColumnIfMissing($tableName, 'STEP_INDEX', 'int');
+                self::addAnalyticsColumnIfMissing($tableName, 'LEAD_ID', 'int');
+                self::dropAnalyticsColumns($tableName, [
+                    'SESSION_ID',
+                    'PAGE_URL',
+                    'REFERER',
+                    'UTM_SOURCE',
+                    'UTM_MEDIUM',
+                    'UTM_CAMPAIGN',
+                    'UTM_CONTENT',
+                    'UTM_TERM',
+                    'USER_AGENT',
+                    'IP_HASH',
+                ]);
+            }
+
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_DATE', ['DATE_CREATE']);
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_QUIZ_DATE', ['QUIZ_CODE', 'DATE_CREATE']);
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_RUN', ['RUN_ID']);
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_TYPE_DATE', ['EVENT_TYPE', 'DATE_CREATE']);
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_QUESTION', ['QUIZ_CODE', 'QUESTION_CODE', 'EVENT_TYPE']);
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_RESULT', ['QUIZ_CODE', 'RESULT_CODE', 'EVENT_TYPE']);
+        } catch (\Throwable $exception) {
+            if ($throwOnError) {
+                throw new SystemException($exception->getMessage());
+            }
+        }
+    }
+
+
+    public static function installLeadDeliveryLogTable(bool $throwOnError = true): void
+    {
+        try {
+            $connection = Application::getConnection();
+            $tableName = LeadDeliveryLogTable::getTableName();
+
+            if (!$connection->isTableExists($tableName)) {
+                LeadDeliveryLogTable::getEntity()->createDbTable();
+            }
+
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_DELIVERY_LEAD', ['LEAD_ID']);
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_DELIVERY_CHANNEL_DATE', ['CHANNEL', 'DATE_CREATE']);
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_DELIVERY_SUCCESS_DATE', ['SUCCESS', 'DATE_CREATE']);
+        } catch (\Throwable $exception) {
+            if ($throwOnError) {
+                throw new SystemException($exception->getMessage());
+            }
+        }
+    }
+
+    private static function addAnalyticsColumnIfMissing(string $tableName, string $columnName, string $type): void
+    {
+        if (self::analyticsColumnExists($tableName, $columnName)) {
+            return;
+        }
+
+        $connection = Application::getConnection();
+        $helper = $connection->getSqlHelper();
+
+        try {
+            $connection->queryExecute(sprintf(
+                'ALTER TABLE %s ADD %s %s NULL',
+                $helper->quote($tableName),
+                $helper->quote($columnName),
+                $type
+            ));
+        } catch (\Throwable) {
+        }
+    }
+
+    private static function dropAnalyticsColumns(string $tableName, array $columnNames): void
+    {
+        $connection = Application::getConnection();
+        $helper = $connection->getSqlHelper();
+
+        foreach ($columnNames as $columnName) {
+            if (!self::analyticsColumnExists($tableName, (string)$columnName)) {
+                continue;
+            }
+
+            try {
+                $connection->queryExecute(sprintf(
+                    'ALTER TABLE %s DROP COLUMN %s',
+                    $helper->quote($tableName),
+                    $helper->quote((string)$columnName)
+                ));
+            } catch (\Throwable) {
+            }
+        }
+    }
+
+    private static function analyticsColumnExists(string $tableName, string $columnName): bool
+    {
+        try {
+            $fields = Application::getConnection()->getTableFields($tableName);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return array_key_exists($columnName, $fields) || array_key_exists(strtolower($columnName), $fields);
+    }
+
+    private static function createAnalyticsIndex(string $tableName, string $indexName, array $columns): void
+    {
+        $connection = Application::getConnection();
+        if (method_exists($connection, 'isIndexExists') && $connection->isIndexExists($tableName, $columns)) {
+            return;
+        }
+
+        $helper = $connection->getSqlHelper();
+        $quotedColumns = [];
+        foreach ($columns as $column) {
+            $quotedColumns[] = $helper->quote((string)$column);
+        }
+
+        try {
+            $connection->queryExecute(sprintf(
+                'CREATE INDEX %s ON %s (%s)',
+                $helper->quote($indexName),
+                $helper->quote($tableName),
+                implode(', ', $quotedColumns)
+            ));
+        } catch (\Throwable) {
+            // Index may already exist under the requested name after a previous module version.
+        }
+    }
+
+    private static function uninstallAnalyticsTables(): void
+    {
+        // Analytics events are user data and are intentionally preserved on module uninstall.
+    }
+
+
+    private static function registerMaintenanceAgent(): void
+    {
+        if (!class_exists('CAgent')) {
+            return;
+        }
+
+        $agentName = '\\Kk\\Quiz\\Service\\QuizEventMaintenanceService::runCleanupAgent();';
+
+        try {
+            $existingAgent = \CAgent::GetList([], [
+                'MODULE_ID' => 'kk.quiz',
+                'NAME' => $agentName,
+            ])->Fetch();
+
+            if (is_array($existingAgent)) {
+                return;
+            }
+
+            \CAgent::AddAgent($agentName, 'kk.quiz', 'N', 86400);
+        } catch (\Throwable) {
+        }
+    }
+
+
+    private static function unregisterMaintenanceAgent(): void
+    {
+        if (!class_exists('CAgent')) {
+            return;
+        }
+
+        $agentName = '\\Kk\\Quiz\\Service\\QuizEventMaintenanceService::runCleanupAgent();';
+
+        try {
+            \CAgent::RemoveAgent($agentName, 'kk.quiz');
+        } catch (\Throwable) {
+        }
     }
 
     private static function installIblockType(): void
@@ -690,6 +1015,15 @@ final class Installer
             ['CODE' => 'KK_LEAD_TELEGRAM_SENT', 'NAME' => 'Telegram отправлен', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
             ['CODE' => 'KK_LEAD_TELEGRAM_SENT_AT', 'NAME' => 'Дата отправки Telegram', 'PROPERTY_TYPE' => 'S', 'USER_TYPE' => 'DateTime'],
             ['CODE' => 'KK_LEAD_TELEGRAM_ERROR', 'NAME' => 'Ошибка Telegram', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
+            ['CODE' => 'KK_LEAD_WEBHOOK_SENT', 'NAME' => 'Webhook отправлен', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
+            ['CODE' => 'KK_LEAD_WEBHOOK_SENT_AT', 'NAME' => 'Webhook отправлен в', 'PROPERTY_TYPE' => 'S', 'USER_TYPE' => 'DateTime'],
+            ['CODE' => 'KK_LEAD_WEBHOOK_STATUS', 'NAME' => 'Webhook статус', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_WEBHOOK_ERROR', 'NAME' => 'Webhook ошибка', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
+            ['CODE' => 'KK_LEAD_BITRIX24_SENT', 'NAME' => 'Bitrix24 отправлен', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
+            ['CODE' => 'KK_LEAD_BITRIX24_SENT_AT', 'NAME' => 'Bitrix24 отправлен в', 'PROPERTY_TYPE' => 'S', 'USER_TYPE' => 'DateTime'],
+            ['CODE' => 'KK_LEAD_BITRIX24_STATUS', 'NAME' => 'Bitrix24 статус', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_BITRIX24_ERROR', 'NAME' => 'Bitrix24 ошибка', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
+            ['CODE' => 'KK_LEAD_BITRIX24_LEAD_ID', 'NAME' => 'Bitrix24 ID лида', 'PROPERTY_TYPE' => 'S'],
         ];
 
         self::addIblockProperties($iblockId, $properties);
@@ -825,6 +1159,15 @@ final class Installer
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_TELEGRAM_SENT'), 'Telegram отправлен'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_TELEGRAM_SENT_AT'), 'Дата отправки Telegram'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_TELEGRAM_ERROR'), 'Ошибка Telegram'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_WEBHOOK_SENT'), 'Webhook отправлен'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_WEBHOOK_SENT_AT'), 'Webhook отправлен в'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_WEBHOOK_STATUS'), 'Webhook статус'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_WEBHOOK_ERROR'), 'Webhook ошибка'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_BITRIX24_SENT'), 'Bitrix24 отправлен'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_BITRIX24_SENT_AT'), 'Bitrix24 отправлен в'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_BITRIX24_STATUS'), 'Bitrix24 статус'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_BITRIX24_ERROR'), 'Bitrix24 ошибка'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_BITRIX24_LEAD_ID'), 'Bitrix24 ID лида'],
                 ],
             ],
         ];
