@@ -219,17 +219,12 @@ final class LeadRepository
             return null;
         }
 
-        $select = ['ID', 'NAME', 'DATE_CREATE', 'DETAIL_TEXT'];
-        foreach ($this->getPropertyMap() as $propertyCode) {
-            $select[] = 'PROPERTY_' . $propertyCode;
-        }
-
         $element = \CIBlockElement::GetList(
             [],
             ['IBLOCK_ID' => $iblockId, 'ID' => $leadId],
             false,
             ['nTopCount' => 1],
-            $select
+            ['ID', 'NAME', 'DATE_CREATE', 'DETAIL_TEXT']
         )->Fetch();
 
         if (!is_array($element)) {
@@ -243,8 +238,26 @@ final class LeadRepository
             'detail_text' => (string)($element['DETAIL_TEXT'] ?? ''),
         ];
 
-        foreach ($this->getPropertyMap() as $leadKey => $propertyCode) {
-            $lead[$leadKey] = $this->getElementPropertyValue($element, $propertyCode);
+        $propertyMap = $this->getPropertyMap();
+        foreach (array_keys($propertyMap) as $leadKey) {
+            $lead[$leadKey] = '';
+        }
+
+        $propertyCodeToLeadKey = array_flip($propertyMap);
+        $propertyResult = \CIBlockElement::GetProperty(
+            $iblockId,
+            $leadId,
+            ['sort' => 'asc', 'id' => 'asc'],
+            []
+        );
+
+        while ($property = $propertyResult->Fetch()) {
+            $code = (string)($property['CODE'] ?? '');
+            if (!isset($propertyCodeToLeadKey[$code])) {
+                continue;
+            }
+
+            $lead[$propertyCodeToLeadKey[$code]] = $this->getReadablePropertyValue($property);
         }
 
         return $lead;
@@ -262,25 +275,35 @@ final class LeadRepository
     }
 
 
-    private function getElementPropertyValue(array $element, string $propertyCode): string
+    private function getReadablePropertyValue(array $property): string
     {
-        foreach ([
-            'PROPERTY_' . $propertyCode . '_VALUE',
-            '~PROPERTY_' . $propertyCode . '_VALUE',
-        ] as $key) {
-            if (!array_key_exists($key, $element)) {
-                continue;
+        $propertyType = (string)($property['PROPERTY_TYPE'] ?? '');
+
+        if ($propertyType === 'L') {
+            foreach (['VALUE_XML_ID', 'VALUE_ENUM', 'VALUE'] as $key) {
+                if (!array_key_exists($key, $property)) {
+                    continue;
+                }
+
+                $value = $property[$key];
+                if (is_array($value)) {
+                    $value = reset($value);
+                }
+
+                if (is_scalar($value)) {
+                    return (string)$value;
+                }
             }
 
-            $value = $element[$key];
-            if (is_array($value)) {
-                $value = reset($value);
-            }
-
-            return is_scalar($value) ? (string)$value : '';
+            return '';
         }
 
-        return '';
+        $value = $property['VALUE'] ?? '';
+        if (is_array($value)) {
+            $value = reset($value);
+        }
+
+        return is_scalar($value) ? (string)$value : '';
     }
 
     private function getPropertyMap(): array
