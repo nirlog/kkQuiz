@@ -107,12 +107,52 @@ final class Bitrix24LeadService
             $fields['EMAIL'] = [['VALUE' => $email, 'VALUE_TYPE' => 'WORK']];
         }
 
+        foreach ($this->buildMappedFields($lead) as $fieldCode => $value) {
+            if ($fieldCode !== '' && $value !== '') {
+                $fields[$fieldCode] = $value;
+            }
+        }
+
         return [
             'fields' => $fields,
             'params' => [
                 'REGISTER_SONET_EVENT' => 'Y',
             ],
         ];
+    }
+
+    private function buildMappedFields(array $lead): array
+    {
+        $quiz = is_array($lead['quiz'] ?? null) ? $lead['quiz'] : [];
+        $result = is_array($lead['result'] ?? null) ? $lead['result'] : [];
+        $page = is_array($lead['page'] ?? null) ? $lead['page'] : [];
+        $utm = is_array($lead['utm'] ?? null) ? $lead['utm'] : [];
+
+        $map = [
+            'bitrix24_field_site_lead_id' => [(int)($lead['id'] ?? 0) > 0 ? (string)(int)$lead['id'] : '', 1000],
+            'bitrix24_field_quiz_code' => [$quiz['code'] ?? '', 1000],
+            'bitrix24_field_quiz_name' => [$quiz['name'] ?? '', 1000],
+            'bitrix24_field_result_code' => [$result['code'] ?? '', 1000],
+            'bitrix24_field_result_title' => [$result['title'] ?? '', 1000],
+            'bitrix24_field_page_url' => [$page['url'] ?? '', 1000],
+            'bitrix24_field_answers_text' => [$lead['answers_text'] ?? '', 10000],
+            'bitrix24_field_utm_source' => [$utm['source'] ?? '', 1000],
+            'bitrix24_field_utm_medium' => [$utm['medium'] ?? '', 1000],
+            'bitrix24_field_utm_campaign' => [$utm['campaign'] ?? '', 1000],
+            'bitrix24_field_utm_content' => [$utm['content'] ?? '', 1000],
+            'bitrix24_field_utm_term' => [$utm['term'] ?? '', 1000],
+        ];
+
+        $fields = [];
+        foreach ($map as $settingName => [$value, $limit]) {
+            $fieldCode = $this->normalizeFieldCode(ModuleSettingsService::get($settingName));
+            $fieldValue = $this->limitFieldValue($value, (int)$limit);
+            if ($fieldCode !== '' && $fieldValue !== '') {
+                $fields[$fieldCode] = $fieldValue;
+            }
+        }
+
+        return $fields;
     }
 
     private function buildTitle(array $quiz, array $result): string
@@ -159,6 +199,23 @@ final class Bitrix24LeadService
             '',
             'ID заявки на сайте: ' . (string)($lead['id'] ?? ''),
         ]);
+    }
+
+    private function normalizeFieldCode(mixed $value): string
+    {
+        $value = is_scalar($value) ? strtoupper(trim((string)$value)) : '';
+
+        return preg_match('/^[A-Z0-9_]{3,100}$/', $value) === 1 ? $value : '';
+    }
+
+    private function limitFieldValue(mixed $value, int $limit = 1000): string
+    {
+        $value = is_scalar($value) ? trim((string)$value) : '';
+        if ($value === '') {
+            return '';
+        }
+
+        return function_exists('mb_substr') ? (string)mb_substr($value, 0, $limit) : substr($value, 0, $limit);
     }
 
     private function normalizeUrl(mixed $value): string

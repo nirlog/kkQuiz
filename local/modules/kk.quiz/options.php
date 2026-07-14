@@ -42,9 +42,29 @@ $checkboxOptions = [
 ];
 $numericOptions = ['rate_limit_ttl', 'rate_limit_max', 'bitrix24_assigned_by_id', 'telegram_message_thread_id', 'analytics_retention_days', 'webhook_timeout'];
 $secretOptions = ModuleSettingsService::SECRET_OPTIONS;
+$bitrix24FieldOptions = [
+    'bitrix24_field_site_lead_id',
+    'bitrix24_field_quiz_code',
+    'bitrix24_field_quiz_name',
+    'bitrix24_field_result_code',
+    'bitrix24_field_result_title',
+    'bitrix24_field_page_url',
+    'bitrix24_field_answers_text',
+    'bitrix24_field_utm_source',
+    'bitrix24_field_utm_medium',
+    'bitrix24_field_utm_campaign',
+    'bitrix24_field_utm_content',
+    'bitrix24_field_utm_term',
+];
 
 $sanitizeText = static function (mixed $value): string {
     return is_scalar($value) ? trim((string)$value) : '';
+};
+
+$sanitizeBitrix24FieldCode = static function (mixed $value): string {
+    $value = is_scalar($value) ? strtoupper(trim((string)$value)) : '';
+
+    return preg_match('/^[A-Z0-9_]{3,100}$/', $value) === 1 ? $value : '';
 };
 
 $sanitizeNumber = static function (string $name, mixed $value): string {
@@ -81,7 +101,7 @@ $sanitizeNumber = static function (string $name, mixed $value): string {
     return (string)$value;
 };
 
-$buildSettingsFromPost = static function () use ($checkboxOptions, $numericOptions, $secretOptions, $sanitizeText, $sanitizeNumber): array {
+$buildSettingsFromPost = static function () use ($checkboxOptions, $numericOptions, $secretOptions, $bitrix24FieldOptions, $sanitizeText, $sanitizeNumber, $sanitizeBitrix24FieldCode): array {
     $chatIdValue = $sanitizeText($_POST['telegram_chat_id'] ?? '');
     if (preg_match('/^(-?\d+):(\d+)$/', $chatIdValue, $matches) === 1) {
         $_POST['telegram_chat_id'] = $matches[1];
@@ -115,6 +135,11 @@ $buildSettingsFromPost = static function () use ($checkboxOptions, $numericOptio
         }
 
         $postedValue = $_POST[$name] ?? $defaultValue;
+        if (in_array($name, $bitrix24FieldOptions, true)) {
+            $settings[$name] = $sanitizeBitrix24FieldCode($postedValue);
+            continue;
+        }
+
         if ($name === 'webhook_url') {
             $url = $sanitizeText($postedValue);
             $settings[$name] = ($url === '' || preg_match('#^https?://#i', $url) === 1) ? $url : '';
@@ -275,6 +300,21 @@ if ($message !== null) {
             <span style="margin-left:10px;" data-kk-quiz-test-bitrix24-result></span>
         </td>
     </tr>
+    <tr class="heading"><td colspan="2">Маппинг полей Bitrix24</td></tr>
+    <?php
+    $renderInput('bitrix24_field_site_lead_id', 'ID заявки на сайте', 'text', 'Укажите коды пользовательских полей Bitrix24, например UF_CRM_1234567890. Пустые поля не отправляются.');
+    $renderInput('bitrix24_field_quiz_code', 'Код квиза');
+    $renderInput('bitrix24_field_quiz_name', 'Название квиза');
+    $renderInput('bitrix24_field_result_code', 'Код результата');
+    $renderInput('bitrix24_field_result_title', 'Название результата');
+    $renderInput('bitrix24_field_page_url', 'URL страницы');
+    $renderInput('bitrix24_field_answers_text', 'Ответы квиза');
+    $renderInput('bitrix24_field_utm_source', 'UTM source');
+    $renderInput('bitrix24_field_utm_medium', 'UTM medium');
+    $renderInput('bitrix24_field_utm_campaign', 'UTM campaign');
+    $renderInput('bitrix24_field_utm_content', 'UTM content');
+    $renderInput('bitrix24_field_utm_term', 'UTM term');
+    ?>
     <tr class="heading"><td colspan="2">Webhook-интеграция</td></tr>
     <?php
     $renderCheckbox('webhook_enabled', 'Включить webhook');
