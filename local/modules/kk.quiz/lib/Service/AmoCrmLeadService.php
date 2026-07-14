@@ -34,7 +34,7 @@ final class AmoCrmLeadService
         $requestBody = Json::encode($requestPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         $result = $this->postJson($requestUrl, $requestBody, $this->tokenService->getAccessToken(), $startedAt);
-        if ((int)($result['status'] ?? 0) === 401) {
+        if ((int)($result['status'] ?? 0) === 401 && !$this->tokenService->isLongLivedTokenMode()) {
             $refresh = $this->tokenService->refreshAccessToken();
             if (($refresh['success'] ?? false) !== true) {
                 return $this->buildResult(false, false, (int)($refresh['status'] ?? 0), 'ERROR', '', '', 'AMOCRM_TOKEN_REFRESH_FAILED', $requestUrl, $requestBody, (string)($refresh['response'] ?? ''), $this->getDurationMs($startedAt));
@@ -53,9 +53,9 @@ final class AmoCrmLeadService
         $result['note_success'] = false;
         $result['note_error'] = '';
 
-        $answersText = trim((string)($payload['lead']['answers_text'] ?? ''));
-        if ($leadId !== '' && $answersText !== '') {
-            $note = $this->sendNote($baseUrl, $leadId, $payload, $this->tokenService->getAccessToken());
+        $noteText = $this->buildNoteText($payload);
+        if ($leadId !== '' && $noteText !== '') {
+            $note = $this->sendNote($baseUrl, $leadId, $noteText, $this->tokenService->getAccessToken());
             $result['note_success'] = (bool)($note['success'] ?? false);
             $result['note_error'] = (string)($note['error'] ?? '');
         }
@@ -65,9 +65,15 @@ final class AmoCrmLeadService
 
     private function hasCompleteSettings(string $baseUrl): bool
     {
-        return $baseUrl !== ''
-            && $this->tokenService->getAccessToken() !== ''
-            && trim(ModuleSettingsService::get('amocrm_client_id')) !== ''
+        if ($baseUrl === '' || $this->tokenService->getAccessToken() === '') {
+            return false;
+        }
+
+        if ($this->tokenService->isLongLivedTokenMode()) {
+            return true;
+        }
+
+        return trim(ModuleSettingsService::get('amocrm_client_id')) !== ''
             && trim(ModuleSettingsService::get('amocrm_client_secret')) !== ''
             && trim(ModuleSettingsService::get('amocrm_refresh_token')) !== ''
             && trim(ModuleSettingsService::get('amocrm_redirect_uri')) !== '';
@@ -79,11 +85,9 @@ final class AmoCrmLeadService
         $quiz = is_array($lead['quiz'] ?? null) ? $lead['quiz'] : [];
         $result = is_array($lead['result'] ?? null) ? $lead['result'] : [];
         $client = is_array($lead['client'] ?? null) ? $lead['client'] : [];
-        $page = is_array($lead['page'] ?? null) ? $lead['page'] : [];
 
         $item = [
             'name' => $this->buildTitle($quiz, $result),
-            'custom_fields_values' => $this->buildCustomFields($quiz, $result, $page),
             '_embedded' => [
                 'contacts' => [$this->buildContact($client)],
                 'tags' => $this->buildTags(),
@@ -124,23 +128,6 @@ final class AmoCrmLeadService
         return $contact;
     }
 
-    private function buildCustomFields(array $quiz, array $result, array $page): array
-    {
-        $fields = [];
-        foreach ([
-            'Код квиза' => $quiz['code'] ?? '',
-            'Результат квиза' => $result['title'] ?? '',
-            'URL страницы' => $page['url'] ?? '',
-        ] as $name => $value) {
-            $value = trim((string)$value);
-            if ($value !== '') {
-                $fields[] = ['field_name' => $name, 'values' => [['value' => $value]]];
-            }
-        }
-
-        return $fields;
-    }
-
     private function buildTags(): array
     {
         $tags = [];
@@ -166,10 +153,10 @@ final class AmoCrmLeadService
         return $resultTitle !== '' ? $title . ' — ' . $resultTitle : $title;
     }
 
-    private function sendNote(string $baseUrl, string $leadId, array $payload, string $token): array
+    private function sendNote(string $baseUrl, string $leadId, string $text, string $token): array
     {
         try {
-            $body = Json::encode([['note_type' => 'common', 'params' => ['text' => $this->buildNoteText($payload)]]], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $body = Json::encode([['note_type' => 'common', 'params' => ['text' => $text]]], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             $httpClient = new HttpClient(['socketTimeout' => 15, 'streamTimeout' => 15]);
             $httpClient->setHeader('Content-Type', 'application/json', true);
             $httpClient->setHeader('Authorization', 'Bearer ' . $token, true);
@@ -185,8 +172,39 @@ final class AmoCrmLeadService
     private function buildNoteText(array $payload): string
     {
         $lead = is_array($payload['lead'] ?? null) ? $payload['lead'] : [];
+        $quiz = is_array($lead['quiz'] ?? null) ? $lead['quiz'] : [];
+        $result = is_array($lead['result'] ?? null) ? $lead['result'] : [];
+        $client = is_array($lead['client'] ?? null) ? $lead['client'] : [];
+        $page = is_array($lead['page'] ?? null) ? $lead['page'] : [];
+        $utm = is_array($lead['utm'] ?? null) ? $lead['utm'] : [];
 
-        return trim((string)($lead['answers_text'] ?? ''));
+        return trim(implode("\n", [
+            'Заявка KK Quiz',
+            '',
+            'Квиз: ' . (string)($quiz['name'] ?? ''),
+            'Код квиза: ' . (string)($quiz['code'] ?? ''),
+            'Результат: ' . (string)($result['title'] ?? ''),
+            '',
+            'Клиент:',
+            'Имя: ' . (string)($client['name'] ?? ''),
+            'Телефон: ' . (string)($client['phone'] ?? ''),
+            'Email: ' . (string)($client['email'] ?? ''),
+            'Мессенджер: ' . (string)($client['messenger'] ?? ''),
+            'Комментарий: ' . (string)($client['comment'] ?? ''),
+            '',
+            'Страница:',
+            (string)($page['url'] ?? ''),
+            '',
+            'UTM:',
+            'source: ' . (string)($utm['source'] ?? ''),
+            'medium: ' . (string)($utm['medium'] ?? ''),
+            'campaign: ' . (string)($utm['campaign'] ?? ''),
+            'content: ' . (string)($utm['content'] ?? ''),
+            'term: ' . (string)($utm['term'] ?? ''),
+            '',
+            'Ответы:',
+            (string)($lead['answers_text'] ?? ''),
+        ]));
     }
 
     private function postJson(string $url, string $body, string $token, float $startedAt): array

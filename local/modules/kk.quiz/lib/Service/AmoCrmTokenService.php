@@ -21,6 +21,11 @@ final class AmoCrmTokenService
         return trim(ModuleSettingsService::get('amocrm_access_token'));
     }
 
+    public function isLongLivedTokenMode(): bool
+    {
+        return ModuleSettingsService::getBool('amocrm_long_lived_token');
+    }
+
     public function refreshAccessToken(): array
     {
         $baseUrl = $this->getBaseUrl();

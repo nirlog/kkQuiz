@@ -32,6 +32,7 @@ $checkboxOptions = [
     'bitrix24_enabled',
     'webhook_enabled',
     'amocrm_enabled',
+    'amocrm_long_lived_token',
     'yandex_metrika_enabled',
     'google_analytics_enabled',
     'save_answers_data',
@@ -391,6 +392,10 @@ if ($message !== null) {
     <?php $tabControl->BeginNextTab(); ?>
     <?php
     $renderCheckbox('amocrm_enabled', 'Включить amoCRM');
+    $renderCheckbox('amocrm_long_lived_token', 'Использовать долгосрочный токен без refresh token');
+    ?>
+    <tr><td width="40%"></td><td width="60%"><small>В этом режиме достаточно указать домен аккаунта и Access Token. Client ID, Client Secret, Redirect URI и Refresh Token не обязательны.</small></td></tr>
+    <?php
     $renderInput('amocrm_base_domain', 'Домен аккаунта', 'text', 'Например: example.amocrm.ru. https:// будет удалён при сохранении.');
     $renderInput('amocrm_client_id', 'Client ID');
     $renderSecretInput('amocrm_client_secret', 'Client Secret');

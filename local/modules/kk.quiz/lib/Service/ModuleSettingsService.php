@@ -56,6 +56,7 @@ final class ModuleSettingsService
             'webhook_timeout' => '5',
 
             'amocrm_enabled' => 'N',
+            'amocrm_long_lived_token' => 'N',
             'amocrm_base_domain' => '',
             'amocrm_client_id' => '',
             'amocrm_client_secret' => '',
