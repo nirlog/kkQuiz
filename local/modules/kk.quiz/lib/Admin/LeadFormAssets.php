@@ -125,7 +125,13 @@ if (!form || !form.parentNode) return;
 var panel = document.createElement('div');
 panel.id = 'kk-quiz-webhook-panel';
 panel.innerHTML = {$panelHtmlJson};
-form.parentNode.insertBefore(panel, form);
+if (typeof form.insertAdjacentElement === 'function') {
+form.insertAdjacentElement('afterend', panel);
+} else if (form.nextSibling) {
+form.parentNode.insertBefore(panel, form.nextSibling);
+} else {
+form.parentNode.appendChild(panel);
+}
 var bindRetry = function(buttonId, action, successPrefix, errorPrefix) {
 var button = document.getElementById(buttonId);
 if (!button) return;
