@@ -15,6 +15,9 @@ final class ModuleSettingsService
         'telegram_proxy_url',
         'bitrix24_webhook_url',
         'webhook_secret',
+        'amocrm_client_secret',
+        'amocrm_access_token',
+        'amocrm_refresh_token',
     ];
 
     public static function getDefaults(): array
@@ -52,10 +55,18 @@ final class ModuleSettingsService
             'webhook_secret' => '',
             'webhook_timeout' => '5',
 
-            'webhook_enabled' => 'N',
-            'webhook_url' => '',
-            'webhook_secret' => '',
-            'webhook_timeout' => '5',
+            'amocrm_enabled' => 'N',
+            'amocrm_base_domain' => '',
+            'amocrm_client_id' => '',
+            'amocrm_client_secret' => '',
+            'amocrm_redirect_uri' => '',
+            'amocrm_access_token' => '',
+            'amocrm_refresh_token' => '',
+            'amocrm_pipeline_id' => '',
+            'amocrm_status_id' => '',
+            'amocrm_responsible_user_id' => '',
+            'amocrm_lead_price' => '',
+            'amocrm_tags' => 'KK Quiz',
 
             'yandex_metrika_enabled' => 'N',
             'yandex_metrika_counter_id' => '',
