@@ -51,6 +51,14 @@ final class LeadRepository
             ) ?? $properties['KK_LEAD_WEBHOOK_SENT'];
         }
 
+        if (isset($properties['KK_LEAD_BITRIX24_SENT'])) {
+            $properties['KK_LEAD_BITRIX24_SENT'] = $this->getEnumId(
+                $iblockId,
+                'KK_LEAD_BITRIX24_SENT',
+                (string)$properties['KK_LEAD_BITRIX24_SENT']
+            ) ?? $properties['KK_LEAD_BITRIX24_SENT'];
+        }
+
         $element = new \CIBlockElement();
         $id = (int)$element->Add([
             'IBLOCK_ID' => $iblockId,
@@ -159,6 +167,43 @@ final class LeadRepository
             'KK_LEAD_WEBHOOK_SENT_AT' => $success ? date('d.m.Y H:i:s') : '',
             'KK_LEAD_WEBHOOK_STATUS' => $status,
             'KK_LEAD_WEBHOOK_ERROR' => $error,
+        ]);
+    }
+
+
+    public function markBitrix24Result(int $leadId, array $result): void
+    {
+        if ($leadId <= 0 || !Loader::includeModule('iblock')) {
+            return;
+        }
+
+        $iblockId = $this->getLeadsIblockId();
+        if ($iblockId === null) {
+            return;
+        }
+
+        $skipped = (bool)($result['skipped'] ?? false);
+        $success = (bool)($result['success'] ?? false) && !$skipped;
+        $status = trim((string)($result['status_label'] ?? ''));
+        if ($status === '') {
+            $status = $skipped
+                ? 'skipped'
+                : ((int)($result['status'] ?? 0) > 0 ? 'HTTP_' . (int)$result['status'] : 'ERROR');
+        }
+        $error = $skipped
+            ? (string)($result['reason'] ?? 'BITRIX24_DISABLED')
+            : ($success ? '' : (string)($result['error'] ?? 'BITRIX24_SEND_FAILED'));
+
+        $error = trim(strip_tags($error));
+        $error = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $error) ?? $error;
+        $error = mb_substr(trim($error), 0, 1000);
+
+        \CIBlockElement::SetPropertyValuesEx($leadId, $iblockId, [
+            'KK_LEAD_BITRIX24_SENT' => $this->getEnumId($iblockId, 'KK_LEAD_BITRIX24_SENT', $success ? 'Y' : 'N') ?? ($success ? 'Y' : 'N'),
+            'KK_LEAD_BITRIX24_SENT_AT' => $success ? date('d.m.Y H:i:s') : '',
+            'KK_LEAD_BITRIX24_STATUS' => $status,
+            'KK_LEAD_BITRIX24_ERROR' => $error,
+            'KK_LEAD_BITRIX24_LEAD_ID' => $success ? (string)($result['external_id'] ?? '') : '',
         ]);
     }
 
@@ -276,6 +321,11 @@ final class LeadRepository
             'webhook_sent_at' => 'KK_LEAD_WEBHOOK_SENT_AT',
             'webhook_status' => 'KK_LEAD_WEBHOOK_STATUS',
             'webhook_error' => 'KK_LEAD_WEBHOOK_ERROR',
+            'bitrix24_sent' => 'KK_LEAD_BITRIX24_SENT',
+            'bitrix24_sent_at' => 'KK_LEAD_BITRIX24_SENT_AT',
+            'bitrix24_status' => 'KK_LEAD_BITRIX24_STATUS',
+            'bitrix24_error' => 'KK_LEAD_BITRIX24_ERROR',
+            'bitrix24_lead_id' => 'KK_LEAD_BITRIX24_LEAD_ID',
         ];
     }
 

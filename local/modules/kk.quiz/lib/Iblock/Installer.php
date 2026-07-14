@@ -1019,6 +1019,11 @@ final class Installer
             ['CODE' => 'KK_LEAD_WEBHOOK_SENT_AT', 'NAME' => 'Webhook отправлен в', 'PROPERTY_TYPE' => 'S', 'USER_TYPE' => 'DateTime'],
             ['CODE' => 'KK_LEAD_WEBHOOK_STATUS', 'NAME' => 'Webhook статус', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_WEBHOOK_ERROR', 'NAME' => 'Webhook ошибка', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
+            ['CODE' => 'KK_LEAD_BITRIX24_SENT', 'NAME' => 'Bitrix24 отправлен', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
+            ['CODE' => 'KK_LEAD_BITRIX24_SENT_AT', 'NAME' => 'Bitrix24 отправлен в', 'PROPERTY_TYPE' => 'S', 'USER_TYPE' => 'DateTime'],
+            ['CODE' => 'KK_LEAD_BITRIX24_STATUS', 'NAME' => 'Bitrix24 статус', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_BITRIX24_ERROR', 'NAME' => 'Bitrix24 ошибка', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
+            ['CODE' => 'KK_LEAD_BITRIX24_LEAD_ID', 'NAME' => 'Bitrix24 ID лида', 'PROPERTY_TYPE' => 'S'],
         ];
 
         self::addIblockProperties($iblockId, $properties);
@@ -1158,6 +1163,11 @@ final class Installer
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_WEBHOOK_SENT_AT'), 'Webhook отправлен в'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_WEBHOOK_STATUS'), 'Webhook статус'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_WEBHOOK_ERROR'), 'Webhook ошибка'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_BITRIX24_SENT'), 'Bitrix24 отправлен'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_BITRIX24_SENT_AT'), 'Bitrix24 отправлен в'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_BITRIX24_STATUS'), 'Bitrix24 статус'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_BITRIX24_ERROR'), 'Bitrix24 ошибка'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_BITRIX24_LEAD_ID'), 'Bitrix24 ID лида'],
                 ],
             ],
         ];

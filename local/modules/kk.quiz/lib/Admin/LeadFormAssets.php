@@ -71,20 +71,33 @@ final class LeadFormAssets
         $sent = self::escape((string)($lead['webhook_sent'] ?? ''));
         $sentAt = self::escape((string)($lead['webhook_sent_at'] ?? ''));
         $error = self::escape((string)($lead['webhook_error'] ?? ''));
+        $bitrix24Status = self::escape((string)($lead['bitrix24_status'] ?? ''));
+        $bitrix24Sent = self::escape((string)($lead['bitrix24_sent'] ?? ''));
+        $bitrix24SentAt = self::escape((string)($lead['bitrix24_sent_at'] ?? ''));
+        $bitrix24Error = self::escape((string)($lead['bitrix24_error'] ?? ''));
+        $bitrix24LeadId = self::escape((string)($lead['bitrix24_lead_id'] ?? ''));
         $rows = self::renderRows($logs);
 
         if ($rows === '') {
             $rows = '<tr><td colspan="8">История webhook-отправок пока пуста.</td></tr>';
         }
 
-        $panelHtml = '<h3>KK Quiz — webhook</h3>'
+        $panelHtml = '<h3>KK Quiz — доставки</h3>'
             . '<div class="kk-quiz-webhook-status">'
+            . '<h4>Webhook</h4>'
             . '<div><b>Текущий статус:</b> ' . $status . '</div>'
             . '<div><b>Отправлен:</b> ' . $sent . '</div>'
             . '<div><b>Дата отправки:</b> ' . $sentAt . '</div>'
             . '<div><b>Ошибка:</b> ' . $error . '</div>'
-            . '</div>'
             . '<button type="button" class="adm-btn adm-btn-save" id="kk-quiz-webhook-retry">Повторить webhook</button>'
+            . '<h4 style="margin-top:14px">Bitrix24</h4>'
+            . '<div><b>Текущий статус:</b> ' . $bitrix24Status . '</div>'
+            . '<div><b>Отправлен:</b> ' . $bitrix24Sent . '</div>'
+            . '<div><b>Дата отправки:</b> ' . $bitrix24SentAt . '</div>'
+            . '<div><b>Bitrix24 ID лида:</b> ' . $bitrix24LeadId . '</div>'
+            . '<div><b>Ошибка:</b> ' . $bitrix24Error . '</div>'
+            . '<button type="button" class="adm-btn adm-btn-save" id="kk-quiz-bitrix24-retry">Повторить Bitrix24</button>'
+            . '</div>'
             . '<h3 style="margin-top:16px">Последние попытки</h3>'
             . '<table><thead><tr><th>Дата</th><th>Канал</th><th>Успех</th><th>Статус</th><th>Ошибка</th><th>Время, мс</th><th>Запрос</th><th>Ответ</th></tr></thead><tbody>' . $rows . '</tbody></table>';
 
@@ -113,14 +126,15 @@ var panel = document.createElement('div');
 panel.id = 'kk-quiz-webhook-panel';
 panel.innerHTML = {$panelHtmlJson};
 form.parentNode.insertBefore(panel, form);
-var button = document.getElementById('kk-quiz-webhook-retry');
+var bindRetry = function(buttonId, action, successPrefix, errorPrefix) {
+var button = document.getElementById(buttonId);
 if (!button) return;
 button.addEventListener('click', function(){
 var originalText = button.textContent;
 button.disabled = true;
 button.textContent = 'Отправка...';
 var params = new URLSearchParams();
-params.set('action', 'kk:quiz.api.retryLeadWebhook');
+params.set('action', action);
 if (window.BX && BX.bitrix_sessid) params.set('sessid', BX.bitrix_sessid());
 fetch('/bitrix/services/main/ajax.php?' + params.toString(), {
 method: 'POST',
@@ -131,18 +145,22 @@ body: JSON.stringify({lead_id: {$leadIdJson}})
 .then(function(response){
 var data = response && response.data ? response.data : response;
 if (!data || data.success !== true) {
-var errors = data && data.errors ? data.errors.join(', ') : (data && data.error ? data.error : 'WEBHOOK_RETRY_FAILED');
+var errors = data && data.errors ? data.errors.join(', ') : (data && data.error ? data.error : 'DELIVERY_RETRY_FAILED');
 throw new Error(errors);
 }
-alert('Webhook отправлен. HTTP ' + (data.status || 0));
+var externalId = data.external_id ? ' ID: ' + data.external_id : '';
+alert(successPrefix + '. HTTP ' + (data.status || 0) + externalId);
 window.location.reload();
 }).catch(function(error){
-alert('Не удалось отправить webhook: ' + (error && error.message ? error.message : 'WEBHOOK_RETRY_FAILED'));
+alert(errorPrefix + ': ' + (error && error.message ? error.message : 'DELIVERY_RETRY_FAILED'));
 }).finally(function(){
 button.disabled = false;
 button.textContent = originalText;
 });
 });
+};
+bindRetry('kk-quiz-webhook-retry', 'kk:quiz.api.retryLeadWebhook', 'Webhook отправлен', 'Не удалось отправить webhook');
+bindRetry('kk-quiz-bitrix24-retry', 'kk:quiz.api.retryLeadBitrix24', 'Bitrix24 отправлен', 'Не удалось отправить Bitrix24');
 };
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
 })();

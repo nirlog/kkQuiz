@@ -45,6 +45,12 @@ final class Api extends Controller
             'retryLeadWebhook' => [
                 'prefilters' => [new Csrf()],
             ],
+            'retryLeadBitrix24' => [
+                'prefilters' => [new Csrf()],
+            ],
+            'testBitrix24' => [
+                'prefilters' => [new Csrf()],
+            ],
         ];
     }
 
@@ -335,6 +341,79 @@ final class Api extends Controller
             return [
                 'success' => false,
                 'errors' => ['WEBHOOK_RETRY_FAILED'],
+            ];
+        }
+    }
+
+
+    public function retryLeadBitrix24Action(int $leadId = 0): array
+    {
+        if (!$this->isAdminAllowed()) {
+            return [
+                'success' => false,
+                'errors' => ['ACCESS_DENIED'],
+            ];
+        }
+
+        $leadId = $this->getLeadIdFromRequest($leadId);
+        if ($leadId <= 0) {
+            return [
+                'success' => false,
+                'errors' => ['LEAD_NOT_FOUND'],
+            ];
+        }
+
+        try {
+            return (new LeadService())->retryBitrix24($leadId);
+        } catch (\Throwable) {
+            return [
+                'success' => false,
+                'errors' => ['BITRIX24_RETRY_FAILED'],
+            ];
+        }
+    }
+
+    public function testBitrix24Action(): array
+    {
+        if (!$this->isAdminAllowed()) {
+            return [
+                'success' => false,
+                'errors' => ['ACCESS_DENIED'],
+            ];
+        }
+
+        $payload = [
+            'event' => 'kk_quiz_bitrix24_test',
+            'module' => 'kk.quiz',
+            'version' => 1,
+            'created_at' => date('c'),
+            'test' => true,
+            'lead' => [
+                'id' => 0,
+                'quiz' => [
+                    'code' => 'test',
+                    'name' => 'Тестовый квиз',
+                ],
+                'result' => [
+                    'title' => 'Тестовая заявка KK Quiz',
+                ],
+                'client' => [
+                    'name' => 'Тест',
+                    'phone' => '+70000000000',
+                    'email' => 'test@example.com',
+                    'comment' => 'Тестовая заявка KK Quiz',
+                ],
+                'answers_text' => 'Тестовая заявка KK Quiz',
+            ],
+        ];
+
+        try {
+            return (new \Kk\Quiz\Service\Bitrix24LeadService())->send($payload);
+        } catch (\Throwable) {
+            return [
+                'success' => false,
+                'status' => 0,
+                'error' => 'BITRIX24_TEST_FAILED',
             ];
         }
     }

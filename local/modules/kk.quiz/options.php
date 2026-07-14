@@ -104,7 +104,11 @@ $buildSettingsFromPost = static function () use ($checkboxOptions, $numericOptio
             if (isset($_POST[$clearName])) {
                 $settings[$name] = '';
             } elseif ($postedValue !== '') {
-                $settings[$name] = $postedValue;
+                if ($name === 'bitrix24_webhook_url') {
+                    $settings[$name] = preg_match('#^https?://#i', $postedValue) === 1 ? $postedValue : '';
+                } else {
+                    $settings[$name] = $postedValue;
+                }
             }
 
             continue;
@@ -260,10 +264,17 @@ if ($message !== null) {
     <?php $tabControl->BeginNextTab(); ?>
     <?php
     $renderCheckbox('bitrix24_enabled', 'Включить интеграцию с Bitrix24');
-    $renderSecretInput('bitrix24_webhook_url', 'Bitrix24 Webhook URL');
+    $renderSecretInput('bitrix24_webhook_url', 'Webhook Bitrix24');
     $renderInput('bitrix24_assigned_by_id', 'ID ответственного', 'number');
     $renderInput('bitrix24_source_id', 'Источник');
     ?>
+    <tr>
+        <td width="40%"></td>
+        <td width="60%">
+            <button type="button" class="adm-btn" data-kk-quiz-test-bitrix24>Проверить Bitrix24</button>
+            <span style="margin-left:10px;" data-kk-quiz-test-bitrix24-result></span>
+        </td>
+    </tr>
     <tr class="heading"><td colspan="2">Webhook-интеграция</td></tr>
     <?php
     $renderCheckbox('webhook_enabled', 'Включить webhook');
@@ -423,5 +434,62 @@ if ($message !== null) {
                 button.textContent = originalText;
             });
     });
+
+    document.addEventListener('click', function (event) {
+        var button = event.target.closest('[data-kk-quiz-test-bitrix24]');
+        if (!button) {
+            return;
+        }
+
+        var resultNode = document.querySelector('[data-kk-quiz-test-bitrix24-result]');
+        var originalText = button.textContent;
+        var sessid = window.BX && typeof BX.bitrix_sessid === 'function' ? BX.bitrix_sessid() : '';
+        var params = new URLSearchParams({ action: 'kk:quiz.api.testBitrix24' });
+        if (sessid !== '') {
+            params.set('sessid', sessid);
+        }
+
+        button.disabled = true;
+        button.textContent = 'Отправка...';
+        if (resultNode) {
+            resultNode.textContent = '';
+        }
+
+        fetch('/bitrix/services/main/ajax.php?' + params.toString(), {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}'
+        })
+            .then(function (response) { return response.json(); })
+            .then(function (response) {
+                var data = response && response.data ? response.data : response;
+                var message = 'Ошибка отправки Bitrix24';
+                if (data && data.skipped && data.reason === 'BITRIX24_DISABLED') {
+                    message = 'Bitrix24 выключен.';
+                } else if (data && data.error === 'BITRIX24_WEBHOOK_URL_EMPTY') {
+                    message = 'Webhook Bitrix24 не задан.';
+                } else if (data && data.success === true) {
+                    message = 'Успешно отправлено. ID лида: ' + String(data.external_id || '') + '. HTTP ' + String(data.status || 200) + '.';
+                } else if (data && data.error) {
+                    message = 'Ошибка отправки: ' + data.error;
+                }
+                if (resultNode) {
+                    resultNode.textContent = message;
+                } else {
+                    alert(message);
+                }
+            })
+            .catch(function () {
+                if (resultNode) {
+                    resultNode.textContent = 'Ошибка отправки Bitrix24';
+                }
+            })
+            .finally(function () {
+                button.disabled = false;
+                button.textContent = originalText;
+            });
+    });
+
 })();
 </script>

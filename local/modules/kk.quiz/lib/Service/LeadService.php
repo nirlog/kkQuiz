@@ -124,6 +124,7 @@ final class LeadService
 
         $this->sendTelegram($lead, $leadId);
         $this->sendWebhook($lead, $leadId);
+        $this->sendBitrix24($lead, $leadId);
 
         return ['success' => true, 'lead_id' => $leadId];
     }
@@ -165,6 +166,35 @@ final class LeadService
         }
     }
 
+
+    public function retryBitrix24(int $leadId): array
+    {
+        if ($leadId <= 0) {
+            return ['success' => false, 'errors' => ['LEAD_NOT_FOUND']];
+        }
+
+        $lead = $this->leadRepository->getLeadDataById($leadId);
+        if ($lead === null) {
+            return ['success' => false, 'errors' => ['LEAD_NOT_FOUND']];
+        }
+
+        try {
+            $payload = (new LeadPayloadBuilder())->build($lead);
+            $result = (new Bitrix24LeadService())->send($payload);
+            $this->leadRepository->markBitrix24Result($leadId, $result);
+            $this->logDeliveryResult($leadId, 'bitrix24', 'crm.lead.add', $result);
+
+            return $result;
+        } catch (\Throwable) {
+            $result = $this->buildDeliveryFailure('BITRIX24_SEND_FAILED');
+            $this->leadRepository->markBitrix24Result($leadId, $result);
+            $this->logDeliveryResult($leadId, 'bitrix24', 'crm.lead.add', $result);
+
+            return $result;
+        }
+    }
+
+
     private function sendWebhook(array $lead, int $leadId): void
     {
         try {
@@ -189,13 +219,34 @@ final class LeadService
         }
     }
 
+
+    private function sendBitrix24(array $lead, int $leadId): void
+    {
+        try {
+            $payload = (new LeadPayloadBuilder())->build($lead);
+            $result = (new Bitrix24LeadService())->send($payload);
+            $this->leadRepository->markBitrix24Result($leadId, $result);
+            $this->logDeliveryResult($leadId, 'bitrix24', 'crm.lead.add', $result);
+        } catch (\Throwable) {
+            $result = $this->buildDeliveryFailure('BITRIX24_SEND_FAILED');
+            $this->leadRepository->markBitrix24Result($leadId, $result);
+            $this->logDeliveryResult($leadId, 'bitrix24', 'crm.lead.add', $result);
+        }
+    }
+
+
     private function logWebhookResult(int $leadId, array $result): void
+    {
+        $this->logDeliveryResult($leadId, 'webhook', 'lead.created', $result);
+    }
+
+    private function logDeliveryResult(int $leadId, string $channel, string $event, array $result): void
     {
         try {
             (new LeadDeliveryLogService())->add([
                 'lead_id' => $leadId,
-                'channel' => 'webhook',
-                'event' => 'lead.created',
+                'channel' => $channel,
+                'event' => $event,
                 'success' => (bool)($result['success'] ?? false),
                 'skipped' => (bool)($result['skipped'] ?? false),
                 'status' => (string)($result['status_label'] ?? ''),
@@ -207,6 +258,21 @@ final class LeadService
             ]);
         } catch (\Throwable) {
         }
+    }
+
+    private function buildDeliveryFailure(string $error): array
+    {
+        return [
+            'success' => false,
+            'skipped' => false,
+            'status' => 0,
+            'status_label' => 'ERROR',
+            'response' => '',
+            'error' => $error,
+            'request_url' => '',
+            'request_body' => '',
+            'duration_ms' => 0,
+        ];
     }
 
 
@@ -608,6 +674,11 @@ final class LeadService
             'webhook_sent_at' => '',
             'webhook_status' => '',
             'webhook_error' => '',
+            'bitrix24_sent' => 'N',
+            'bitrix24_sent_at' => '',
+            'bitrix24_status' => '',
+            'bitrix24_error' => '',
+            'bitrix24_lead_id' => '',
         ];
     }
 
