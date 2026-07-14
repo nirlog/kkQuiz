@@ -52,11 +52,6 @@ final class ModuleSettingsService
             'webhook_secret' => '',
             'webhook_timeout' => '5',
 
-            'webhook_enabled' => 'N',
-            'webhook_url' => '',
-            'webhook_secret' => '',
-            'webhook_timeout' => '5',
-
             'yandex_metrika_enabled' => 'N',
             'yandex_metrika_counter_id' => '',
             'yandex_metrika_first_answer_goal' => 'kk_quiz_first_answer',
