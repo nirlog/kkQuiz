@@ -51,6 +51,12 @@ final class Api extends Controller
             'testBitrix24' => [
                 'prefilters' => [new Csrf()],
             ],
+            'retryLeadAmoCrm' => [
+                'prefilters' => [new Csrf()],
+            ],
+            'testAmoCrm' => [
+                'prefilters' => [new Csrf()],
+            ],
         ];
     }
 
@@ -417,6 +423,82 @@ final class Api extends Controller
             ];
         }
     }
+
+    public function retryLeadAmoCrmAction(int $leadId = 0): array
+    {
+        if (!$this->isAdminAllowed()) {
+            return [
+                'success' => false,
+                'errors' => ['ACCESS_DENIED'],
+            ];
+        }
+
+        $leadId = $this->getLeadIdFromRequest($leadId);
+        if ($leadId <= 0) {
+            return [
+                'success' => false,
+                'errors' => ['LEAD_NOT_FOUND'],
+            ];
+        }
+
+        try {
+            return (new LeadService())->retryAmoCrm($leadId);
+        } catch (\Throwable) {
+            return [
+                'success' => false,
+                'errors' => ['AMOCRM_RETRY_FAILED'],
+            ];
+        }
+    }
+
+    public function testAmoCrmAction(): array
+    {
+        if (!$this->isAdminAllowed()) {
+            return [
+                'success' => false,
+                'errors' => ['ACCESS_DENIED'],
+            ];
+        }
+
+        $payload = [
+            'event' => 'kk_quiz_amocrm_test',
+            'module' => 'kk.quiz',
+            'version' => 1,
+            'created_at' => date('c'),
+            'test' => true,
+            'lead' => [
+                'id' => 0,
+                'quiz' => [
+                    'code' => 'test',
+                    'name' => 'Тестовый квиз',
+                ],
+                'result' => [
+                    'title' => 'Тестовая заявка KK Quiz',
+                ],
+                'client' => [
+                    'name' => 'Тест',
+                    'phone' => '+70000000000',
+                    'email' => 'test@example.com',
+                    'comment' => 'Тестовая заявка KK Quiz',
+                ],
+                'page' => [
+                    'url' => 'https://example.com/kk-quiz-test',
+                ],
+                'answers_text' => 'Тестовая заявка KK Quiz',
+            ],
+        ];
+
+        try {
+            return (new \Kk\Quiz\Service\AmoCrmLeadService())->send($payload);
+        } catch (\Throwable) {
+            return [
+                'success' => false,
+                'status' => 0,
+                'error' => 'AMOCRM_TEST_FAILED',
+            ];
+        }
+    }
+
 
     private function isAdminAllowed(): bool
     {
