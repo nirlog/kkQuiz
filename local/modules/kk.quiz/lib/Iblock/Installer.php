@@ -10,8 +10,10 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\SystemException;
 use Kk\Quiz\Admin\ElementFormAssets;
 use Kk\Quiz\Admin\ElementListAssets;
+use Kk\Quiz\Admin\LeadFormAssets;
 use Kk\Quiz\Admin\LeadListAssets;
 use Kk\Quiz\Admin\SectionFormAssets;
+use Kk\Quiz\Analytics\LeadDeliveryLogTable;
 use Kk\Quiz\Analytics\QuizEventTable;
 use Kk\Quiz\Iblock\Property\QuizAnswersProperty;
 use Kk\Quiz\Service\QuizEventMaintenanceService;
@@ -31,6 +33,7 @@ final class Installer
         self::registerEventHandlers();
         self::installAdminFiles();
         self::installAnalyticsTables();
+        self::installLeadDeliveryLogTable();
         self::registerMaintenanceAgent();
 
         self::installIblockType();
@@ -59,6 +62,7 @@ final class Installer
     {
         self::installAdminFiles(false);
         self::installAnalyticsTables(false);
+        self::installLeadDeliveryLogTable(false);
         self::registerMaintenanceAgent();
         self::ensureLeadProperties();
 
@@ -87,6 +91,13 @@ final class Installer
             'main',
             'OnProlog',
             LeadListAssets::class,
+            'onProlog'
+        );
+
+        self::registerEventHandlerIfMissing(
+            'main',
+            'OnProlog',
+            LeadFormAssets::class,
             'onProlog'
         );
 
@@ -197,6 +208,14 @@ final class Installer
             'main',
             'OnProlog',
             'kk.quiz',
+            LeadFormAssets::class,
+            'onProlog'
+        );
+
+        EventManager::getInstance()->registerEventHandler(
+            'main',
+            'OnProlog',
+            'kk.quiz',
             SectionFormAssets::class,
             'onProlog'
         );
@@ -233,6 +252,14 @@ final class Installer
             'OnProlog',
             'kk.quiz',
             LeadListAssets::class,
+            'onProlog'
+        );
+
+        EventManager::getInstance()->unRegisterEventHandler(
+            'main',
+            'OnProlog',
+            'kk.quiz',
+            LeadFormAssets::class,
             'onProlog'
         );
 
@@ -339,6 +366,27 @@ final class Installer
             self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_TYPE_DATE', ['EVENT_TYPE', 'DATE_CREATE']);
             self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_QUESTION', ['QUIZ_CODE', 'QUESTION_CODE', 'EVENT_TYPE']);
             self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_EVENTS_RESULT', ['QUIZ_CODE', 'RESULT_CODE', 'EVENT_TYPE']);
+        } catch (\Throwable $exception) {
+            if ($throwOnError) {
+                throw new SystemException($exception->getMessage());
+            }
+        }
+    }
+
+
+    public static function installLeadDeliveryLogTable(bool $throwOnError = true): void
+    {
+        try {
+            $connection = Application::getConnection();
+            $tableName = LeadDeliveryLogTable::getTableName();
+
+            if (!$connection->isTableExists($tableName)) {
+                LeadDeliveryLogTable::getEntity()->createDbTable();
+            }
+
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_DELIVERY_LEAD', ['LEAD_ID']);
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_DELIVERY_CHANNEL_DATE', ['CHANNEL', 'DATE_CREATE']);
+            self::createAnalyticsIndex($tableName, 'IX_KK_QUIZ_DELIVERY_SUCCESS_DATE', ['SUCCESS', 'DATE_CREATE']);
         } catch (\Throwable $exception) {
             if ($throwOnError) {
                 throw new SystemException($exception->getMessage());

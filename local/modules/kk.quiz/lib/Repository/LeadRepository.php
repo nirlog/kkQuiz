@@ -140,9 +140,12 @@ final class LeadRepository
 
         $skipped = (bool)($result['skipped'] ?? false);
         $success = (bool)($result['success'] ?? false) && !$skipped;
-        $status = $skipped
-            ? 'skipped'
-            : ((int)($result['status'] ?? 0) > 0 ? 'HTTP_' . (int)$result['status'] : 'ERROR');
+        $status = trim((string)($result['status_label'] ?? ''));
+        if ($status === '') {
+            $status = $skipped
+                ? 'skipped'
+                : ((int)($result['status'] ?? 0) > 0 ? 'HTTP_' . (int)$result['status'] : 'ERROR');
+        }
         $error = $skipped
             ? (string)($result['reason'] ?? 'WEBHOOK_DISABLED')
             : ($success ? '' : (string)($result['error'] ?? 'WEBHOOK_SEND_FAILED'));
@@ -159,6 +162,49 @@ final class LeadRepository
         ]);
     }
 
+
+    public function getLeadDataById(int $leadId): ?array
+    {
+        if ($leadId <= 0 || !Loader::includeModule('iblock')) {
+            return null;
+        }
+
+        $iblockId = $this->getLeadsIblockId();
+        if ($iblockId === null) {
+            return null;
+        }
+
+        $select = ['ID', 'NAME', 'DATE_CREATE', 'DETAIL_TEXT'];
+        foreach ($this->getPropertyMap() as $propertyCode) {
+            $select[] = 'PROPERTY_' . $propertyCode;
+        }
+
+        $element = \CIBlockElement::GetList(
+            [],
+            ['IBLOCK_ID' => $iblockId, 'ID' => $leadId],
+            false,
+            ['nTopCount' => 1],
+            $select
+        )->Fetch();
+
+        if (!is_array($element)) {
+            return null;
+        }
+
+        $lead = [
+            'id' => (int)$element['ID'],
+            'name' => (string)($element['NAME'] ?? ''),
+            'created_at' => (string)($element['DATE_CREATE'] ?? ''),
+            'detail_text' => (string)($element['DETAIL_TEXT'] ?? ''),
+        ];
+
+        foreach ($this->getPropertyMap() as $leadKey => $propertyCode) {
+            $lead[$leadKey] = $this->getElementPropertyValue($element, $propertyCode);
+        }
+
+        return $lead;
+    }
+
     public function getLeadsIblockId(): ?int
     {
         $iblock = \CIBlock::GetList([], [
@@ -168,6 +214,28 @@ final class LeadRepository
         ])->Fetch();
 
         return is_array($iblock) ? (int)$iblock['ID'] : null;
+    }
+
+
+    private function getElementPropertyValue(array $element, string $propertyCode): string
+    {
+        foreach ([
+            'PROPERTY_' . $propertyCode . '_VALUE',
+            '~PROPERTY_' . $propertyCode . '_VALUE',
+        ] as $key) {
+            if (!array_key_exists($key, $element)) {
+                continue;
+            }
+
+            $value = $element[$key];
+            if (is_array($value)) {
+                $value = reset($value);
+            }
+
+            return is_scalar($value) ? (string)$value : '';
+        }
+
+        return '';
     }
 
     private function getPropertyMap(): array

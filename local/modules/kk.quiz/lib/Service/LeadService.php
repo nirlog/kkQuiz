@@ -128,18 +128,84 @@ final class LeadService
         return ['success' => true, 'lead_id' => $leadId];
     }
 
+    public function retryWebhook(int $leadId): array
+    {
+        if ($leadId <= 0) {
+            return ['success' => false, 'errors' => ['LEAD_NOT_FOUND']];
+        }
+
+        $lead = $this->leadRepository->getLeadDataById($leadId);
+        if ($lead === null) {
+            return ['success' => false, 'errors' => ['LEAD_NOT_FOUND']];
+        }
+
+        try {
+            $payload = (new LeadPayloadBuilder())->build($lead);
+            $result = (new LeadWebhookService())->send($payload);
+            $this->leadRepository->markWebhookResult($leadId, $result);
+            $this->logWebhookResult($leadId, $result);
+
+            return $result;
+        } catch (\Throwable) {
+            $result = [
+                'success' => false,
+                'skipped' => false,
+                'status' => 0,
+                'status_label' => 'ERROR',
+                'response' => '',
+                'error' => 'WEBHOOK_SEND_FAILED',
+                'request_url' => '',
+                'request_body' => '',
+                'duration_ms' => 0,
+            ];
+            $this->leadRepository->markWebhookResult($leadId, $result);
+            $this->logWebhookResult($leadId, $result);
+
+            return $result;
+        }
+    }
+
     private function sendWebhook(array $lead, int $leadId): void
     {
         try {
             $payload = (new LeadPayloadBuilder())->build($lead);
             $result = (new LeadWebhookService())->send($payload);
             $this->leadRepository->markWebhookResult($leadId, $result);
+            $this->logWebhookResult($leadId, $result);
         } catch (\Throwable) {
-            $this->leadRepository->markWebhookResult($leadId, [
+            $result = [
                 'success' => false,
+                'skipped' => false,
                 'status' => 0,
+                'status_label' => 'ERROR',
+                'response' => '',
                 'error' => 'WEBHOOK_SEND_FAILED',
+                'request_url' => '',
+                'request_body' => '',
+                'duration_ms' => 0,
+            ];
+            $this->leadRepository->markWebhookResult($leadId, $result);
+            $this->logWebhookResult($leadId, $result);
+        }
+    }
+
+    private function logWebhookResult(int $leadId, array $result): void
+    {
+        try {
+            (new LeadDeliveryLogService())->add([
+                'lead_id' => $leadId,
+                'channel' => 'webhook',
+                'event' => 'lead.created',
+                'success' => (bool)($result['success'] ?? false),
+                'skipped' => (bool)($result['skipped'] ?? false),
+                'status' => (string)($result['status_label'] ?? ''),
+                'error' => (string)($result['error'] ?? $result['reason'] ?? ''),
+                'request_url' => (string)($result['request_url'] ?? ''),
+                'request_body' => (string)($result['request_body'] ?? ''),
+                'response_body' => (string)($result['response'] ?? ''),
+                'duration_ms' => (int)($result['duration_ms'] ?? 0),
             ]);
+        } catch (\Throwable) {
         }
     }
 

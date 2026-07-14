@@ -42,6 +42,9 @@ final class Api extends Controller
             'testWebhook' => [
                 'prefilters' => [new Csrf()],
             ],
+            'retryLeadWebhook' => [
+                'prefilters' => [new Csrf()],
+            ],
         ];
     }
 
@@ -308,6 +311,34 @@ final class Api extends Controller
         }
     }
 
+
+    public function retryLeadWebhookAction(int $leadId = 0): array
+    {
+        if (!$this->isAdminAllowed()) {
+            return [
+                'success' => false,
+                'errors' => ['ACCESS_DENIED'],
+            ];
+        }
+
+        $leadId = $this->getLeadIdFromRequest($leadId);
+        if ($leadId <= 0) {
+            return [
+                'success' => false,
+                'errors' => ['LEAD_NOT_FOUND'],
+            ];
+        }
+
+        try {
+            return (new LeadService())->retryWebhook($leadId);
+        } catch (\Throwable) {
+            return [
+                'success' => false,
+                'errors' => ['WEBHOOK_RETRY_FAILED'],
+            ];
+        }
+    }
+
     private function isAdminAllowed(): bool
     {
         global $USER;
@@ -346,6 +377,41 @@ final class Api extends Controller
         }
 
         return is_array($decoded) ? trim((string)($decoded['quizCode'] ?? '')) : '';
+    }
+
+
+    private function getLeadIdFromRequest(int $leadId): int
+    {
+        if ($leadId > 0) {
+            return $leadId;
+        }
+
+        $requestLeadId = $this->getRequest()->getPost('lead_id');
+        if (is_scalar($requestLeadId) && (int)$requestLeadId > 0) {
+            return (int)$requestLeadId;
+        }
+
+        $input = method_exists($this->getRequest(), 'getInput')
+            ? (string)$this->getRequest()->getInput()
+            : (string)file_get_contents('php://input');
+
+        if (trim($input) === '') {
+            return 0;
+        }
+
+        try {
+            $decoded = Json::decode($input);
+        } catch (\Throwable) {
+            return 0;
+        }
+
+        if (!is_array($decoded)) {
+            return 0;
+        }
+
+        $payload = is_array($decoded['payload'] ?? null) ? $decoded['payload'] : $decoded;
+
+        return (int)($payload['lead_id'] ?? $payload['leadId'] ?? 0);
     }
 
     private function getImportPayloadFromRequest(): array

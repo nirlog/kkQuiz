@@ -13,11 +13,20 @@ final class LeadWebhookService
 
     public function send(array $payload): array
     {
+        $startedAt = microtime(true);
+
         if (!ModuleSettingsService::getBool('webhook_enabled')) {
             return [
                 'success' => true,
                 'skipped' => true,
                 'reason' => 'WEBHOOK_DISABLED',
+                'status' => 0,
+                'status_label' => 'skipped',
+                'response' => '',
+                'error' => 'WEBHOOK_DISABLED',
+                'request_url' => '',
+                'request_body' => '',
+                'duration_ms' => 0,
             ];
         }
 
@@ -27,10 +36,16 @@ final class LeadWebhookService
                 'success' => false,
                 'skipped' => false,
                 'status' => 0,
+                'status_label' => 'ERROR',
                 'response' => '',
                 'error' => 'WEBHOOK_URL_EMPTY',
+                'request_url' => '',
+                'request_body' => '',
+                'duration_ms' => 0,
             ];
         }
+
+        $jsonBody = '';
 
         try {
             $jsonBody = Json::encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -55,16 +70,26 @@ final class LeadWebhookService
 
             return [
                 'success' => $success,
+                'skipped' => false,
                 'status' => $status,
+                'status_label' => 'HTTP_' . $status,
                 'response' => $this->limit($response),
                 'error' => $success ? '' : 'HTTP_' . $status,
+                'request_url' => $url,
+                'request_body' => $jsonBody,
+                'duration_ms' => $this->getDurationMs($startedAt),
             ];
         } catch (\Throwable $exception) {
             return [
                 'success' => false,
+                'skipped' => false,
                 'status' => 0,
+                'status_label' => 'ERROR',
                 'response' => '',
                 'error' => $this->limit($exception->getMessage() !== '' ? $exception->getMessage() : 'WEBHOOK_SEND_FAILED'),
+                'request_url' => $url,
+                'request_body' => $jsonBody,
+                'duration_ms' => $this->getDurationMs($startedAt),
             ];
         }
     }
@@ -84,6 +109,11 @@ final class LeadWebhookService
         $timeout = (int)ModuleSettingsService::get('webhook_timeout');
 
         return in_array($timeout, self::ALLOWED_TIMEOUTS, true) ? $timeout : 5;
+    }
+
+    private function getDurationMs(float $startedAt): int
+    {
+        return max(0, (int)round((microtime(true) - $startedAt) * 1000));
     }
 
     private function limit(mixed $value): string
