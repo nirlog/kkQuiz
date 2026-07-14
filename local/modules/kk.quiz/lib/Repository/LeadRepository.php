@@ -59,6 +59,14 @@ final class LeadRepository
             ) ?? $properties['KK_LEAD_BITRIX24_SENT'];
         }
 
+        if (isset($properties['KK_LEAD_AMOCRM_SENT'])) {
+            $properties['KK_LEAD_AMOCRM_SENT'] = $this->getEnumId(
+                $iblockId,
+                'KK_LEAD_AMOCRM_SENT',
+                (string)$properties['KK_LEAD_AMOCRM_SENT']
+            ) ?? $properties['KK_LEAD_AMOCRM_SENT'];
+        }
+
         $element = new \CIBlockElement();
         $id = (int)$element->Add([
             'IBLOCK_ID' => $iblockId,
@@ -208,6 +216,44 @@ final class LeadRepository
     }
 
 
+    public function markAmoCrmResult(int $leadId, array $result): void
+    {
+        if ($leadId <= 0 || !Loader::includeModule('iblock')) {
+            return;
+        }
+
+        $iblockId = $this->getLeadsIblockId();
+        if ($iblockId === null) {
+            return;
+        }
+
+        $skipped = (bool)($result['skipped'] ?? false);
+        $success = (bool)($result['success'] ?? false) && !$skipped;
+        $status = trim((string)($result['status_label'] ?? ''));
+        if ($status === '') {
+            $status = $skipped
+                ? 'skipped'
+                : ((int)($result['status'] ?? 0) > 0 ? 'HTTP_' . (int)$result['status'] : 'ERROR');
+        }
+        $error = $skipped
+            ? (string)($result['reason'] ?? 'AMOCRM_DISABLED')
+            : ($success ? (string)($result['note_error'] ?? '') : (string)($result['error'] ?? 'AMOCRM_SEND_FAILED'));
+
+        $error = trim(strip_tags($error));
+        $error = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $error) ?? $error;
+        $error = mb_substr(trim($error), 0, 1000);
+
+        \CIBlockElement::SetPropertyValuesEx($leadId, $iblockId, [
+            'KK_LEAD_AMOCRM_SENT' => $this->getEnumId($iblockId, 'KK_LEAD_AMOCRM_SENT', $success ? 'Y' : 'N') ?? ($success ? 'Y' : 'N'),
+            'KK_LEAD_AMOCRM_SENT_AT' => $success ? date('d.m.Y H:i:s') : '',
+            'KK_LEAD_AMOCRM_STATUS' => $status,
+            'KK_LEAD_AMOCRM_ERROR' => $error,
+            'KK_LEAD_AMOCRM_LEAD_ID' => $success ? (string)($result['external_id'] ?? '') : '',
+            'KK_LEAD_AMOCRM_CONTACT_ID' => $success ? (string)($result['external_contact_id'] ?? '') : '',
+        ]);
+    }
+
+
     public function getLeadDataById(int $leadId): ?array
     {
         if ($leadId <= 0 || !Loader::includeModule('iblock')) {
@@ -349,6 +395,12 @@ final class LeadRepository
             'bitrix24_status' => 'KK_LEAD_BITRIX24_STATUS',
             'bitrix24_error' => 'KK_LEAD_BITRIX24_ERROR',
             'bitrix24_lead_id' => 'KK_LEAD_BITRIX24_LEAD_ID',
+            'amocrm_sent' => 'KK_LEAD_AMOCRM_SENT',
+            'amocrm_sent_at' => 'KK_LEAD_AMOCRM_SENT_AT',
+            'amocrm_status' => 'KK_LEAD_AMOCRM_STATUS',
+            'amocrm_error' => 'KK_LEAD_AMOCRM_ERROR',
+            'amocrm_lead_id' => 'KK_LEAD_AMOCRM_LEAD_ID',
+            'amocrm_contact_id' => 'KK_LEAD_AMOCRM_CONTACT_ID',
         ];
     }
 
