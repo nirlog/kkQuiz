@@ -1024,6 +1024,12 @@ final class Installer
             ['CODE' => 'KK_LEAD_BITRIX24_STATUS', 'NAME' => 'Bitrix24 статус', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_BITRIX24_ERROR', 'NAME' => 'Bitrix24 ошибка', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
             ['CODE' => 'KK_LEAD_BITRIX24_LEAD_ID', 'NAME' => 'Bitrix24 ID лида', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_AMOCRM_SENT', 'NAME' => 'amoCRM отправлен', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
+            ['CODE' => 'KK_LEAD_AMOCRM_SENT_AT', 'NAME' => 'amoCRM отправлен в', 'PROPERTY_TYPE' => 'S', 'USER_TYPE' => 'DateTime'],
+            ['CODE' => 'KK_LEAD_AMOCRM_STATUS', 'NAME' => 'amoCRM статус', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_AMOCRM_ERROR', 'NAME' => 'amoCRM ошибка', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
+            ['CODE' => 'KK_LEAD_AMOCRM_LEAD_ID', 'NAME' => 'amoCRM ID сделки', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_AMOCRM_CONTACT_ID', 'NAME' => 'amoCRM ID контакта', 'PROPERTY_TYPE' => 'S'],
         ];
 
         self::addIblockProperties($iblockId, $properties);
@@ -1168,6 +1174,12 @@ final class Installer
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_BITRIX24_STATUS'), 'Bitrix24 статус'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_BITRIX24_ERROR'), 'Bitrix24 ошибка'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_BITRIX24_LEAD_ID'), 'Bitrix24 ID лида'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_AMOCRM_SENT'), 'amoCRM отправлен'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_AMOCRM_SENT_AT'), 'amoCRM отправлен в'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_AMOCRM_STATUS'), 'amoCRM статус'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_AMOCRM_ERROR'), 'amoCRM ошибка'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_AMOCRM_LEAD_ID'), 'amoCRM ID сделки'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_AMOCRM_CONTACT_ID'), 'amoCRM ID контакта'],
                 ],
             ],
         ];
