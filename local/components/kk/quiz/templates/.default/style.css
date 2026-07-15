@@ -502,6 +502,13 @@
     --kk-quiz-radius-sm: 12px;
     --kk-quiz-shadow: 0 18px 45px rgba(15, 23, 42, 0.12);
     --kk-quiz-focus: 0 0 0 4px var(--kk-quiz-accent-soft);
+    --kk-quiz-input-bg: #ffffff;
+    --kk-quiz-input-text: #111827;
+    --kk-quiz-input-placeholder: #9ca3af;
+    --kk-quiz-input-border: #d1d5db;
+    --kk-quiz-input-focus: #2f6fed;
+    --kk-quiz-input-disabled-bg: #f3f4f6;
+    color-scheme: light;
     max-width: 920px;
     margin: 32px auto;
     padding: 28px;
@@ -512,6 +519,84 @@
         var(--kk-quiz-surface);
     color: var(--kk-quiz-text);
     box-shadow: var(--kk-quiz-shadow);
+}
+
+.kk-quiz input,
+.kk-quiz select,
+.kk-quiz textarea {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 14px;
+    border: 1px solid var(--kk-quiz-input-border);
+    border-radius: var(--kk-quiz-radius-sm, 12px);
+    background: var(--kk-quiz-input-bg) !important;
+    color: var(--kk-quiz-input-text) !important;
+    font: inherit;
+    line-height: 1.4;
+    outline: none;
+    box-shadow: none;
+    color-scheme: light;
+    transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+}
+
+.kk-quiz textarea {
+    min-height: 120px;
+    resize: vertical;
+}
+
+.kk-quiz select {
+    cursor: pointer;
+    appearance: auto;
+}
+
+.kk-quiz select option {
+    background: #ffffff !important;
+    color: #111827 !important;
+}
+
+.kk-quiz input::placeholder,
+.kk-quiz textarea::placeholder {
+    color: var(--kk-quiz-input-placeholder) !important;
+    opacity: 1;
+}
+
+.kk-quiz input:focus,
+.kk-quiz select:focus,
+.kk-quiz textarea:focus {
+    border-color: var(--kk-quiz-input-focus);
+    box-shadow: 0 0 0 3px var(--kk-quiz-accent-soft, rgba(47, 111, 237, 0.1));
+}
+
+.kk-quiz input:disabled,
+.kk-quiz select:disabled,
+.kk-quiz textarea:disabled {
+    background: var(--kk-quiz-input-disabled-bg) !important;
+    color: var(--kk-quiz-muted, #6b7280) !important;
+    cursor: not-allowed;
+}
+
+.kk-quiz input[type="checkbox"],
+.kk-quiz input[type="radio"] {
+    width: auto;
+    min-height: auto;
+    padding: 0;
+    background: #ffffff !important;
+    accent-color: var(--kk-quiz-accent, #2f6fed);
+}
+
+.kk-quiz input:-webkit-autofill,
+.kk-quiz input:-webkit-autofill:hover,
+.kk-quiz input:-webkit-autofill:focus,
+.kk-quiz textarea:-webkit-autofill,
+.kk-quiz textarea:-webkit-autofill:hover,
+.kk-quiz textarea:-webkit-autofill:focus,
+.kk-quiz select:-webkit-autofill,
+.kk-quiz select:-webkit-autofill:hover,
+.kk-quiz select:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--kk-quiz-input-text) !important;
+    box-shadow: 0 0 0 1000px var(--kk-quiz-input-bg) inset !important;
+    transition: background-color 9999s ease-out 0s;
 }
 
 .kk-quiz__start {
@@ -697,21 +782,22 @@
 .kk-quiz__input {
     min-height: 50px;
     padding: 12px 14px;
-    border-color: var(--kk-quiz-border);
+    border-color: var(--kk-quiz-input-border);
     border-radius: var(--kk-quiz-radius-sm);
-    color: var(--kk-quiz-text);
-    background: var(--kk-quiz-surface);
+    color: var(--kk-quiz-input-text) !important;
+    background: var(--kk-quiz-input-bg) !important;
     transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
 
 .kk-quiz__input::placeholder {
-    color: #9ca3af;
+    color: var(--kk-quiz-input-placeholder) !important;
+    opacity: 1;
 }
 
 .kk-quiz__input:focus-visible,
 .kk-quiz select.kk-quiz__input:focus-visible,
 .kk-quiz textarea.kk-quiz__input:focus-visible {
-    border-color: var(--kk-quiz-accent);
+    border-color: var(--kk-quiz-input-focus);
     box-shadow: var(--kk-quiz-focus);
     outline: none;
 }
