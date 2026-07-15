@@ -102,6 +102,13 @@ $APPLICATION-&gt;IncludeComponent(
     <h2>Видео на результате</h2>
     <p>В карточке результата можно указать URL видео. Поддерживаются YouTube, Rutube, VK Video и прямые ссылки на mp4/webm/ogg. Модуль сам преобразует ссылку в безопасный embed. Произвольный iframe-код не используется.</p>
 
+    <h2>Дизайн публичной части</h2>
+    <p>Публичный шаблон использует CSS-переменные. Их можно переопределить на уровне сайта, например для изменения акцентного цвета, скругления и фона. Основной файл стилей: <code>local/components/kk/quiz/templates/.default/style.css</code>.</p>
+<pre><code>.kk-quiz {
+    --kk-quiz-accent: #ff6a00;
+    --kk-quiz-radius: 24px;
+}</code></pre>
+
     <h2>Email</h2>
     <ol>
         <li>Откройте настройки модуля KK Quiz.</li>
