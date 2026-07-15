@@ -31,6 +31,8 @@ $checkboxOptions = [
     'telegram_enabled',
     'bitrix24_enabled',
     'webhook_enabled',
+    'amocrm_enabled',
+    'amocrm_long_lived_token',
     'yandex_metrika_enabled',
     'google_analytics_enabled',
     'save_answers_data',
@@ -40,7 +42,7 @@ $checkboxOptions = [
     'debug_enabled',
     'log_notification_errors',
 ];
-$numericOptions = ['rate_limit_ttl', 'rate_limit_max', 'bitrix24_assigned_by_id', 'telegram_message_thread_id', 'analytics_retention_days', 'webhook_timeout'];
+$numericOptions = ['rate_limit_ttl', 'rate_limit_max', 'bitrix24_assigned_by_id', 'telegram_message_thread_id', 'analytics_retention_days', 'webhook_timeout', 'amocrm_pipeline_id', 'amocrm_status_id', 'amocrm_responsible_user_id', 'amocrm_lead_price'];
 $secretOptions = ModuleSettingsService::SECRET_OPTIONS;
 $bitrix24FieldOptions = [
     'bitrix24_field_site_lead_id',
@@ -65,6 +67,26 @@ $sanitizeBitrix24FieldCode = static function (mixed $value): string {
     $value = is_scalar($value) ? strtoupper(trim((string)$value)) : '';
 
     return preg_match('/^[A-Z0-9_]{3,100}$/', $value) === 1 ? $value : '';
+};
+
+$sanitizeAmoCrmDomain = static function (mixed $value): string {
+    $value = is_scalar($value) ? strtolower(trim((string)$value)) : '';
+    $value = preg_replace('#^https?://#i', '', $value) ?? $value;
+    $value = trim(explode('/', $value, 2)[0]);
+
+    return preg_match('/^[a-z0-9.-]+\.amocrm\.(ru|com)$/i', $value) === 1 ? $value : '';
+};
+
+$sanitizeRedirectUri = static function (mixed $value): string {
+    $value = is_scalar($value) ? trim((string)$value) : '';
+
+    return $value === '' || preg_match('#^https?://#i', $value) === 1 ? $value : '';
+};
+
+$sanitizeAmoCrmTags = static function (mixed $value): string {
+    $value = is_scalar($value) ? trim((string)$value) : '';
+
+    return function_exists('mb_substr') ? (string)mb_substr($value, 0, 500) : substr($value, 0, 500);
 };
 
 $sanitizeNumber = static function (string $name, mixed $value): string {
@@ -98,10 +120,14 @@ $sanitizeNumber = static function (string $name, mixed $value): string {
         return (string)max(0, $value);
     }
 
+    if (in_array($name, ['amocrm_pipeline_id', 'amocrm_status_id', 'amocrm_responsible_user_id', 'amocrm_lead_price'], true)) {
+        return (string)max(0, $value);
+    }
+
     return (string)$value;
 };
 
-$buildSettingsFromPost = static function () use ($checkboxOptions, $numericOptions, $secretOptions, $bitrix24FieldOptions, $sanitizeText, $sanitizeNumber, $sanitizeBitrix24FieldCode): array {
+$buildSettingsFromPost = static function () use ($checkboxOptions, $numericOptions, $secretOptions, $bitrix24FieldOptions, $sanitizeText, $sanitizeNumber, $sanitizeBitrix24FieldCode, $sanitizeAmoCrmDomain, $sanitizeRedirectUri, $sanitizeAmoCrmTags): array {
     $chatIdValue = $sanitizeText($_POST['telegram_chat_id'] ?? '');
     if (preg_match('/^(-?\d+):(\d+)$/', $chatIdValue, $matches) === 1) {
         $_POST['telegram_chat_id'] = $matches[1];
@@ -137,6 +163,21 @@ $buildSettingsFromPost = static function () use ($checkboxOptions, $numericOptio
         $postedValue = $_POST[$name] ?? $defaultValue;
         if (in_array($name, $bitrix24FieldOptions, true)) {
             $settings[$name] = $sanitizeBitrix24FieldCode($postedValue);
+            continue;
+        }
+
+        if ($name === 'amocrm_base_domain') {
+            $settings[$name] = $sanitizeAmoCrmDomain($postedValue);
+            continue;
+        }
+
+        if ($name === 'amocrm_redirect_uri') {
+            $settings[$name] = $sanitizeRedirectUri($postedValue);
+            continue;
+        }
+
+        if ($name === 'amocrm_tags') {
+            $settings[$name] = $sanitizeAmoCrmTags($postedValue);
             continue;
         }
 
@@ -192,6 +233,7 @@ $tabs = [
     ['DIV' => 'email', 'TAB' => 'Email', 'TITLE' => 'Email-уведомления'],
     ['DIV' => 'telegram', 'TAB' => 'Telegram', 'TITLE' => 'Telegram-уведомления'],
     ['DIV' => 'crm', 'TAB' => 'CRM', 'TITLE' => 'CRM'],
+    ['DIV' => 'amocrm', 'TAB' => 'amoCRM', 'TITLE' => 'amoCRM'],
     ['DIV' => 'analytics', 'TAB' => 'Аналитика', 'TITLE' => 'Аналитика'],
     ['DIV' => 'leads', 'TAB' => 'Заявки и антиспам', 'TITLE' => 'Заявки и антиспам'],
     ['DIV' => 'privacy', 'TAB' => 'Privacy', 'TITLE' => 'Privacy'],
@@ -226,6 +268,17 @@ $renderSecretInput = static function (string $name, string $label) use (&$values
     echo '<tr><td width="40%"><label for="' . $e($inputId) . '">' . $e($label) . '</label></td><td width="60%">';
     echo '<input type="password" size="45" autocomplete="new-password" id="' . $e($inputId) . '" name="' . $e($name) . '" value="" data-kk-secret-input>';
     echo ' <button type="button" class="adm-btn kk-quiz-secret-toggle" data-kk-secret-toggle="' . $e($inputId) . '">Показать</button>';
+    if ($hasValue) {
+        echo '<br><small>Значение уже сохранено. Оставьте поле пустым, чтобы не менять.</small>';
+    }
+    echo '<br><label><input type="checkbox" name="' . $e($name) . '_clear" value="Y"> Очистить</label>';
+    echo '</td></tr>';
+};
+
+$renderSecretTextarea = static function (string $name, string $label) use (&$values, $e): void {
+    $hasValue = trim((string)($values[$name] ?? '')) !== '';
+    echo '<tr><td width="40%"><label for="' . $e($name) . '">' . $e($label) . '</label></td><td width="60%">';
+    echo '<textarea rows="3" cols="55" autocomplete="new-password" id="' . $e($name) . '" name="' . $e($name) . '" data-kk-secret-input></textarea>';
     if ($hasValue) {
         echo '<br><small>Значение уже сохранено. Оставьте поле пустым, чтобы не менять.</small>';
     }
@@ -334,6 +387,35 @@ if ($message !== null) {
             <span style="margin-left:10px;" data-kk-quiz-test-webhook-result></span>
         </td>
     </tr>
+
+
+    <?php $tabControl->BeginNextTab(); ?>
+    <?php
+    $renderCheckbox('amocrm_enabled', 'Включить amoCRM');
+    $renderCheckbox('amocrm_long_lived_token', 'Использовать долгосрочный токен без refresh token');
+    ?>
+    <tr><td width="40%"></td><td width="60%"><small>В этом режиме достаточно указать домен аккаунта и Access Token. Client ID, Client Secret, Redirect URI и Refresh Token не обязательны.</small></td></tr>
+    <?php
+    $renderInput('amocrm_base_domain', 'Домен аккаунта', 'text', 'Например: example.amocrm.ru. https:// будет удалён при сохранении.');
+    $renderInput('amocrm_client_id', 'Client ID');
+    $renderSecretInput('amocrm_client_secret', 'Client Secret');
+    $renderInput('amocrm_redirect_uri', 'Redirect URI', 'text', 'Разрешены http:// и https:// URI.');
+    $renderSecretTextarea('amocrm_access_token', 'Access Token');
+    $renderSecretTextarea('amocrm_refresh_token', 'Refresh Token');
+    $renderInput('amocrm_pipeline_id', 'ID воронки', 'number');
+    $renderInput('amocrm_status_id', 'ID этапа', 'number');
+    $renderInput('amocrm_responsible_user_id', 'ID ответственного', 'number');
+    $renderInput('amocrm_lead_price', 'Бюджет сделки', 'number');
+    $renderInput('amocrm_tags', 'Теги', 'text', 'Через запятую, максимум 500 символов.');
+    ?>
+    <tr>
+        <td width="40%"></td>
+        <td width="60%">
+            <button type="button" class="adm-btn" data-kk-quiz-test-amocrm>Проверить amoCRM</button>
+            <span style="margin-left:10px;" data-kk-quiz-test-amocrm-result></span>
+        </td>
+    </tr>
+
     <?php
     $tabControl->BeginNextTab();
     $renderCheckbox('yandex_metrika_enabled', 'Включить Яндекс.Метрику');
@@ -523,6 +605,63 @@ if ($message !== null) {
             .catch(function () {
                 if (resultNode) {
                     resultNode.textContent = 'Ошибка отправки Bitrix24';
+                }
+            })
+            .finally(function () {
+                button.disabled = false;
+                button.textContent = originalText;
+            });
+    });
+
+
+    document.addEventListener('click', function (event) {
+        var button = event.target.closest('[data-kk-quiz-test-amocrm]');
+        if (!button) {
+            return;
+        }
+
+        var resultNode = document.querySelector('[data-kk-quiz-test-amocrm-result]');
+        var originalText = button.textContent;
+        var sessid = window.BX && typeof BX.bitrix_sessid === 'function' ? BX.bitrix_sessid() : '';
+        var params = new URLSearchParams({ action: 'kk:quiz.api.testAmoCrm' });
+        if (sessid !== '') {
+            params.set('sessid', sessid);
+        }
+
+        button.disabled = true;
+        button.textContent = 'Отправка...';
+        if (resultNode) {
+            resultNode.textContent = '';
+        }
+
+        fetch('/bitrix/services/main/ajax.php?' + params.toString(), {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}'
+        })
+            .then(function (response) { return response.json(); })
+            .then(function (response) {
+                var data = response && response.data ? response.data : response;
+                var message = 'Ошибка отправки amoCRM';
+                if (data && data.skipped && data.reason === 'AMOCRM_DISABLED') {
+                    message = 'amoCRM выключена.';
+                } else if (data && data.error === 'AMOCRM_SETTINGS_INCOMPLETE') {
+                    message = 'Не заполнены настройки amoCRM.';
+                } else if (data && data.success === true) {
+                    message = 'Успешно отправлено. ID сделки: ' + String(data.external_id || '') + ', ID контакта: ' + String(data.external_contact_id || '') + '.';
+                } else if (data && data.error) {
+                    message = 'Ошибка отправки: ' + data.error;
+                }
+                if (resultNode) {
+                    resultNode.textContent = message;
+                } else {
+                    alert(message);
+                }
+            })
+            .catch(function () {
+                if (resultNode) {
+                    resultNode.textContent = 'Ошибка отправки amoCRM';
                 }
             })
             .finally(function () {

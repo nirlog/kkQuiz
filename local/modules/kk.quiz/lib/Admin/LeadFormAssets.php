@@ -76,6 +76,12 @@ final class LeadFormAssets
         $bitrix24SentAt = self::escape((string)($lead['bitrix24_sent_at'] ?? ''));
         $bitrix24Error = self::escape((string)($lead['bitrix24_error'] ?? ''));
         $bitrix24LeadId = self::escape((string)($lead['bitrix24_lead_id'] ?? ''));
+        $amocrmStatus = self::escape((string)($lead['amocrm_status'] ?? ''));
+        $amocrmSent = self::escape((string)($lead['amocrm_sent'] ?? ''));
+        $amocrmSentAt = self::escape((string)($lead['amocrm_sent_at'] ?? ''));
+        $amocrmError = self::escape((string)($lead['amocrm_error'] ?? ''));
+        $amocrmLeadId = self::escape((string)($lead['amocrm_lead_id'] ?? ''));
+        $amocrmContactId = self::escape((string)($lead['amocrm_contact_id'] ?? ''));
         $rows = self::renderRows($logs);
 
         if ($rows === '') {
@@ -97,6 +103,14 @@ final class LeadFormAssets
             . '<div><b>Bitrix24 ID лида:</b> ' . $bitrix24LeadId . '</div>'
             . '<div><b>Ошибка:</b> ' . $bitrix24Error . '</div>'
             . '<button type="button" class="adm-btn adm-btn-save" id="kk-quiz-bitrix24-retry">Повторить Bitrix24</button>'
+            . '<h4 style="margin-top:14px">amoCRM</h4>'
+            . '<div><b>Текущий статус:</b> ' . $amocrmStatus . '</div>'
+            . '<div><b>Отправлен:</b> ' . $amocrmSent . '</div>'
+            . '<div><b>Дата отправки:</b> ' . $amocrmSentAt . '</div>'
+            . '<div><b>amoCRM ID сделки:</b> ' . $amocrmLeadId . '</div>'
+            . '<div><b>amoCRM ID контакта:</b> ' . $amocrmContactId . '</div>'
+            . '<div><b>Ошибка:</b> ' . $amocrmError . '</div>'
+            . '<button type="button" class="adm-btn adm-btn-save" id="kk-quiz-amocrm-retry">Повторить amoCRM</button>'
             . '</div>'
             . '<h3 style="margin-top:16px">Последние попытки</h3>'
             . '<table><thead><tr><th>Дата</th><th>Канал</th><th>Успех</th><th>Статус</th><th>Ошибка</th><th>Время, мс</th><th>Запрос</th><th>Ответ</th></tr></thead><tbody>' . $rows . '</tbody></table>';
@@ -167,6 +181,7 @@ button.textContent = originalText;
 };
 bindRetry('kk-quiz-webhook-retry', 'kk:quiz.api.retryLeadWebhook', 'Webhook отправлен', 'Не удалось отправить webhook');
 bindRetry('kk-quiz-bitrix24-retry', 'kk:quiz.api.retryLeadBitrix24', 'Bitrix24 отправлен', 'Не удалось отправить Bitrix24');
+bindRetry('kk-quiz-amocrm-retry', 'kk:quiz.api.retryLeadAmoCrm', 'amoCRM отправлен', 'Не удалось отправить amoCRM');
 };
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
 })();
