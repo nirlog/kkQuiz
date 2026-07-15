@@ -27,6 +27,8 @@ Loader::registerAutoLoadClasses(
         'Kk\\Quiz\\Service\\QuizImportService' => 'lib/Service/QuizImportService.php',
         'Kk\\Quiz\\Service\\LeadService' => 'lib/Service/LeadService.php',
         'Kk\\Quiz\\Service\\Bitrix24LeadService' => 'lib/Service/Bitrix24LeadService.php',
+        'Kk\\Quiz\\Service\\AmoCrmTokenService' => 'lib/Service/AmoCrmTokenService.php',
+        'Kk\\Quiz\\Service\\AmoCrmLeadService' => 'lib/Service/AmoCrmLeadService.php',
         'Kk\\Quiz\\Service\\LeadPayloadBuilder' => 'lib/Service/LeadPayloadBuilder.php',
         'Kk\\Quiz\\Service\\LeadDeliveryLogService' => 'lib/Service/LeadDeliveryLogService.php',
         'Kk\\Quiz\\Service\\LeadExportService' => 'lib/Service/LeadExportService.php',

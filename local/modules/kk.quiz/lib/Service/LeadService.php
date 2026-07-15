@@ -125,6 +125,7 @@ final class LeadService
         $this->sendTelegram($lead, $leadId);
         $this->sendWebhook($lead, $leadId);
         $this->sendBitrix24($lead, $leadId);
+        $this->sendAmoCrm($lead, $leadId);
 
         return ['success' => true, 'lead_id' => $leadId];
     }
@@ -195,6 +196,34 @@ final class LeadService
     }
 
 
+    public function retryAmoCrm(int $leadId): array
+    {
+        if ($leadId <= 0) {
+            return ['success' => false, 'errors' => ['LEAD_NOT_FOUND']];
+        }
+
+        $lead = $this->leadRepository->getLeadDataById($leadId);
+        if ($lead === null) {
+            return ['success' => false, 'errors' => ['LEAD_NOT_FOUND']];
+        }
+
+        try {
+            $payload = (new LeadPayloadBuilder())->build($lead);
+            $result = (new AmoCrmLeadService())->send($payload);
+            $this->leadRepository->markAmoCrmResult($leadId, $result);
+            $this->logDeliveryResult($leadId, 'amocrm', 'leads.complex.add', $result);
+
+            return $result;
+        } catch (\Throwable) {
+            $result = $this->buildDeliveryFailure('AMOCRM_SEND_FAILED');
+            $this->leadRepository->markAmoCrmResult($leadId, $result);
+            $this->logDeliveryResult($leadId, 'amocrm', 'leads.complex.add', $result);
+
+            return $result;
+        }
+    }
+
+
     private function sendWebhook(array $lead, int $leadId): void
     {
         try {
@@ -231,6 +260,21 @@ final class LeadService
             $result = $this->buildDeliveryFailure('BITRIX24_SEND_FAILED');
             $this->leadRepository->markBitrix24Result($leadId, $result);
             $this->logDeliveryResult($leadId, 'bitrix24', 'crm.lead.add', $result);
+        }
+    }
+
+
+    private function sendAmoCrm(array $lead, int $leadId): void
+    {
+        try {
+            $payload = (new LeadPayloadBuilder())->build($lead);
+            $result = (new AmoCrmLeadService())->send($payload);
+            $this->leadRepository->markAmoCrmResult($leadId, $result);
+            $this->logDeliveryResult($leadId, 'amocrm', 'leads.complex.add', $result);
+        } catch (\Throwable) {
+            $result = $this->buildDeliveryFailure('AMOCRM_SEND_FAILED');
+            $this->leadRepository->markAmoCrmResult($leadId, $result);
+            $this->logDeliveryResult($leadId, 'amocrm', 'leads.complex.add', $result);
         }
     }
 

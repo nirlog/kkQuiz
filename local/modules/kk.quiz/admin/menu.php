@@ -21,5 +21,10 @@ return [
             'url' => 'kk_quiz_statistics.php?lang=' . (defined('LANGUAGE_ID') ? LANGUAGE_ID : 'ru'),
             'title' => 'Статистика квизов',
         ],
+        [
+            'text' => 'Помощь',
+            'url' => 'kk_quiz_help.php?lang=' . (defined('LANGUAGE_ID') ? LANGUAGE_ID : 'ru'),
+            'title' => 'KK Quiz — помощь и инструкция',
+        ],
     ],
 ];
