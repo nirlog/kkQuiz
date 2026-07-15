@@ -1089,6 +1089,66 @@
         return wrapper;
     };
 
+    const normalizeResultVideoPosition = (position) => {
+        const normalized = String(position || '').trim();
+        return ['after_text', 'before_form', 'after_form', 'before_products'].includes(normalized)
+            ? normalized
+            : 'after_text';
+    };
+
+    const renderResultVideo = (video) => {
+        if (!video || typeof video !== 'object') {
+            return null;
+        }
+
+        const url = String(video.url || '').trim();
+        const embedUrl = String(video.embedUrl || '').trim();
+        const type = String(video.type || '').trim();
+        if (url === '') {
+            return null;
+        }
+
+        const wrapper = create('div', 'kk-quiz-result-video');
+        const title = String(video.title || '').trim();
+        if (title !== '') {
+            wrapper.appendChild(create('div', 'kk-quiz-result-video__title', title));
+        }
+
+        if (type === 'iframe' && embedUrl !== '') {
+            const frame = create('div', 'kk-quiz-result-video__frame');
+            const iframe = document.createElement('iframe');
+            iframe.src = embedUrl;
+            iframe.loading = 'lazy';
+            iframe.allowFullscreen = true;
+            iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+            iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+            frame.appendChild(iframe);
+            wrapper.appendChild(frame);
+
+            return wrapper;
+        }
+
+        if (type === 'video') {
+            const frame = create('div', 'kk-quiz-result-video__frame');
+            const videoNode = document.createElement('video');
+            videoNode.controls = true;
+            videoNode.preload = 'metadata';
+            videoNode.src = url;
+            frame.appendChild(videoNode);
+            wrapper.appendChild(frame);
+
+            return wrapper;
+        }
+
+        const link = create('a', 'kk-quiz-result-video__link', title || 'Открыть видео');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        wrapper.appendChild(link);
+
+        return wrapper;
+    };
+
     const showResult = (nodes, quiz, state, resultId) => {
         const result = findById(quiz.results, resultId);
         if (!result) {
@@ -1134,6 +1194,12 @@
         appendTextBlock(card, 'kk-quiz__result-title', result.name);
         appendTextBlock(card, 'kk-quiz__result-text', result.preview_text);
 
+        const videoBlock = renderResultVideo(result.video);
+        const videoPosition = normalizeResultVideoPosition(result.video ? result.video.position : '');
+        if (videoBlock && videoPosition === 'after_text') {
+            card.appendChild(videoBlock);
+        }
+
         if (result.cta_text && result.cta_link) {
             const link = create('a', 'kk-quiz__button kk-quiz__button--link', result.cta_text);
             link.href = String(result.cta_link);
@@ -1153,12 +1219,20 @@
 
         nodes.result.appendChild(card);
 
+        if (videoBlock && videoPosition === 'before_products') {
+            nodes.result.appendChild(videoBlock);
+        }
+
         const productsBlock = renderResultProducts(quiz, result);
         if (productsBlock) {
             nodes.result.appendChild(productsBlock);
         }
 
         if (result.show_form === true) {
+            if (videoBlock && videoPosition === 'before_form') {
+                nodes.result.appendChild(videoBlock);
+            }
+
             const formWrap = create('div', 'kk-quiz__result-form');
             nodes.result.appendChild(formWrap);
             const originalForm = nodes.form;
@@ -1166,6 +1240,12 @@
             showFinalForm(nodes, quiz, state, result);
             nodes.result.hidden = false;
             nodes.form = originalForm;
+
+            if (videoBlock && videoPosition === 'after_form') {
+                nodes.result.appendChild(videoBlock);
+            }
+        } else if (videoBlock && (videoPosition === 'before_form' || videoPosition === 'after_form')) {
+            nodes.result.appendChild(videoBlock);
         }
     };
 

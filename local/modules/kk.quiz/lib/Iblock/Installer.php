@@ -64,6 +64,7 @@ final class Installer
         self::installAnalyticsTables(false);
         self::installLeadDeliveryLogTable(false);
         self::registerMaintenanceAgent();
+        self::ensureQuizProperties();
         self::ensureLeadProperties();
 
         self::registerEventHandlerIfMissing(
@@ -108,6 +109,25 @@ final class Installer
             'onProlog'
         );
     }
+
+    private static function ensureQuizProperties(): void
+    {
+        try {
+            if (!Loader::includeModule('iblock')) {
+                return;
+            }
+
+            $iblock = \CIBlock::GetList([], [
+                'TYPE' => self::IBLOCK_TYPE_ID,
+                'CODE' => self::QUIZZES_IBLOCK_CODE,
+            ])->Fetch();
+            if (is_array($iblock) && (int)($iblock['ID'] ?? 0) > 0) {
+                self::installQuizProperties((int)$iblock['ID']);
+            }
+        } catch (\Throwable) {
+        }
+    }
+
 
     private static function ensureLeadProperties(): void
     {
@@ -981,6 +1001,9 @@ final class Installer
             ['CODE' => 'KK_RESULT_PRIORITY', 'NAME' => 'Приоритет результата', 'SORT' => 300, 'PROPERTY_TYPE' => 'N'],
             ['CODE' => 'KK_RESULT_CTA_TEXT', 'NAME' => 'Текст CTA', 'SORT' => 340, 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_RESULT_CTA_LINK', 'NAME' => 'Ссылка CTA', 'SORT' => 350, 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_RESULT_VIDEO_URL', 'NAME' => 'Видео результата — URL', 'SORT' => 352, 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_RESULT_VIDEO_TITLE', 'NAME' => 'Видео результата — заголовок', 'SORT' => 354, 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_RESULT_VIDEO_POSITION', 'NAME' => 'Позиция видео результата', 'SORT' => 356, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getResultVideoPositionValues()],
             ['CODE' => 'KK_RESULT_SHOW_FORM', 'NAME' => 'Показывать форму', 'SORT' => 360, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
             ['CODE' => 'KK_RESULT_CATALOG_SECTION', 'NAME' => 'Раздел рекомендаций', 'SORT' => 370, 'PROPERTY_TYPE' => 'G'],
             ['CODE' => 'KK_RESULT_CATALOG_PRODUCTS', 'NAME' => 'Рекомендуемые элементы', 'SORT' => 380, 'PROPERTY_TYPE' => 'E', 'MULTIPLE' => 'Y'],
@@ -1417,6 +1440,16 @@ final class Installer
         ];
     }
 
+    private static function getResultVideoPositionValues(): array
+    {
+        return [
+            'after_text' => ['VALUE' => 'После текста результата', 'DEF' => 'Y'],
+            'before_form' => 'Перед формой заявки',
+            'after_form' => 'После формы заявки',
+            'before_products' => 'Перед рекомендациями',
+        ];
+    }
+
     private static function getYesNoValues(): array
     {
         return [
@@ -1430,10 +1463,16 @@ final class Installer
         $formatted = [];
         $sort = 100;
         foreach ($values as $xmlId => $value) {
+            $default = 'N';
+            if (is_array($value)) {
+                $default = (string)($value['DEF'] ?? 'N') === 'Y' ? 'Y' : 'N';
+                $value = (string)($value['VALUE'] ?? '');
+            }
+
             $formatted[] = [
                 'VALUE' => $value,
                 'XML_ID' => $xmlId,
-                'DEF' => 'N',
+                'DEF' => $default,
                 'SORT' => $sort,
             ];
             $sort += 100;
