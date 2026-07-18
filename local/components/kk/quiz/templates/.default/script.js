@@ -1339,6 +1339,12 @@
             card.appendChild(videoBlock);
         }
 
+        const videoBlock = renderResultVideo(result.video);
+        const videoPosition = normalizeResultVideoPosition(result.video ? result.video.position : '');
+        if (videoBlock && videoPosition === 'after_text') {
+            card.appendChild(videoBlock);
+        }
+
         if (result.cta_text && result.cta_link) {
             const actions = create('div', 'kk-quiz__result-actions');
             const link = create('a', 'kk-quiz__button kk-quiz__button--link kk-quiz__result-catalog-link', result.cta_text);
