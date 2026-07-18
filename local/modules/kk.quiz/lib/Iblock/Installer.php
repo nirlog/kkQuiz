@@ -64,6 +64,7 @@ final class Installer
         self::installAnalyticsTables(false);
         self::installLeadDeliveryLogTable(false);
         self::registerMaintenanceAgent();
+        self::ensureQuizProperties();
         self::ensureLeadProperties();
 
         self::registerEventHandlerIfMissing(
@@ -108,6 +109,25 @@ final class Installer
             'onProlog'
         );
     }
+
+    private static function ensureQuizProperties(): void
+    {
+        try {
+            if (!Loader::includeModule('iblock')) {
+                return;
+            }
+
+            $iblock = \CIBlock::GetList([], [
+                'TYPE' => self::IBLOCK_TYPE_ID,
+                'CODE' => self::QUIZZES_IBLOCK_CODE,
+            ])->Fetch();
+            if (is_array($iblock) && (int)($iblock['ID'] ?? 0) > 0) {
+                self::installQuizProperties((int)$iblock['ID']);
+            }
+        } catch (\Throwable) {
+        }
+    }
+
 
     private static function ensureLeadProperties(): void
     {
@@ -283,18 +303,7 @@ final class Installer
             return;
         }
 
-        $source = dirname(__DIR__, 2) . '/admin/kk_quiz_statistics.php';
-        $target = $documentRoot . '/bitrix/admin/kk_quiz_statistics.php';
-
-        if (!is_file($source)) {
-            if ($throwOnError) {
-                throw new SystemException('KK Quiz admin statistics stub source not found.');
-            }
-
-            return;
-        }
-
-        $targetDir = dirname($target);
+        $targetDir = $documentRoot . '/bitrix/admin';
         if (!is_dir($targetDir)) {
             if ($throwOnError) {
                 throw new SystemException('/bitrix/admin directory not found.');
@@ -303,15 +312,40 @@ final class Installer
             return;
         }
 
-        $sourceContent = (string)file_get_contents($source);
-        $targetContent = is_file($target) ? (string)file_get_contents($target) : '';
+        $files = [
+            [
+                'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_statistics.php',
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_statistics.php',
+                'missing' => 'KK Quiz admin statistics stub source not found.',
+                'write' => 'Cannot write /bitrix/admin/kk_quiz_statistics.php.',
+            ],
+            [
+                'source' => dirname(__DIR__, 2) . '/install/admin/kk_quiz_help.php',
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_help.php',
+                'missing' => 'KK Quiz admin help stub source not found.',
+                'write' => 'Cannot write /bitrix/admin/kk_quiz_help.php.',
+            ],
+        ];
 
-        if ($targetContent === $sourceContent) {
-            return;
-        }
+        foreach ($files as $file) {
+            if (!is_file($file['source'])) {
+                if ($throwOnError) {
+                    throw new SystemException($file['missing']);
+                }
 
-        if (@file_put_contents($target, $sourceContent) === false && $throwOnError) {
-            throw new SystemException('Cannot write /bitrix/admin/kk_quiz_statistics.php.');
+                continue;
+            }
+
+            $sourceContent = (string)file_get_contents($file['source']);
+            $targetContent = is_file($file['target']) ? (string)file_get_contents($file['target']) : '';
+
+            if ($targetContent === $sourceContent) {
+                continue;
+            }
+
+            if (@file_put_contents($file['target'], $sourceContent) === false && $throwOnError) {
+                throw new SystemException($file['write']);
+            }
         }
     }
 
@@ -322,16 +356,27 @@ final class Installer
             return;
         }
 
-        $target = $documentRoot . '/bitrix/admin/kk_quiz_statistics.php';
+        $files = [
+            [
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_statistics.php',
+                'marker' => 'kk.quiz/admin/statistics.php',
+            ],
+            [
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_help.php',
+                'marker' => 'kk.quiz/admin/help.php',
+            ],
+        ];
 
-        if (!is_file($target)) {
-            return;
-        }
+        foreach ($files as $file) {
+            if (!is_file($file['target'])) {
+                continue;
+            }
 
-        $content = (string)file_get_contents($target);
+            $content = (string)file_get_contents($file['target']);
 
-        if (strpos($content, 'kk.quiz/admin/statistics.php') !== false) {
-            @unlink($target);
+            if (strpos($content, $file['marker']) !== false) {
+                @unlink($file['target']);
+            }
         }
     }
 
@@ -954,11 +999,20 @@ final class Installer
             ['CODE' => 'KK_RESULT_MIN_SCORE', 'NAME' => 'Минимальный балл результата', 'SORT' => 310, 'PROPERTY_TYPE' => 'N'],
             ['CODE' => 'KK_RESULT_MAX_SCORE', 'NAME' => 'Максимальный балл результата', 'SORT' => 320, 'PROPERTY_TYPE' => 'N'],
             ['CODE' => 'KK_RESULT_PRIORITY', 'NAME' => 'Приоритет результата', 'SORT' => 300, 'PROPERTY_TYPE' => 'N'],
+            ['CODE' => 'KK_RESULT_SUMMARY', 'NAME' => 'Краткий вывод результата', 'SORT' => 332, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 4],
+            ['CODE' => 'KK_RESULT_WHY_TEXT', 'NAME' => 'Почему подходит', 'SORT' => 334, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
+            ['CODE' => 'KK_RESULT_SPECS_TEXT', 'NAME' => 'Ориентир по комплектующим', 'SORT' => 336, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 6],
+            ['CODE' => 'KK_RESULT_NOTE_TEXT', 'NAME' => 'Что важно учесть', 'SORT' => 338, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 4],
             ['CODE' => 'KK_RESULT_CTA_TEXT', 'NAME' => 'Текст CTA', 'SORT' => 340, 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_RESULT_CTA_LINK', 'NAME' => 'Ссылка CTA', 'SORT' => 350, 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_RESULT_SHOW_FORM', 'NAME' => 'Показывать форму', 'SORT' => 360, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
-            ['CODE' => 'KK_RESULT_CATALOG_SECTION', 'NAME' => 'Раздел рекомендаций', 'SORT' => 370, 'PROPERTY_TYPE' => 'G'],
-            ['CODE' => 'KK_RESULT_CATALOG_PRODUCTS', 'NAME' => 'Рекомендуемые элементы', 'SORT' => 380, 'PROPERTY_TYPE' => 'E', 'MULTIPLE' => 'Y'],
+            ['CODE' => 'KK_RESULT_FORM_INTRO', 'NAME' => 'Текст перед формой результата', 'SORT' => 362, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 4],
+            ['CODE' => 'KK_RESULT_FORM_BUTTON_TEXT', 'NAME' => 'Текст кнопки открытия формы', 'SORT' => 364, 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_RESULT_VIDEO_URL', 'NAME' => 'Видео результата — URL', 'SORT' => 366, 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_RESULT_VIDEO_TITLE', 'NAME' => 'Видео результата — заголовок', 'SORT' => 368, 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_RESULT_VIDEO_POSITION', 'NAME' => 'Позиция видео результата', 'SORT' => 370, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getResultVideoPositionValues()],
+            ['CODE' => 'KK_RESULT_CATALOG_SECTION', 'NAME' => 'Раздел рекомендаций', 'SORT' => 380, 'PROPERTY_TYPE' => 'G'],
+            ['CODE' => 'KK_RESULT_CATALOG_PRODUCTS', 'NAME' => 'Рекомендуемые элементы', 'SORT' => 390, 'PROPERTY_TYPE' => 'E', 'MULTIPLE' => 'Y'],
             ['CODE' => 'KK_RESULT_BADGE', 'NAME' => 'Бейдж результата', 'SORT' => 330, 'PROPERTY_TYPE' => 'S'],
         ];
 
@@ -1024,6 +1078,12 @@ final class Installer
             ['CODE' => 'KK_LEAD_BITRIX24_STATUS', 'NAME' => 'Bitrix24 статус', 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_LEAD_BITRIX24_ERROR', 'NAME' => 'Bitrix24 ошибка', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
             ['CODE' => 'KK_LEAD_BITRIX24_LEAD_ID', 'NAME' => 'Bitrix24 ID лида', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_AMOCRM_SENT', 'NAME' => 'amoCRM отправлен', 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
+            ['CODE' => 'KK_LEAD_AMOCRM_SENT_AT', 'NAME' => 'amoCRM отправлен в', 'PROPERTY_TYPE' => 'S', 'USER_TYPE' => 'DateTime'],
+            ['CODE' => 'KK_LEAD_AMOCRM_STATUS', 'NAME' => 'amoCRM статус', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_AMOCRM_ERROR', 'NAME' => 'amoCRM ошибка', 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
+            ['CODE' => 'KK_LEAD_AMOCRM_LEAD_ID', 'NAME' => 'amoCRM ID сделки', 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_LEAD_AMOCRM_CONTACT_ID', 'NAME' => 'amoCRM ID контакта', 'PROPERTY_TYPE' => 'S'],
         ];
 
         self::addIblockProperties($iblockId, $properties);
@@ -1168,6 +1228,12 @@ final class Installer
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_BITRIX24_STATUS'), 'Bitrix24 статус'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_BITRIX24_ERROR'), 'Bitrix24 ошибка'],
                     [self::getPropertyFormField($propertyIds, 'KK_LEAD_BITRIX24_LEAD_ID'), 'Bitrix24 ID лида'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_AMOCRM_SENT'), 'amoCRM отправлен'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_AMOCRM_SENT_AT'), 'amoCRM отправлен в'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_AMOCRM_STATUS'), 'amoCRM статус'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_AMOCRM_ERROR'), 'amoCRM ошибка'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_AMOCRM_LEAD_ID'), 'amoCRM ID сделки'],
+                    [self::getPropertyFormField($propertyIds, 'KK_LEAD_AMOCRM_CONTACT_ID'), 'amoCRM ID контакта'],
                 ],
             ],
         ];
@@ -1380,6 +1446,16 @@ final class Installer
         ];
     }
 
+    private static function getResultVideoPositionValues(): array
+    {
+        return [
+            'after_text' => ['VALUE' => 'После текста результата', 'DEF' => 'Y'],
+            'before_form' => 'Перед формой заявки',
+            'after_form' => 'После формы заявки',
+            'before_products' => 'Перед рекомендациями',
+        ];
+    }
+
     private static function getYesNoValues(): array
     {
         return [
@@ -1393,10 +1469,16 @@ final class Installer
         $formatted = [];
         $sort = 100;
         foreach ($values as $xmlId => $value) {
+            $default = 'N';
+            if (is_array($value)) {
+                $default = (string)($value['DEF'] ?? 'N') === 'Y' ? 'Y' : 'N';
+                $value = (string)($value['VALUE'] ?? '');
+            }
+
             $formatted[] = [
                 'VALUE' => $value,
                 'XML_ID' => $xmlId,
-                'DEF' => 'N',
+                'DEF' => $default,
                 'SORT' => $sort,
             ];
             $sort += 100;

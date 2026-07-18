@@ -277,6 +277,9 @@ final class QuizRepository
         $adminName = (string)($element['NAME'] ?? '');
         $publicTitle = trim((string)$this->getElementPropertyValue($properties, 'KK_PUBLIC_TITLE'));
         $title = $publicTitle !== '' ? $publicTitle : $adminName;
+        $summary = (string)$this->getElementPropertyValue($properties, 'KK_RESULT_SUMMARY');
+        $whyText = (string)$this->getElementPropertyValue($properties, 'KK_RESULT_WHY_TEXT');
+        $specsText = (string)$this->getElementPropertyValue($properties, 'KK_RESULT_SPECS_TEXT');
 
         return [
             'id' => (int)$element['ID'],
@@ -285,6 +288,14 @@ final class QuizRepository
             'public_title' => $publicTitle,
             'admin_name' => $adminName,
             'preview_text' => (string)($element['PREVIEW_TEXT'] ?? ''),
+            'summary' => $summary,
+            'why_text' => $whyText,
+            'why_items' => $this->normalizeTextLines($whyText),
+            'specs_text' => $specsText,
+            'specs_items' => $this->normalizeTextLines($specsText),
+            'note_text' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_NOTE_TEXT'),
+            'form_intro' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_FORM_INTRO'),
+            'form_button_text' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_FORM_BUTTON_TEXT'),
             'detail_text' => (string)($element['DETAIL_TEXT'] ?? ''),
             'picture_id' => $pictureId,
             'picture_src' => $this->getFilePath($pictureId),
@@ -294,11 +305,183 @@ final class QuizRepository
             'priority' => (int)$this->getElementPropertyValue($properties, 'KK_RESULT_PRIORITY'),
             'cta_text' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_CTA_TEXT'),
             'cta_link' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_CTA_LINK'),
+            'video' => $this->buildResultVideo($properties),
             'show_form' => $this->toBool($this->getElementPropertyEnumXmlId($properties, 'KK_RESULT_SHOW_FORM')),
             'catalog_section_id' => $this->toNullableInt($this->getElementPropertyValue($properties, 'KK_RESULT_CATALOG_SECTION')),
             'catalog_product_ids' => $this->normalizeIntList($this->getElementPropertyValues($properties, 'KK_RESULT_CATALOG_PRODUCTS')),
             'badge' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_BADGE'),
         ];
+    }
+
+    private function buildResultVideo(array $properties): ?array
+    {
+        $url = trim((string)$this->getElementPropertyValue($properties, 'KK_RESULT_VIDEO_URL'));
+        if ($url === '') {
+            return null;
+        }
+
+        $parsed = $this->parseVideoUrl($url);
+        if ($parsed === null) {
+            return null;
+        }
+
+        $position = $this->normalizeVideoPosition(
+            $this->getElementPropertyEnumXmlId($properties, 'KK_RESULT_VIDEO_POSITION')
+                ?: (string)$this->getElementPropertyValue($properties, 'KK_RESULT_VIDEO_POSITION')
+        );
+
+        return [
+            'url' => $parsed['url'],
+            'title' => trim((string)$this->getElementPropertyValue($properties, 'KK_RESULT_VIDEO_TITLE')),
+            'position' => $position,
+            'provider' => $parsed['provider'],
+            'embedUrl' => $parsed['embedUrl'],
+            'type' => $parsed['type'],
+        ];
+    }
+
+    private function parseVideoUrl(string $url): ?array
+    {
+        $url = trim($url);
+        if ($url === '' || preg_match('#^https?://#i', $url) !== 1) {
+            return null;
+        }
+
+        $parts = parse_url($url);
+        if (!is_array($parts)) {
+            return null;
+        }
+
+        $scheme = strtolower((string)($parts['scheme'] ?? ''));
+        if (!in_array($scheme, ['http', 'https'], true)) {
+            return null;
+        }
+
+        $host = strtolower((string)($parts['host'] ?? ''));
+        $path = (string)($parts['path'] ?? '');
+        $safeUrl = $this->buildSafeVideoUrl($parts);
+        if ($safeUrl === '') {
+            return null;
+        }
+
+        if (preg_match('/\.(mp4|webm|ogg)$/i', $path) === 1) {
+            return [
+                'url' => $safeUrl,
+                'provider' => 'file',
+                'embedUrl' => '',
+                'type' => 'video',
+            ];
+        }
+
+        if (in_array($host, ['youtube.com', 'www.youtube.com', 'm.youtube.com'], true)) {
+            $query = [];
+            parse_str((string)($parts['query'] ?? ''), $query);
+            $videoId = (string)($query['v'] ?? '');
+            if ($videoId === '' && preg_match('~^/shorts/([^/?#]+)~', $path, $matches) === 1) {
+                $videoId = $matches[1];
+            }
+            $videoId = $this->normalizeExternalVideoId($videoId);
+            if ($videoId !== '' && $scheme === 'https') {
+                return [
+                    'url' => $safeUrl,
+                    'provider' => 'youtube',
+                    'embedUrl' => 'https://www.youtube.com/embed/' . rawurlencode($videoId),
+                    'type' => 'iframe',
+                ];
+            }
+        }
+
+        if ($host === 'youtu.be' && preg_match('~^/([^/?#]+)~', $path, $matches) === 1) {
+            $videoId = $this->normalizeExternalVideoId($matches[1]);
+            if ($videoId !== '' && $scheme === 'https') {
+                return [
+                    'url' => $safeUrl,
+                    'provider' => 'youtube',
+                    'embedUrl' => 'https://www.youtube.com/embed/' . rawurlencode($videoId),
+                    'type' => 'iframe',
+                ];
+            }
+        }
+
+        if ($host === 'rutube.ru') {
+            $videoId = '';
+            if (preg_match('#^/video/(?:private/)?([a-zA-Z0-9_-]+)#', $path, $matches) === 1) {
+                $videoId = $matches[1];
+            }
+            $videoId = $this->normalizeExternalVideoId($videoId);
+            if ($videoId !== '' && $scheme === 'https') {
+                return [
+                    'url' => $safeUrl,
+                    'provider' => 'rutube',
+                    'embedUrl' => 'https://rutube.ru/play/embed/' . rawurlencode($videoId),
+                    'type' => 'iframe',
+                ];
+            }
+        }
+
+        if (in_array($host, ['vk.com', 'www.vk.com', 'vkvideo.ru', 'www.vkvideo.ru'], true)) {
+            if (
+                preg_match('#/video(-?\d+)_(\d+)#', $path, $matches) === 1
+                && $scheme === 'https'
+            ) {
+                return [
+                    'url' => $safeUrl,
+                    'provider' => 'vk',
+                    'embedUrl' => 'https://vk.com/video_ext.php?oid=' . rawurlencode($matches[1]) . '&id=' . rawurlencode($matches[2]),
+                    'type' => 'iframe',
+                ];
+            }
+
+            return [
+                'url' => $safeUrl,
+                'provider' => 'vk',
+                'embedUrl' => '',
+                'type' => 'link',
+            ];
+        }
+
+        return [
+            'url' => $safeUrl,
+            'provider' => 'link',
+            'embedUrl' => '',
+            'type' => 'link',
+        ];
+    }
+
+    private function buildSafeVideoUrl(array $parts): string
+    {
+        $scheme = strtolower((string)($parts['scheme'] ?? ''));
+        $host = strtolower((string)($parts['host'] ?? ''));
+        if (!in_array($scheme, ['http', 'https'], true) || $host === '') {
+            return '';
+        }
+
+        $url = $scheme . '://' . $host;
+        if (isset($parts['port']) && (int)$parts['port'] > 0) {
+            $url .= ':' . (int)$parts['port'];
+        }
+        $url .= (string)($parts['path'] ?? '');
+        if (isset($parts['query']) && (string)$parts['query'] !== '') {
+            $url .= '?' . (string)$parts['query'];
+        }
+
+        return $url;
+    }
+
+    private function normalizeExternalVideoId(string $value): string
+    {
+        $value = trim($value);
+
+        return preg_match('/^[a-zA-Z0-9_-]{3,128}$/', $value) === 1 ? $value : '';
+    }
+
+    private function normalizeVideoPosition(string $position): string
+    {
+        $position = trim($position);
+
+        return in_array($position, ['after_text', 'before_form', 'after_form', 'before_products'], true)
+            ? $position
+            : 'after_text';
     }
 
     private function getElementPropertyValue(array $properties, string $code): mixed
@@ -482,6 +665,21 @@ final class QuizRepository
         }
 
         return is_scalar($value) ? (string)$value : '';
+    }
+
+    private function normalizeTextLines(string $text): array
+    {
+        $lines = preg_split('/\R/u', $text) ?: [];
+        $result = [];
+
+        foreach ($lines as $line) {
+            $line = trim((string)$line);
+            if ($line !== '') {
+                $result[] = $line;
+            }
+        }
+
+        return $result;
     }
 
     private function normalizeIntList(mixed $value): array
