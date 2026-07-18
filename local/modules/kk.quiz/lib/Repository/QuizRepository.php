@@ -277,6 +277,9 @@ final class QuizRepository
         $adminName = (string)($element['NAME'] ?? '');
         $publicTitle = trim((string)$this->getElementPropertyValue($properties, 'KK_PUBLIC_TITLE'));
         $title = $publicTitle !== '' ? $publicTitle : $adminName;
+        $summary = (string)$this->getElementPropertyValue($properties, 'KK_RESULT_SUMMARY');
+        $whyText = (string)$this->getElementPropertyValue($properties, 'KK_RESULT_WHY_TEXT');
+        $specsText = (string)$this->getElementPropertyValue($properties, 'KK_RESULT_SPECS_TEXT');
 
         return [
             'id' => (int)$element['ID'],
@@ -285,6 +288,14 @@ final class QuizRepository
             'public_title' => $publicTitle,
             'admin_name' => $adminName,
             'preview_text' => (string)($element['PREVIEW_TEXT'] ?? ''),
+            'summary' => $summary,
+            'why_text' => $whyText,
+            'why_items' => $this->normalizeTextLines($whyText),
+            'specs_text' => $specsText,
+            'specs_items' => $this->normalizeTextLines($specsText),
+            'note_text' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_NOTE_TEXT'),
+            'form_intro' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_FORM_INTRO'),
+            'form_button_text' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_FORM_BUTTON_TEXT'),
             'detail_text' => (string)($element['DETAIL_TEXT'] ?? ''),
             'picture_id' => $pictureId,
             'picture_src' => $this->getFilePath($pictureId),
@@ -654,6 +665,21 @@ final class QuizRepository
         }
 
         return is_scalar($value) ? (string)$value : '';
+    }
+
+    private function normalizeTextLines(string $text): array
+    {
+        $lines = preg_split('/\R/u', $text) ?: [];
+        $result = [];
+
+        foreach ($lines as $line) {
+            $line = trim((string)$line);
+            if ($line !== '') {
+                $result[] = $line;
+            }
+        }
+
+        return $result;
     }
 
     private function normalizeIntList(mixed $value): array

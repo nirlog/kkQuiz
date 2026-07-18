@@ -1185,6 +1185,89 @@
         return wrapper;
     };
 
+    const getResultLines = (result, itemsKey, textKey) => {
+        if (Array.isArray(result[itemsKey])) {
+            return result[itemsKey].map((item) => String(item || '').trim()).filter((item) => item !== '');
+        }
+
+        return String(result[textKey] || '')
+            .split(/\r?\n/)
+            .map((item) => item.trim())
+            .filter((item) => item !== '');
+    };
+
+    const hasEnhancedResultContent = (result) => {
+        return ['summary', 'why_text', 'specs_text', 'note_text', 'form_intro', 'form_button_text'].some((key) => String(result[key] || '').trim() !== '')
+            || getResultLines(result, 'why_items', 'why_text').length > 0
+            || getResultLines(result, 'specs_items', 'specs_text').length > 0;
+    };
+
+    const renderResultSection = (title, items, extraClassName) => {
+        if (!Array.isArray(items) || items.length === 0) {
+            return null;
+        }
+
+        const section = create('section', 'kk-quiz__result-section' + (extraClassName ? ' ' + extraClassName : ''));
+        section.appendChild(create('h4', 'kk-quiz__result-section-title', title));
+
+        const list = create('ul', 'kk-quiz__result-list');
+        items.forEach((item) => {
+            list.appendChild(create('li', '', item));
+        });
+        section.appendChild(list);
+
+        return section;
+    };
+
+    const renderResultNote = (text) => {
+        const noteText = String(text || '').trim();
+        if (noteText === '') {
+            return null;
+        }
+
+        const note = create('section', 'kk-quiz__result-section kk-quiz__result-note');
+        note.appendChild(create('h4', 'kk-quiz__result-section-title', 'Что важно учесть'));
+        note.appendChild(create('div', 'kk-quiz__result-note-text', noteText));
+
+        return note;
+    };
+
+    const renderResultFormHelp = (nodes, quiz, state, result) => {
+        const help = create('div', 'kk-quiz__result-help');
+        help.appendChild(create('h3', 'kk-quiz__result-help-title', 'Хотите точнее?'));
+        help.appendChild(create(
+            'div',
+            'kk-quiz__result-help-text',
+            String(result.form_intro || '').trim() || 'Отправьте результат специалисту — он проверит наличие и предложит 2–3 подходящих варианта.'
+        ));
+
+        const toggle = create(
+            'button',
+            'kk-quiz__button kk-quiz__button--secondary kk-quiz__result-form-toggle',
+            String(result.form_button_text || '').trim() || 'Отправить результат специалисту'
+        );
+        toggle.type = 'button';
+
+        const formWrap = create('div', 'kk-quiz__result-form');
+        formWrap.hidden = true;
+
+        toggle.addEventListener('click', () => {
+            toggle.hidden = true;
+            formWrap.hidden = false;
+
+            const originalForm = nodes.form;
+            nodes.form = formWrap;
+            showFinalForm(nodes, quiz, state, result);
+            nodes.result.hidden = false;
+            nodes.form = originalForm;
+        });
+
+        help.appendChild(toggle);
+        help.appendChild(formWrap);
+
+        return help;
+    };
+
     const showResult = (nodes, quiz, state, resultId) => {
         const result = findById(quiz.results, resultId);
         if (!result) {
@@ -1216,6 +1299,11 @@
         clear(nodes.result);
         nodes.result.hidden = false;
 
+        const enhancedResult = hasEnhancedResultContent(result);
+        const summaryText = String(result.summary || '').trim() || String(result.preview_text || '').trim();
+        const whyItems = getResultLines(result, 'why_items', 'why_text');
+        const specsItems = getResultLines(result, 'specs_items', 'specs_text');
+
         const card = create('div', 'kk-quiz__result-card');
         appendTextBlock(card, 'kk-quiz__badge', result.badge);
 
@@ -1228,7 +1316,28 @@
         }
 
         appendTextBlock(card, 'kk-quiz__result-title', result.name);
-        appendTextBlock(card, 'kk-quiz__result-text', result.preview_text);
+        appendTextBlock(card, enhancedResult ? 'kk-quiz__result-summary' : 'kk-quiz__result-text', summaryText);
+
+        const whySection = renderResultSection('Почему подходит', whyItems, 'kk-quiz__result-why');
+        if (whySection) {
+            card.appendChild(whySection);
+        }
+
+        const specsSection = renderResultSection('Ориентир по комплектующим', specsItems, 'kk-quiz__result-specs');
+        if (specsSection) {
+            card.appendChild(specsSection);
+        }
+
+        const noteSection = renderResultNote(result.note_text);
+        if (noteSection) {
+            card.appendChild(noteSection);
+        }
+
+        const videoBlock = renderResultVideo(result.video);
+        const videoPosition = normalizeResultVideoPosition(result.video ? result.video.position : '');
+        if (videoBlock && videoPosition === 'after_text') {
+            card.appendChild(videoBlock);
+        }
 
         const videoBlock = renderResultVideo(result.video);
         const videoPosition = normalizeResultVideoPosition(result.video ? result.video.position : '');
@@ -1237,7 +1346,8 @@
         }
 
         if (result.cta_text && result.cta_link) {
-            const link = create('a', 'kk-quiz__button kk-quiz__button--link', result.cta_text);
+            const actions = create('div', 'kk-quiz__result-actions');
+            const link = create('a', 'kk-quiz__button kk-quiz__button--link kk-quiz__result-catalog-link', result.cta_text);
             link.href = String(result.cta_link);
 
             link.addEventListener('click', () => {
@@ -1250,7 +1360,8 @@
                 });
             });
 
-            card.appendChild(link);
+            actions.appendChild(link);
+            card.appendChild(actions);
         }
 
         nodes.result.appendChild(card);
@@ -1269,13 +1380,17 @@
                 nodes.result.appendChild(videoBlock);
             }
 
-            const formWrap = create('div', 'kk-quiz__result-form');
-            nodes.result.appendChild(formWrap);
-            const originalForm = nodes.form;
-            nodes.form = formWrap;
-            showFinalForm(nodes, quiz, state, result);
-            nodes.result.hidden = false;
-            nodes.form = originalForm;
+            if (enhancedResult) {
+                nodes.result.appendChild(renderResultFormHelp(nodes, quiz, state, result));
+            } else {
+                const formWrap = create('div', 'kk-quiz__result-form');
+                nodes.result.appendChild(formWrap);
+                const originalForm = nodes.form;
+                nodes.form = formWrap;
+                showFinalForm(nodes, quiz, state, result);
+                nodes.result.hidden = false;
+                nodes.form = originalForm;
+            }
 
             if (videoBlock && videoPosition === 'after_form') {
                 nodes.result.appendChild(videoBlock);
