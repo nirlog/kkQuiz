@@ -294,6 +294,7 @@ final class QuizRepository
             'specs_text' => $specsText,
             'specs_items' => $this->normalizeTextLines($specsText),
             'note_text' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_NOTE_TEXT'),
+            'form_title' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_FORM_TITLE'),
             'form_intro' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_FORM_INTRO'),
             'form_button_text' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_FORM_BUTTON_TEXT'),
             'detail_text' => (string)($element['DETAIL_TEXT'] ?? ''),
