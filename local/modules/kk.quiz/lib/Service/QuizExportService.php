@@ -225,6 +225,7 @@ final class QuizExportService
             'why_text' => (string)$this->getPropertyValue($properties, 'KK_RESULT_WHY_TEXT'),
             'specs_text' => (string)$this->getPropertyValue($properties, 'KK_RESULT_SPECS_TEXT'),
             'note_text' => (string)$this->getPropertyValue($properties, 'KK_RESULT_NOTE_TEXT'),
+            'form_title' => (string)$this->getPropertyValue($properties, 'KK_RESULT_FORM_TITLE'),
             'form_intro' => (string)$this->getPropertyValue($properties, 'KK_RESULT_FORM_INTRO'),
             'form_button_text' => (string)$this->getPropertyValue($properties, 'KK_RESULT_FORM_BUTTON_TEXT'),
             'detail_text' => (string)($element['DETAIL_TEXT'] ?? ''),

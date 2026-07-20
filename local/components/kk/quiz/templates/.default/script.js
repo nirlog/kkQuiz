@@ -1197,7 +1197,7 @@
     };
 
     const hasEnhancedResultContent = (result) => {
-        return ['summary', 'why_text', 'specs_text', 'note_text', 'form_intro', 'form_button_text'].some((key) => String(result[key] || '').trim() !== '')
+        return ['summary', 'why_text', 'specs_text', 'note_text', 'form_title', 'form_intro', 'form_button_text'].some((key) => String(result[key] || '').trim() !== '')
             || getResultLines(result, 'why_items', 'why_text').length > 0
             || getResultLines(result, 'specs_items', 'specs_text').length > 0;
     };
@@ -1234,7 +1234,11 @@
 
     const renderResultFormHelp = (nodes, quiz, state, result) => {
         const help = create('div', 'kk-quiz__result-help');
-        help.appendChild(create('h3', 'kk-quiz__result-help-title', 'Хотите точнее?'));
+        help.appendChild(create(
+            'h3',
+            'kk-quiz__result-help-title',
+            String(result.form_title || '').trim() || 'Хотите точнее?'
+        ));
         help.appendChild(create(
             'div',
             'kk-quiz__result-help-text',

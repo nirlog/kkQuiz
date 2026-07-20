@@ -1009,6 +1009,7 @@ final class Installer
             ['CODE' => 'KK_RESULT_VIDEO_TITLE', 'NAME' => 'Видео результата — заголовок', 'SORT' => 354, 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_RESULT_VIDEO_POSITION', 'NAME' => 'Позиция видео результата', 'SORT' => 356, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getResultVideoPositionValues()],
             ['CODE' => 'KK_RESULT_SHOW_FORM', 'NAME' => 'Показывать форму', 'SORT' => 360, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
+            ['CODE' => 'KK_RESULT_FORM_TITLE', 'NAME' => 'Заголовок блока формы результата', 'SORT' => 361, 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_RESULT_FORM_INTRO', 'NAME' => 'Текст перед формой результата', 'SORT' => 362, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 4],
             ['CODE' => 'KK_RESULT_FORM_BUTTON_TEXT', 'NAME' => 'Текст кнопки открытия формы', 'SORT' => 364, 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_RESULT_CATALOG_SECTION', 'NAME' => 'Раздел рекомендаций', 'SORT' => 380, 'PROPERTY_TYPE' => 'G'],

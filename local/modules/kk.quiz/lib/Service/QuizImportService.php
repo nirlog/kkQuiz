@@ -185,6 +185,7 @@ final class QuizImportService
                 'KK_RESULT_VIDEO_POSITION',
                 (string)($result['video_position'] ?? $video['position'] ?? '')
             ),
+            'KK_RESULT_FORM_TITLE' => (string)($result['form_title'] ?? ''),
             'KK_RESULT_FORM_INTRO' => (string)($result['form_intro'] ?? ''),
             'KK_RESULT_FORM_BUTTON_TEXT' => (string)($result['form_button_text'] ?? ''),
             'KK_RESULT_SHOW_FORM' => $this->getPropertyEnumId($iblockId, 'KK_RESULT_SHOW_FORM', $this->toBool($result['show_form'] ?? true) ? 'Y' : 'N'),
