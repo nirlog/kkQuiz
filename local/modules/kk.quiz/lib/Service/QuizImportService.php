@@ -165,6 +165,7 @@ final class QuizImportService
 
     private function createResult(int $iblockId, int $sectionId, string $code, array $result): int
     {
+        $video = is_array($result['video'] ?? null) ? $result['video'] : [];
         $propertyValues = [
             'KK_ENTITY_TYPE' => $this->getPropertyEnumId($iblockId, 'KK_ENTITY_TYPE', 'RESULT'),
             'KK_PUBLIC_TITLE' => (string)($result['public_title'] ?? ''),
@@ -177,6 +178,13 @@ final class QuizImportService
             'KK_RESULT_NOTE_TEXT' => (string)($result['note_text'] ?? ''),
             'KK_RESULT_CTA_TEXT' => (string)($result['cta_text'] ?? ''),
             'KK_RESULT_CTA_LINK' => (string)($result['cta_link'] ?? ''),
+            'KK_RESULT_VIDEO_URL' => (string)($result['video_url'] ?? $video['url'] ?? ''),
+            'KK_RESULT_VIDEO_TITLE' => (string)($result['video_title'] ?? $video['title'] ?? ''),
+            'KK_RESULT_VIDEO_POSITION' => $this->getPropertyEnumId(
+                $iblockId,
+                'KK_RESULT_VIDEO_POSITION',
+                (string)($result['video_position'] ?? $video['position'] ?? '')
+            ),
             'KK_RESULT_FORM_INTRO' => (string)($result['form_intro'] ?? ''),
             'KK_RESULT_FORM_BUTTON_TEXT' => (string)($result['form_button_text'] ?? ''),
             'KK_RESULT_SHOW_FORM' => $this->getPropertyEnumId($iblockId, 'KK_RESULT_SHOW_FORM', $this->toBool($result['show_form'] ?? true) ? 'Y' : 'N'),
