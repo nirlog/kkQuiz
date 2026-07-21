@@ -55,6 +55,8 @@ final class QuizStructureDiagnostics
         $questionResultEdges = [];
         $usedResultIds = [];
         $graphEdges = [];
+        $scoringResultIds = [];
+        $scoringValuesByResult = [];
 
         foreach ($questions as $questionId => $question) {
             $transitionQuestionIds = [];
@@ -76,13 +78,38 @@ final class QuizStructureDiagnostics
                     }
                 }
 
-                foreach (['result_id', 'score_result_id'] as $field) {
-                    $id = self::toPositiveInt($answer[$field] ?? null);
-                    if ($id > 0) {
+                $resultId = self::toPositiveInt($answer['result_id'] ?? null);
+                if ($resultId > 0) {
+                    $hasTransition = true;
+                    $transitionResultIds[] = $resultId;
+                    $graphEdges[] = self::buildEdge($questionId, $resultId, 'result', $label, 'answer_result', $questions, $results);
+                }
+
+                $scoreResultId = self::toPositiveInt($answer['score_result_id'] ?? null);
+                $scoreValue = (int)($answer['score_value'] ?? 0);
+                if ($scoreResultId > 0) {
+                    $graphEdges[] = self::buildEdge(
+                        $questionId,
+                        $scoreResultId,
+                        'result',
+                        $label . ' · ' . self::formatScoreValue($scoreValue),
+                        'score_result',
+                        $questions,
+                        $results
+                    );
+                    if ($scoreValue === 0) {
+                        $messages[] = ['type' => 'warning', 'message' => 'Предупреждение: у ответа “' . $label . '” вопроса “' . $question['title'] . '” выбран scoring-результат, но количество баллов равно 0.'];
+                    } elseif (isset($results[$scoreResultId])) {
                         $hasTransition = true;
-                        $transitionResultIds[] = $id;
-                        $graphEdges[] = self::buildEdge($questionId, $id, 'result', $label, 'answer_result', $questions, $results);
+                        $transitionResultIds[] = $scoreResultId;
+                        $scoringResultIds[$scoreResultId] = true;
+                        $scoringValuesByResult[$scoreResultId][$scoreValue] = true;
                     }
+                    if (!isset($results[$scoreResultId])) {
+                        $messages[] = ['type' => 'warning', 'message' => 'Предупреждение: scoring-связь ответа “' . $label . '” вопроса “' . $question['title'] . '” указывает на несуществующий или неактивный результат ID ' . $scoreResultId . '.'];
+                    }
+                } elseif ($scoreValue !== 0) {
+                    $messages[] = ['type' => 'warning', 'message' => 'Предупреждение: у ответа “' . $label . '” вопроса “' . $question['title'] . '” указано ' . self::formatScoreValue($scoreValue) . ', но scoring-результат не выбран.'];
                 }
             }
 
@@ -120,6 +147,34 @@ final class QuizStructureDiagnostics
                 }
 
                 $questionResultEdges[$questionId][] = $targetResultId;
+            }
+        }
+
+        $scoringResultsByPriority = [];
+        foreach (array_keys($scoringResultIds) as $scoringResultId) {
+            if (!isset($results[$scoringResultId])) {
+                continue;
+            }
+            $result = $results[$scoringResultId];
+            if ($result['priority'] === '') {
+                $messages[] = ['type' => 'warning', 'message' => 'Предупреждение: результат “' . $result['title'] . '” участвует в scoring, но у него не задан priority.'];
+                continue;
+            }
+            $scoringResultsByPriority[(string)(int)$result['priority']][$scoringResultId] = $result['title'];
+        }
+        foreach ($scoringResultsByPriority as $priority => $resultTitles) {
+            $resultIds = array_keys($resultTitles);
+            for ($leftIndex = 0, $count = count($resultIds); $leftIndex < $count; $leftIndex++) {
+                for ($rightIndex = $leftIndex + 1; $rightIndex < $count; $rightIndex++) {
+                    $leftId = $resultIds[$leftIndex];
+                    $rightId = $resultIds[$rightIndex];
+                    $commonScores = array_intersect_key($scoringValuesByResult[$leftId] ?? [], $scoringValuesByResult[$rightId] ?? []);
+                    if ($commonScores === []) {
+                        continue;
+                    }
+                    $score = (int)array_key_first($commonScores);
+                    $messages[] = ['type' => 'warning', 'message' => 'Предупреждение: scoring-результаты “' . $resultTitles[$leftId] . '” и “' . $resultTitles[$rightId] . '” могут получить одинаковый score ' . $score . ' и имеют одинаковый priority ' . $priority . '.'];
+                }
             }
         }
 
@@ -213,6 +268,7 @@ final class QuizStructureDiagnostics
                 'answers_invalid' => $answersData['invalid'],
                 'default_next_question_id' => self::toPositiveInt(self::getPropertyValue($properties, 'KK_DEFAULT_NEXT_QUESTION')),
                 'default_result_id' => self::toPositiveInt(self::getPropertyValue($properties, 'KK_DEFAULT_RESULT')),
+                'priority' => self::cleanString(self::getPropertyValue($properties, 'KK_RESULT_PRIORITY')),
             ];
         }
 
@@ -317,6 +373,7 @@ final class QuizStructureDiagnostics
             'to_title' => $isBroken ? 'ID ' . $targetId . ' не найден' : (string)$targetMap[$targetId]['title'],
             'label' => $label !== '' ? $label : 'Ответ',
             'kind' => $kind,
+            'is_scoring' => $kind === 'score_result',
             'is_broken' => $isBroken,
         ];
     }
@@ -362,6 +419,8 @@ final class QuizStructureDiagnostics
             || isset($rows['RESULT_ID'])
             || isset($rows['score_result_id'])
             || isset($rows['SCORE_RESULT_ID'])
+            || isset($rows['score_value'])
+            || isset($rows['SCORE_VALUE'])
         ) {
             $rows = [$rows];
         }
@@ -382,6 +441,7 @@ final class QuizStructureDiagnostics
                 'next_question_id' => self::toPositiveInt($answer['next_question_id'] ?? $answer['NEXT_QUESTION_ID'] ?? null),
                 'result_id' => self::toPositiveInt($answer['result_id'] ?? $answer['RESULT_ID'] ?? null),
                 'score_result_id' => self::toPositiveInt($answer['score_result_id'] ?? $answer['SCORE_RESULT_ID'] ?? null),
+                'score_value' => (int)($answer['score_value'] ?? $answer['SCORE_VALUE'] ?? 0),
             ];
         }
 
@@ -395,6 +455,25 @@ final class QuizStructureDiagnostics
         }
 
         return is_scalar($value) ? trim(strip_tags((string)$value)) : '';
+    }
+
+    private static function formatScoreValue(int $score): string
+    {
+        return ($score > 0 ? '+' : '') . $score . ' ' . self::getScoreWord($score);
+    }
+
+    private static function getScoreWord(int $score): string
+    {
+        $absolute = abs($score) % 100;
+        $last = $absolute % 10;
+        if ($absolute > 10 && $absolute < 20) {
+            return 'баллов';
+        }
+        if ($last === 1) {
+            return 'балл';
+        }
+
+        return $last >= 2 && $last <= 4 ? 'балла' : 'баллов';
     }
 
 
