@@ -677,6 +677,12 @@ final class LeadService
     {
         $request = Context::getCurrent()->getRequest();
         $utm = is_array($payload['utm'] ?? null) ? $payload['utm'] : [];
+        $answers = $payload['answers'] ?? [];
+        $detailText = $this->buildAnswersText($quiz, $answers);
+        $scoresText = $this->buildScoresText($quiz, $this->calculateScores($quiz, $answers));
+        if ($scoresText !== '') {
+            $detailText .= ($detailText !== '' ? "\n\n" : '') . $scoresText;
+        }
 
         return [
             'quiz_section_id' => (int)$quiz['id'],
@@ -702,9 +708,9 @@ final class LeadService
             'user_agent' => $this->cleanString($request->getUserAgent()),
             'ip' => $this->cleanString($request->getRemoteAddress()),
             'session_id' => session_id(),
-            'detail_text' => $this->buildAnswersText($quiz, $payload['answers'] ?? []),
+            'detail_text' => $detailText,
             'answers_data' => Json::encode(
-                $this->normalizeAnswersData($quiz, $payload['answers'] ?? []),
+                $this->normalizeAnswersData($quiz, $answers),
                 JSON_UNESCAPED_UNICODE
             ),
             'agreement_accepted' => $this->isAgreementAccepted($payload['agreement_accepted'] ?? null) ? 'Y' : 'N',
@@ -988,6 +994,7 @@ final class LeadService
             }
         }
 
+        $hasExplicitResult = false;
         foreach ($answers as $questionId => $answerValue) {
             $questionId = (int)$questionId;
             $question = $questionMap[$questionId] ?? null;
@@ -1020,10 +1027,103 @@ final class LeadService
                 if ($this->answerPointsToResult($answer, $targetResultId, $targetResultCode)) {
                     return true;
                 }
+
+                if ((int)($answer['result_id'] ?? 0) > 0) {
+                    $hasExplicitResult = true;
+                }
             }
         }
 
-        return false;
+        if ($hasExplicitResult) {
+            return false;
+        }
+
+        $scoredResult = $this->findScoredResult($quiz, $this->calculateScores($quiz, $answers));
+
+        return is_array($scoredResult)
+            && ((int)($scoredResult['id'] ?? 0) === $targetResultId
+                || ($targetResultCode !== '' && (string)($scoredResult['code'] ?? '') === $targetResultCode));
+    }
+
+    /** @return array<int, int|float> */
+    private function calculateScores(array $quiz, mixed $answers): array
+    {
+        if (!is_array($answers)) {
+            return [];
+        }
+
+        $questionMap = [];
+        foreach ((array)($quiz['questions'] ?? []) as $question) {
+            if (is_array($question) && (int)($question['id'] ?? 0) > 0) {
+                $questionMap[(int)$question['id']] = $question;
+            }
+        }
+
+        $scores = [];
+        foreach ($answers as $questionId => $answerValue) {
+            $question = $questionMap[(int)$questionId] ?? null;
+            if (!is_array($question) || $this->isInputQuestion($question)) {
+                continue;
+            }
+
+            $selectedItems = is_array($answerValue) && array_is_list($answerValue) ? $answerValue : [$answerValue];
+            foreach ($selectedItems as $selectedItem) {
+                $answer = $this->findConfiguredAnswer($question, $selectedItem);
+                $scoreResultId = (int)($answer['score_result_id'] ?? 0);
+                $scoreValue = (int)($answer['score_value'] ?? 0);
+                if ($scoreResultId > 0 && $scoreValue !== 0) {
+                    $scores[$scoreResultId] = ($scores[$scoreResultId] ?? 0) + $scoreValue;
+                }
+            }
+        }
+
+        return $scores;
+    }
+
+    private function findScoredResult(array $quiz, array $scores): ?array
+    {
+        $candidates = array_values(array_filter((array)($quiz['results'] ?? []), static function ($result) use ($scores): bool {
+            if (!is_array($result)) {
+                return false;
+            }
+            $score = (float)($scores[(int)($result['id'] ?? 0)] ?? 0);
+            $minScore = $result['min_score'] ?? null;
+            $maxScore = $result['max_score'] ?? null;
+
+            return $score > 0
+                && ($minScore === null || $minScore === '' || $score >= (float)$minScore)
+                && ($maxScore === null || $maxScore === '' || $score <= (float)$maxScore);
+        }));
+
+        usort($candidates, static function (array $left, array $right) use ($scores): int {
+            $scoreComparison = (float)($scores[(int)($right['id'] ?? 0)] ?? 0) <=> (float)($scores[(int)($left['id'] ?? 0)] ?? 0);
+            return $scoreComparison !== 0
+                ? $scoreComparison
+                : ((int)($left['priority'] ?? 0) <=> (int)($right['priority'] ?? 0));
+        });
+
+        return $candidates[0] ?? null;
+    }
+
+    private function buildScoresText(array $quiz, array $scores): string
+    {
+        if ($scores === []) {
+            return '';
+        }
+
+        $titles = [];
+        foreach ((array)($quiz['results'] ?? []) as $result) {
+            if (is_array($result)) {
+                $titles[(int)($result['id'] ?? 0)] = (string)($result['name'] ?? $result['code'] ?? '');
+            }
+        }
+
+        $lines = ['Баллы результатов:'];
+        foreach ($scores as $resultId => $score) {
+            $lines[] = '- ' . ($titles[$resultId] ?? ('#' . $resultId)) . ': ' . $score;
+        }
+
+        return implode("\n", $lines);
     }
 
     private function questionPointsToDefaultResult(array $question, int $targetResultId, string $targetResultCode): bool

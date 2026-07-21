@@ -558,15 +558,15 @@ appendRestartButton();
 renderTrace();
 };
 const resolveTransition = (question, answer) => {
-const answerResultId = answer && (answer.result_id || answer.score_result_id)
-? (answer.result_id || answer.score_result_id)
+const answerResultId = answer && answer.result_id
+? answer.result_id
 : 0;
 
 if (answerResultId) {
 const result = resultMap.get(String(answerResultId));
 
 return {
-type: answer.result_id ? 'answer.result_id' : 'answer.score_result_id',
+type: 'answer.result_id',
 targetType: 'result',
 targetId: answerResultId,
 targetTitle: getNodeTitle(result, 'Результат ID ' + answerResultId)
@@ -1158,9 +1158,14 @@ return container;
 edges.forEach((edge, index) => {
 const edgeLine = document.createElement('div');
 edgeLine.style.margin = '4px 0 0 26px';
-edgeLine.style.color = edge.is_broken ? '#a40000' : '#555';
+edgeLine.style.color = edge.is_broken ? '#a40000' : (edge.is_scoring ? '#315b8a' : '#555');
+if (edge.is_scoring) {
+edgeLine.style.borderLeft = '2px dashed #7b9bbb';
+edgeLine.style.paddingLeft = '8px';
+}
 const prefix = index === edges.length - 1 ? '└─ ' : '├─ ';
-edgeLine.appendChild(document.createTextNode(prefix + String(edge.label || 'Ответ') + ' → '));
+const edgePrefix = edge.is_scoring ? 'scoring (не переход): ' : '';
+edgeLine.appendChild(document.createTextNode(prefix + edgePrefix + String(edge.label || 'Ответ') + ' → '));
 if (edge.is_broken) {
 edgeLine.appendChild(document.createTextNode(String(edge.to_title || ('ID ' + edge.to + ' не найден'))));
 container.appendChild(edgeLine);

@@ -42,11 +42,9 @@ final class ElementFormAssets
         'KK_RESULT_VIDEO_TITLE',
         'KK_RESULT_VIDEO_POSITION',
         'KK_RESULT_SHOW_FORM',
+        'KK_RESULT_FORM_TITLE',
         'KK_RESULT_FORM_INTRO',
         'KK_RESULT_FORM_BUTTON_TEXT',
-        'KK_RESULT_VIDEO_URL',
-        'KK_RESULT_VIDEO_TITLE',
-        'KK_RESULT_VIDEO_POSITION',
         'KK_RESULT_CATALOG_SECTION',
         'KK_RESULT_CATALOG_PRODUCTS',
     ];
