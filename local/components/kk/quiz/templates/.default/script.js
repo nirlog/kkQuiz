@@ -186,6 +186,7 @@
     const resetRunState = (state) => {
         state.runId = createRunId();
         state.answers = {};
+        state.scores = {};
         state.fields = {};
         state.stepIndex = 0;
         state.analytics.firstAnswerSent = false;
@@ -556,6 +557,7 @@
         runId: createRunId(),
         stepIndex: 0,
         answers: {},
+        scores: {},
         fields: {},
         analytics: {
             firstAnswerSent: false,
@@ -579,7 +581,9 @@
     };
 
     const renderProgress = (quiz, state) => {
-        const questionsCount = Array.isArray(quiz.questions) ? quiz.questions.length : 0;
+        const technicalCount = Array.isArray(quiz.questions) ? quiz.questions.length : 0;
+        const configuredTotal = Number(quiz.progress_total || 0);
+        const questionsCount = configuredTotal > 0 ? configuredTotal : technicalCount;
         if (questionsCount <= 0) {
             return null;
         }
@@ -1004,6 +1008,7 @@
                 result_title: currentResult ? currentResult.name : '',
                 fields: payloadFields,
                 answers: state.answers,
+                scores: state.scores,
                 page_url: window.location.href,
                 referer: document.referrer,
                 utm: getUtm(),
@@ -1197,7 +1202,7 @@
     };
 
     const hasEnhancedResultContent = (result) => {
-        return ['summary', 'why_text', 'specs_text', 'note_text', 'form_intro', 'form_button_text'].some((key) => String(result[key] || '').trim() !== '')
+        return ['summary', 'why_text', 'specs_text', 'note_text', 'form_title', 'form_intro', 'form_button_text'].some((key) => String(result[key] || '').trim() !== '')
             || getResultLines(result, 'why_items', 'why_text').length > 0
             || getResultLines(result, 'specs_items', 'specs_text').length > 0;
     };
@@ -1234,7 +1239,11 @@
 
     const renderResultFormHelp = (nodes, quiz, state, result) => {
         const help = create('div', 'kk-quiz__result-help');
-        help.appendChild(create('h3', 'kk-quiz__result-help-title', 'Хотите точнее?'));
+        help.appendChild(create(
+            'h3',
+            'kk-quiz__result-help-title',
+            String(result.form_title || '').trim() || 'Хотите точнее?'
+        ));
         help.appendChild(create(
             'div',
             'kk-quiz__result-help-text',
@@ -1339,12 +1348,6 @@
             card.appendChild(videoBlock);
         }
 
-        const videoBlock = renderResultVideo(result.video);
-        const videoPosition = normalizeResultVideoPosition(result.video ? result.video.position : '');
-        if (videoBlock && videoPosition === 'after_text') {
-            card.appendChild(videoBlock);
-        }
-
         if (result.cta_text && result.cta_link) {
             const actions = create('div', 'kk-quiz__result-actions');
             const link = create('a', 'kk-quiz__button kk-quiz__button--link kk-quiz__result-catalog-link', result.cta_text);
@@ -1400,7 +1403,52 @@
         }
     };
 
+    const addAnswerScores = (scores, answers) => {
+        toArray(answers).forEach((answer) => {
+            const resultId = toId(answer && answer.score_result_id);
+            const scoreValue = Number(answer && answer.score_value);
+            if (resultId === null || !Number.isFinite(scoreValue) || scoreValue === 0) {
+                return;
+            }
+
+            const key = String(resultId);
+            scores[key] = Number(scores[key] || 0) + scoreValue;
+        });
+    };
+
+    const findScoredResult = (quiz, scores) => {
+        const candidates = toArray(quiz.results).filter((result) => {
+            const score = Number(scores[String(toId(result.id))] || 0);
+            if (score <= 0) {
+                return false;
+            }
+
+            const minScore = result.min_score === null || result.min_score === undefined || result.min_score === ''
+                ? null
+                : Number(result.min_score);
+            const maxScore = result.max_score === null || result.max_score === undefined || result.max_score === ''
+                ? null
+                : Number(result.max_score);
+
+            return (minScore === null || score >= minScore) && (maxScore === null || score <= maxScore);
+        });
+
+        candidates.sort((left, right) => {
+            const scoreDifference = Number(scores[String(toId(right.id))] || 0) - Number(scores[String(toId(left.id))] || 0);
+            if (scoreDifference !== 0) {
+                return scoreDifference;
+            }
+
+            return Number(left.priority || 0) - Number(right.priority || 0);
+        });
+
+        return candidates[0] || null;
+    };
+
     const goNext = (nodes, quiz, state, question, answer) => {
+        const selectedAnswers = Array.isArray(answer) ? answer : (answer ? [answer] : []);
+        addAnswerScores(state.scores, selectedAnswers);
+
         sendQuizView(nodes.root);
         sendQuizOpen(nodes.root);
 
@@ -1445,14 +1493,22 @@
             });
         }
 
-        if (answer && answer.result_id) {
-            showResult(nodes, quiz, state, answer.result_id);
+        const resultAnswer = selectedAnswers.find((item) => item.result_id);
+        if (resultAnswer) {
+            showResult(nodes, quiz, state, resultAnswer.result_id);
             return;
         }
 
-        const nextQuestionId = answer && answer.next_question_id ? answer.next_question_id : question.default_next_question_id;
+        const nextAnswer = selectedAnswers.find((item) => item.next_question_id);
+        const nextQuestionId = nextAnswer ? nextAnswer.next_question_id : question.default_next_question_id;
         if (nextQuestionId) {
             showQuestion(nodes, quiz, state, nextQuestionId);
+            return;
+        }
+
+        const scoredResult = findScoredResult(quiz, state.scores);
+        if (scoredResult) {
+            showResult(nodes, quiz, state, scoredResult.id);
             return;
         }
 
@@ -1715,7 +1771,9 @@
         const next = create('button', 'kk-quiz__button kk-quiz__button--next', 'Далее');
         next.type = 'button';
         next.addEventListener('click', () => {
-            const payload = [...selected].map((index) => buildAnswerPayload(question.answers[index], index));
+            const selectedIndexes = [...selected].sort((left, right) => left - right);
+            const selectedAnswers = selectedIndexes.map((index) => question.answers[index]);
+            const payload = selectedIndexes.map((index) => buildAnswerPayload(question.answers[index], index));
             if (customCheckbox && customCheckbox.checked) {
                 if (customInput.input.value.trim() === '') {
                     customInput.input.focus();
@@ -1731,7 +1789,7 @@
             }
 
             state.answers[question.id] = payload;
-            goNext(nodes, quiz, state, question, null);
+            goNext(nodes, quiz, state, question, selectedAnswers);
         });
 
         nodes.question.appendChild(answers);
