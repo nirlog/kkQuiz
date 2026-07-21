@@ -41,6 +41,7 @@ final class QuizService
             'form_title' => $quiz['form_title'],
             'form_subtitle' => $quiz['form_subtitle'],
             'start_text' => $quiz['start_text'],
+            'progress_total' => (int)($quiz['progress_total'] ?? 0),
             'success_text' => $quiz['success_text'],
             'theme' => $quiz['theme'] !== '' ? $quiz['theme'] : 'default',
             'form_fields' => $quiz['form_fields'],

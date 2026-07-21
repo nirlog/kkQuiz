@@ -383,6 +383,7 @@ const OPTION_TYPES = ['radio', 'checkbox'];
 const TEMPLATE_NAMES = ['image_cards', 'cards', 'list', 'select'];
 let previewState = {
 answers: {},
+scores: {},
 trace: []
 };
 const getQuestionType = (question) => {
@@ -453,6 +454,7 @@ container.appendChild(subtitle);
 const restartPreview = () => {
 previewState = {
 answers: {},
+scores: {},
 trace: []
 };
 
@@ -557,34 +559,67 @@ container.appendChild(box);
 appendRestartButton();
 renderTrace();
 };
-const resolveTransition = (question, answer) => {
-const answerResultId = answer && (answer.result_id || answer.score_result_id)
-? (answer.result_id || answer.score_result_id)
-: 0;
+const addPreviewScores = (answers) => {
+(Array.isArray(answers) ? answers : []).forEach((answer) => {
+const resultId = Number.parseInt(answer && answer.score_result_id, 10) || 0;
+const scoreValue = Number(answer && answer.score_value);
+if (resultId > 0 && Number.isFinite(scoreValue) && scoreValue !== 0) {
+previewState.scores[String(resultId)] = Number(previewState.scores[String(resultId)] || 0) + scoreValue;
+}
+});
+};
+const findPreviewScoredResult = () => {
+const candidates = results.filter((result) => {
+const score = Number(previewState.scores[String(result.id)] || 0);
+const minScore = result.min_score === null || result.min_score === undefined || result.min_score === '' ? null : Number(result.min_score);
+const maxScore = result.max_score === null || result.max_score === undefined || result.max_score === '' ? null : Number(result.max_score);
+return score > 0 && (minScore === null || score >= minScore) && (maxScore === null || score <= maxScore);
+});
+candidates.sort((left, right) => {
+const scoreDifference = Number(previewState.scores[String(right.id)] || 0) - Number(previewState.scores[String(left.id)] || 0);
+return scoreDifference !== 0 ? scoreDifference : Number(left.priority || 0) - Number(right.priority || 0);
+});
+return candidates[0] || null;
+};
+const resolveTransition = (question, answers) => {
+const selectedAnswers = Array.isArray(answers) ? answers : [];
+const resultAnswer = selectedAnswers.find((answer) => answer && answer.result_id);
+const answerResultId = resultAnswer ? resultAnswer.result_id : 0;
 
 if (answerResultId) {
 const result = resultMap.get(String(answerResultId));
 
 return {
-type: answer.result_id ? 'answer.result_id' : 'answer.score_result_id',
+type: 'answer.result_id',
 targetType: 'result',
 targetId: answerResultId,
 targetTitle: getNodeTitle(result, 'Результат ID ' + answerResultId)
 };
 }
 
-const nextQuestionId = answer && answer.next_question_id
-? answer.next_question_id
+const nextAnswer = selectedAnswers.find((answer) => answer && answer.next_question_id);
+const nextQuestionId = nextAnswer
+? nextAnswer.next_question_id
 : question.default_next_question_id;
 
 if (nextQuestionId && questionMap.has(String(nextQuestionId))) {
 const nextQuestion = questionMap.get(String(nextQuestionId));
 
 return {
-type: answer && answer.next_question_id ? 'answer.next_question_id' : 'question.default_next_question_id',
+type: nextAnswer ? 'answer.next_question_id' : 'question.default_next_question_id',
 targetType: 'question',
 targetId: nextQuestionId,
 targetTitle: getNodeTitle(nextQuestion, 'Вопрос ID ' + nextQuestionId)
+};
+}
+
+const scoredResult = findPreviewScoredResult();
+if (scoredResult) {
+return {
+type: 'результат по баллам',
+targetType: 'result',
+targetId: scoredResult.id,
+targetTitle: getNodeTitle(scoredResult, 'Результат ID ' + scoredResult.id)
 };
 }
 
@@ -618,7 +653,9 @@ targetTitle: transition.targetTitle || ''
 });
 };
 const goNext = (question, answer, value) => {
-const transition = resolveTransition(question, answer);
+const selectedAnswers = Array.isArray(answer) ? answer : (answer ? [answer] : []);
+addPreviewScores(selectedAnswers);
+const transition = resolveTransition(question, selectedAnswers);
 
 pushTrace(question, answer, value, transition);
 
@@ -730,7 +767,7 @@ return;
 
 const value = [...selected].map((index) => answers[index]).filter(Boolean);
 previewState.answers[question.id] = value;
-goNext(question, null, value);
+goNext(question, value, value);
 });
 
 container.appendChild(wrap);
@@ -1158,9 +1195,14 @@ return container;
 edges.forEach((edge, index) => {
 const edgeLine = document.createElement('div');
 edgeLine.style.margin = '4px 0 0 26px';
-edgeLine.style.color = edge.is_broken ? '#a40000' : '#555';
+edgeLine.style.color = edge.is_broken ? '#a40000' : (edge.is_scoring ? '#315b8a' : '#555');
+if (edge.is_scoring) {
+edgeLine.style.borderLeft = '2px dashed #7b9bbb';
+edgeLine.style.paddingLeft = '8px';
+}
 const prefix = index === edges.length - 1 ? '└─ ' : '├─ ';
-edgeLine.appendChild(document.createTextNode(prefix + String(edge.label || 'Ответ') + ' → '));
+const edgePrefix = edge.is_scoring ? 'scoring (не переход): ' : '';
+edgeLine.appendChild(document.createTextNode(prefix + edgePrefix + String(edge.label || 'Ответ') + ' → '));
 if (edge.is_broken) {
 edgeLine.appendChild(document.createTextNode(String(edge.to_title || ('ID ' + edge.to + ' не найден'))));
 container.appendChild(edgeLine);
