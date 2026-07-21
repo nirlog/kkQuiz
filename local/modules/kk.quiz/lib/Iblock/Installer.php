@@ -901,6 +901,7 @@ final class Installer
             ['FIELD_NAME' => 'UF_KK_FORM_SUBTITLE', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Подзаголовок финальной формы', 'SETTINGS' => ['ROWS' => 3]],
             ['FIELD_NAME' => 'UF_KK_START_TEXT', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Стартовый текст', 'SETTINGS' => ['ROWS' => 6]],
             ['FIELD_NAME' => 'UF_KK_START_QUESTION', 'USER_TYPE_ID' => 'integer', 'EDIT_FORM_LABEL' => 'Стартовый вопрос'],
+            ['FIELD_NAME' => 'UF_KK_PROGRESS_TOTAL', 'USER_TYPE_ID' => 'integer', 'EDIT_FORM_LABEL' => 'Количество шагов в прогрессе', 'SETTINGS' => ['DEFAULT_VALUE' => 0]],
             ['FIELD_NAME' => 'UF_KK_SUCCESS_TEXT', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Текст успешного завершения', 'SETTINGS' => ['ROWS' => 6]],
             ['FIELD_NAME' => 'UF_KK_EMAIL_TO', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Email получателя'],
             ['FIELD_NAME' => 'UF_KK_FORM_FIELDS', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Поля формы', 'MULTIPLE' => 'Y', 'VALUES' => self::getFormFieldEnumValues()],

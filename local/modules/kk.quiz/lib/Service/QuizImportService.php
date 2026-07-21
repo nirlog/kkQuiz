@@ -137,6 +137,7 @@ final class QuizImportService
             'UF_KK_FORM_TITLE' => (string)($settings['form_title'] ?? ''),
             'UF_KK_FORM_SUBTITLE' => (string)($settings['form_subtitle'] ?? ''),
             'UF_KK_START_TEXT' => (string)($settings['start_text'] ?? ''),
+            'UF_KK_PROGRESS_TOTAL' => max(0, (int)($settings['progress_total'] ?? 0)),
             'UF_KK_SUCCESS_TEXT' => (string)($settings['success_text'] ?? ''),
             'UF_KK_EMAIL_TO' => (string)($settings['email_to'] ?? ''),
             'UF_KK_FORM_FIELDS' => $this->mapUserFieldEnumValues('UF_KK_FORM_FIELDS', $settings['form_fields'] ?? []),

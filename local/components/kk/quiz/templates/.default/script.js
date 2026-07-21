@@ -186,6 +186,7 @@
     const resetRunState = (state) => {
         state.runId = createRunId();
         state.answers = {};
+        state.scores = {};
         state.fields = {};
         state.stepIndex = 0;
         state.analytics.firstAnswerSent = false;
@@ -580,7 +581,9 @@
     };
 
     const renderProgress = (quiz, state) => {
-        const questionsCount = Array.isArray(quiz.questions) ? quiz.questions.length : 0;
+        const technicalCount = Array.isArray(quiz.questions) ? quiz.questions.length : 0;
+        const configuredTotal = Number(quiz.progress_total || 0);
+        const questionsCount = configuredTotal > 0 ? configuredTotal : technicalCount;
         if (questionsCount <= 0) {
             return null;
         }
