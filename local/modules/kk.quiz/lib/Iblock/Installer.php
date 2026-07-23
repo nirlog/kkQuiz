@@ -122,6 +122,7 @@ final class Installer
                 'CODE' => self::QUIZZES_IBLOCK_CODE,
             ])->Fetch();
             if (is_array($iblock) && (int)($iblock['ID'] ?? 0) > 0) {
+                self::installQuizSectionUserFields((int)$iblock['ID']);
                 self::installQuizProperties((int)$iblock['ID']);
             }
         } catch (\Throwable) {
@@ -913,6 +914,11 @@ final class Installer
             ['FIELD_NAME' => 'UF_KK_CATALOG_IBLOCK_ID', 'USER_TYPE_ID' => 'integer', 'EDIT_FORM_LABEL' => 'ID инфоблока рекомендаций'],
             ['FIELD_NAME' => 'UF_KK_CATALOG_IBLOCK_IDS', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Инфоблоки рекомендаций', 'MULTIPLE' => 'Y', 'VALUES' => self::getCatalogIblockEnumValues()],
             ['FIELD_NAME' => 'UF_KK_THEME', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Тема оформления', 'VALUES' => self::getThemeEnumValues()],
+            ['FIELD_NAME' => 'UF_KK_ACCENT_COLOR', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Акцентный цвет (HEX)'],
+            ['FIELD_NAME' => 'UF_KK_ACCENT_HOVER', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Акцентный цвет при наведении (HEX)'],
+            ['FIELD_NAME' => 'UF_KK_BORDER_RADIUS', 'USER_TYPE_ID' => 'integer', 'EDIT_FORM_LABEL' => 'Скругление элементов, px'],
+            ['FIELD_NAME' => 'UF_KK_IMAGE_RATIO', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Соотношение сторон изображений ответов', 'VALUES' => self::getImageRatioEnumValues()],
+            ['FIELD_NAME' => 'UF_KK_IMAGE_FIT', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Режим изображений ответов', 'VALUES' => self::getImageFitEnumValues()],
             ['FIELD_NAME' => 'UF_KK_ALLOW_POPUP_URL', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Разрешить URL для попапа'],
             ['FIELD_NAME' => 'UF_KK_PRIVACY_TEXT', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Текст политики'],
             ['FIELD_NAME' => 'UF_KK_PRIVACY_URL', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Ссылка на политику'],
@@ -991,6 +997,7 @@ final class Installer
             ['CODE' => 'KK_ADMIN_NOTE', 'NAME' => 'Комментарий администратора', 'SORT' => 900, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
             ['CODE' => 'KK_QUESTION_TYPE', 'NAME' => 'Тип вопроса', 'SORT' => 200, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getQuestionTypeValues(), 'SHOW_IN_LIST' => 'Y', 'FILTRABLE' => 'Y', 'LIST_COLUMN_LABEL' => 'Тип вопроса', 'LIST_FILTER_LABEL' => 'Тип вопроса'],
             ['CODE' => 'KK_DISPLAY_TEMPLATE', 'NAME' => 'Шаблон отображения', 'SORT' => 220, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getDisplayTemplateValues()],
+            ['CODE' => 'KK_IMAGE_RATIO', 'NAME' => 'Соотношение сторон изображений ответов', 'SORT' => 225, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getQuestionImageRatioValues()],
             ['CODE' => 'KK_IS_REQUIRED', 'NAME' => 'Обязательный вопрос', 'SORT' => 230, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
             ['CODE' => 'KK_PLACEHOLDER', 'NAME' => 'Placeholder', 'SORT' => 240, 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_DEFAULT_NEXT_QUESTION', 'NAME' => 'Следующий вопрос по умолчанию', 'SORT' => 250, 'PROPERTY_TYPE' => 'E', 'LINK_IBLOCK_ID' => $iblockId],
@@ -1413,6 +1420,21 @@ final class Installer
             'dark' => 'Тёмная',
             'compact' => 'Компактная',
         ];
+    }
+
+    private static function getImageRatioEnumValues(): array
+    {
+        return ['16:9' => '16:9', '4:3' => '4:3', '1:1' => '1:1', '3:4' => '3:4'];
+    }
+
+    private static function getQuestionImageRatioValues(): array
+    {
+        return ['inherit' => 'Как у квиза', '16:9' => '16:9', '4:3' => '4:3', '1:1' => '1:1', '3:4' => '3:4'];
+    }
+
+    private static function getImageFitEnumValues(): array
+    {
+        return ['cover' => 'Cover (с обрезкой)', 'contain' => 'Contain (целиком)'];
     }
 
     private static function getQuestionTypeValues(): array
