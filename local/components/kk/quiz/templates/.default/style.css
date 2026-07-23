@@ -17,7 +17,7 @@
 .kk-quiz__question-title,
 .kk-quiz__form-title {
     margin: 0;
-    color: var(--kk-quiz-heading, #111827);
+    color: var(--kk-quiz-text, #111827);
     line-height: 1.2;
 }
 
@@ -33,7 +33,7 @@
 
 .kk-quiz__form-subtitle {
     margin: -6px 0 18px;
-    color: var(--kk-quiz-muted-color, #64748b);
+    color: var(--kk-quiz-muted, #64748b);
     font-size: 15px;
     line-height: 1.5;
 }
@@ -43,7 +43,7 @@
 .kk-quiz__question-hint,
 .kk-quiz__result-text,
 .kk-quiz__answer-description {
-    color: var(--kk-quiz-muted-color, #5b6573);
+    color: var(--kk-quiz-muted, #5b6573);
     line-height: 1.55;
 }
 
@@ -55,7 +55,7 @@
     min-height: 44px;
     padding: 12px 22px;
     border: 0;
-    border-radius: var(--kk-quiz-radius, 999px);
+    border-radius: var(--kk-quiz-button-radius, 12px);
     background: var(--kk-quiz-accent, #2563eb);
     color: #ffffff;
     font: inherit;
@@ -92,7 +92,7 @@
     min-height: 64px;
     padding: 14px;
     border: 1px solid var(--kk-quiz-border, #d8e0ea);
-    border-radius: var(--kk-quiz-radius, 16px);
+    border-radius: var(--kk-quiz-card-radius, 16px);
     background: var(--kk-quiz-surface, #ffffff);
     color: var(--kk-quiz-text, #1f2937);
     font: inherit;
@@ -105,7 +105,7 @@
 .kk-quiz__answer:focus-visible,
 .kk-quiz__answer--active {
     border-color: var(--kk-quiz-accent, #2563eb);
-    background: var(--kk-quiz-active-bg, #eff6ff);
+    background: var(--kk-quiz-surface-soft, #eff6ff);
     box-shadow: 0 10px 24px rgba(37, 99, 235, 0.12);
     transform: translateY(-1px);
 }
@@ -171,9 +171,9 @@
     min-height: 44px;
     padding: 10px 12px;
     border: 1px solid #d8e0ea;
-    border-radius: var(--kk-quiz-radius, 12px);
+    border-radius: var(--kk-quiz-input-radius, 10px);
     background: var(--kk-quiz-surface, #ffffff);
-    color: var(--kk-quiz-heading, #111827);
+    color: var(--kk-quiz-text, #111827);
     font: inherit;
 }
 
@@ -707,6 +707,7 @@
     transition: width 0.28s ease;
 }
 
+.kk-quiz__title,
 .kk-quiz__question-title,
 .kk-quiz__form-title,
 .kk-quiz__result-title {
