@@ -44,6 +44,13 @@ final class QuizService
             'progress_total' => (int)($quiz['progress_total'] ?? 0),
             'success_text' => $quiz['success_text'],
             'theme' => $quiz['theme'] !== '' ? $quiz['theme'] : 'default',
+            'appearance' => [
+                'accent_color' => $quiz['accent_color'] ?? '#2563eb',
+                'accent_hover_color' => $quiz['accent_hover_color'] ?? '#1d4ed8',
+                'border_radius' => (int)($quiz['border_radius'] ?? 20),
+                'answer_image_ratio' => $quiz['answer_image_ratio'] ?? '16:9',
+                'answer_image_fit' => $quiz['answer_image_fit'] ?? 'cover',
+            ],
             'form_fields' => $quiz['form_fields'],
             'required_fields' => $quiz['required_fields'],
             'metrika' => $this->buildMetrikaSettings($quiz),

@@ -15,6 +15,13 @@ $subtitle = $quiz !== null ? (string)($quiz['subtitle'] ?? '') : '';
 $startText = $quiz !== null ? (string)($quiz['start_text'] ?? '') : '';
 $buttonText = $quiz !== null && (string)($quiz['button_text'] ?? '') !== '' ? (string)$quiz['button_text'] : 'Начать';
 $quizCode = $quiz !== null ? (string)($quiz['code'] ?? '') : '';
+$theme = in_array((string)($quiz['theme'] ?? ''), ['dark', 'light'], true) ? (string)$quiz['theme'] : 'light';
+$appearance = is_array($quiz['appearance'] ?? null) ? $quiz['appearance'] : [];
+$accentColor = preg_match('/^#[0-9a-f]{6}$/i', (string)($appearance['accent_color'] ?? '')) ? (string)$appearance['accent_color'] : '#2563eb';
+$accentHoverColor = preg_match('/^#[0-9a-f]{6}$/i', (string)($appearance['accent_hover_color'] ?? '')) ? (string)$appearance['accent_hover_color'] : '#1d4ed8';
+$borderRadius = min(48, max(0, (int)($appearance['border_radius'] ?? 20)));
+$imageRatio = in_array((string)($appearance['answer_image_ratio'] ?? ''), ['16:9', '4:3', '1:1', '3:4'], true) ? (string)$appearance['answer_image_ratio'] : '16:9';
+$imageFit = in_array((string)($appearance['answer_image_fit'] ?? ''), ['cover', 'contain'], true) ? (string)$appearance['answer_image_fit'] : 'cover';
 $isButtonMode = $displayMode === 'button';
 $isPopupMode = $displayMode === 'popup' || $isButtonMode;
 $rootDisplayMode = $isPopupMode ? 'popup' : 'block';
@@ -27,7 +34,8 @@ $rootDisplayMode = $isPopupMode ? 'popup' : 'block';
     <button class="kk-quiz__button kk-quiz__popup-trigger" type="button" data-kk-quiz-popup="<?= htmlspecialcharsbx($quizCode) ?>"><?= htmlspecialcharsbx($buttonText) ?></button>
 <?php endif; ?>
 <div
-    class="kk-quiz kk-quiz--<?= htmlspecialcharsbx($rootDisplayMode) ?>"
+    class="kk-quiz kk-quiz--<?= htmlspecialcharsbx($rootDisplayMode) ?> kk-quiz--theme-<?= htmlspecialcharsbx($theme) ?>"
+    style="--kk-quiz-accent: <?= htmlspecialcharsbx($accentColor) ?>; --kk-quiz-accent-hover: <?= htmlspecialcharsbx($accentHoverColor) ?>; --kk-quiz-radius: <?= $borderRadius ?>px; --kk-quiz-image-ratio: <?= htmlspecialcharsbx(str_replace(':', ' / ', $imageRatio)) ?>; --kk-quiz-image-fit: <?= htmlspecialcharsbx($imageFit) ?>;"
     data-kk-quiz
     data-kk-quiz-sessid="<?= htmlspecialcharsbx(bitrix_sessid()) ?>"
     <?php if ($isPopupMode): ?>data-kk-quiz-popup-root data-kk-quiz-code="<?= htmlspecialcharsbx($quizCode) ?>" hidden<?php endif; ?>

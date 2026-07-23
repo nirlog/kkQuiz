@@ -1557,6 +1557,10 @@
 
         const type = getQuestionType(question);
         const template = getDisplayTemplate(question);
+        const ratio = String(question.answer_image_ratio || '');
+        nodes.question.style.setProperty('--kk-quiz-question-image-ratio', ['16:9', '4:3', '1:1', '3:4'].includes(ratio)
+            ? ratio.replace(':', ' / ')
+            : 'var(--kk-quiz-image-ratio)');
 
         const progress = renderProgress(quiz, state);
         if (progress) {
