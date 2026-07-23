@@ -1173,15 +1173,35 @@ final class Installer
 
         $enum = new \CIBlockPropertyEnum();
         $sort = 100;
-        foreach ($desiredValues as $xmlId => $label) {
+        foreach ($desiredValues as $xmlId => $value) {
             $xmlId = (string)$xmlId;
+            $fields = self::normalizeIblockEnumValue($xmlId, $value, $sort);
             if (isset($existing[$xmlId])) {
-                $enum->Update($existing[$xmlId], ['VALUE' => $label, 'SORT' => $sort, 'XML_ID' => $xmlId]);
+                $enum->Update($existing[$xmlId], $fields);
             } else {
-                $enum->Add(['PROPERTY_ID' => $propertyId, 'VALUE' => $label, 'SORT' => $sort, 'XML_ID' => $xmlId]);
+                $fields['PROPERTY_ID'] = $propertyId;
+                $enum->Add($fields);
             }
             $sort += 100;
         }
+    }
+
+    private static function normalizeIblockEnumValue(string $xmlId, mixed $value, int $sort): array
+    {
+        $default = 'N';
+        if (is_array($value)) {
+            $default = (string)($value['DEF'] ?? 'N') === 'Y' ? 'Y' : 'N';
+            $value = (string)($value['VALUE'] ?? '');
+        } else {
+            $value = (string)$value;
+        }
+
+        return [
+            'VALUE' => $value,
+            'XML_ID' => $xmlId,
+            'SORT' => $sort,
+            'DEF' => $default,
+        ];
     }
 
 
