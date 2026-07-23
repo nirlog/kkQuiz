@@ -21,6 +21,7 @@ final class ElementFormAssets
         'KK_ANSWERS',
         'KK_DISPLAY_TEMPLATE',
         'KK_IMAGE_RATIO',
+        'KK_IMAGE_FIT',
         'KK_IS_REQUIRED',
         'KK_PLACEHOLDER',
         'KK_DEFAULT_NEXT_QUESTION',

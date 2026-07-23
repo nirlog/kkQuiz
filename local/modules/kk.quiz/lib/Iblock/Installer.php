@@ -916,7 +916,14 @@ final class Installer
             ['FIELD_NAME' => 'UF_KK_THEME', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Тема оформления', 'VALUES' => self::getThemeEnumValues()],
             ['FIELD_NAME' => 'UF_KK_ACCENT_COLOR', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Акцентный цвет (HEX)'],
             ['FIELD_NAME' => 'UF_KK_ACCENT_HOVER', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Акцентный цвет при наведении (HEX)'],
+            ['FIELD_NAME' => 'UF_KK_ACTIVE_COLOR', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Цвет активного элемента (HEX)'],
+            ['FIELD_NAME' => 'UF_KK_PROGRESS_COLOR', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Цвет прогресс-бара (HEX)'],
             ['FIELD_NAME' => 'UF_KK_BORDER_RADIUS', 'USER_TYPE_ID' => 'integer', 'EDIT_FORM_LABEL' => 'Скругление элементов, px'],
+            ['FIELD_NAME' => 'UF_KK_CONTAINER_RADIUS', 'USER_TYPE_ID' => 'integer', 'EDIT_FORM_LABEL' => 'Скругление контейнера квиза, px'],
+            ['FIELD_NAME' => 'UF_KK_CARD_RADIUS', 'USER_TYPE_ID' => 'integer', 'EDIT_FORM_LABEL' => 'Скругление карточек ответов, px'],
+            ['FIELD_NAME' => 'UF_KK_BUTTON_RADIUS', 'USER_TYPE_ID' => 'integer', 'EDIT_FORM_LABEL' => 'Скругление кнопок, px'],
+            ['FIELD_NAME' => 'UF_KK_INPUT_RADIUS', 'USER_TYPE_ID' => 'integer', 'EDIT_FORM_LABEL' => 'Скругление полей формы, px'],
+            ['FIELD_NAME' => 'UF_KK_IMAGE_RADIUS', 'USER_TYPE_ID' => 'integer', 'EDIT_FORM_LABEL' => 'Скругление изображений ответов, px'],
             ['FIELD_NAME' => 'UF_KK_IMAGE_RATIO', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Соотношение сторон изображений ответов', 'VALUES' => self::getImageRatioEnumValues()],
             ['FIELD_NAME' => 'UF_KK_IMAGE_FIT', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Режим изображений ответов', 'VALUES' => self::getImageFitEnumValues()],
             ['FIELD_NAME' => 'UF_KK_ALLOW_POPUP_URL', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Разрешить URL для попапа'],
@@ -951,15 +958,17 @@ final class Installer
     private static function addUserField(string $entityId, array $field): void
     {
         $fieldName = $field['FIELD_NAME'];
+        $values = isset($field['VALUES']) ? $field['VALUES'] : [];
+        unset($field['VALUES']);
         $exists = \CUserTypeEntity::GetList([], ['ENTITY_ID' => $entityId, 'FIELD_NAME' => $fieldName])->Fetch();
         if ($exists) {
             self::updateExistingUserFieldLabels((int)$exists['ID'], $field);
+            if ($values !== []) {
+                self::syncUserFieldEnumValues((int)$exists['ID'], $values);
+            }
 
             return;
         }
-
-        $values = isset($field['VALUES']) ? $field['VALUES'] : [];
-        unset($field['VALUES']);
 
         $field = array_merge([
             'ENTITY_ID' => $entityId,
@@ -989,6 +998,25 @@ final class Installer
         }
     }
 
+    private static function syncUserFieldEnumValues(int $fieldId, array $desiredValues): void
+    {
+        $existing = [];
+        $result = \CUserFieldEnum::GetList(['SORT' => 'ASC'], ['USER_FIELD_ID' => $fieldId]);
+        while ($item = $result->Fetch()) {
+            $existing[(string)($item['XML_ID'] ?? '')] = (int)$item['ID'];
+        }
+
+        $values = [];
+        $sort = 100;
+        foreach ($desiredValues as $xmlId => $label) {
+            $key = isset($existing[(string)$xmlId]) ? (string)$existing[(string)$xmlId] : 'n' . $sort;
+            $values[$key] = ['VALUE' => $label, 'XML_ID' => (string)$xmlId, 'SORT' => $sort, 'DEF' => 'N'];
+            $sort += 100;
+        }
+
+        (new \CUserFieldEnum())->SetEnumValues($fieldId, $values);
+    }
+
     private static function installQuizProperties(int $iblockId): void
     {
         $properties = [
@@ -998,6 +1026,7 @@ final class Installer
             ['CODE' => 'KK_QUESTION_TYPE', 'NAME' => 'Тип вопроса', 'SORT' => 200, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getQuestionTypeValues(), 'SHOW_IN_LIST' => 'Y', 'FILTRABLE' => 'Y', 'LIST_COLUMN_LABEL' => 'Тип вопроса', 'LIST_FILTER_LABEL' => 'Тип вопроса'],
             ['CODE' => 'KK_DISPLAY_TEMPLATE', 'NAME' => 'Шаблон отображения', 'SORT' => 220, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getDisplayTemplateValues()],
             ['CODE' => 'KK_IMAGE_RATIO', 'NAME' => 'Соотношение сторон изображений ответов', 'SORT' => 225, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getQuestionImageRatioValues()],
+            ['CODE' => 'KK_IMAGE_FIT', 'NAME' => 'Режим отображения изображений ответов', 'SORT' => 226, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getQuestionImageFitValues()],
             ['CODE' => 'KK_IS_REQUIRED', 'NAME' => 'Обязательный вопрос', 'SORT' => 230, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
             ['CODE' => 'KK_PLACEHOLDER', 'NAME' => 'Placeholder', 'SORT' => 240, 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_DEFAULT_NEXT_QUESTION', 'NAME' => 'Следующий вопрос по умолчанию', 'SORT' => 250, 'PROPERTY_TYPE' => 'E', 'LINK_IBLOCK_ID' => $iblockId],
@@ -1104,6 +1133,9 @@ final class Installer
             $exists = \CIBlockProperty::GetList([], ['IBLOCK_ID' => $iblockId, 'CODE' => $property['CODE']])->Fetch();
             if ($exists) {
                 self::updateExistingIblockProperty((int)$exists['ID'], $property);
+                if (!empty($property['VALUES'])) {
+                    self::syncIblockPropertyEnumValues((int)$exists['ID'], $property['VALUES']);
+                }
                 continue;
             }
 
@@ -1128,6 +1160,27 @@ final class Installer
             if (!$propertyId) {
                 throw new SystemException((string)$iblockProperty->LAST_ERROR);
             }
+        }
+    }
+
+    private static function syncIblockPropertyEnumValues(int $propertyId, array $desiredValues): void
+    {
+        $existing = [];
+        $result = \CIBlockPropertyEnum::GetList(['SORT' => 'ASC'], ['PROPERTY_ID' => $propertyId]);
+        while ($item = $result->Fetch()) {
+            $existing[(string)($item['XML_ID'] ?? '')] = (int)$item['ID'];
+        }
+
+        $enum = new \CIBlockPropertyEnum();
+        $sort = 100;
+        foreach ($desiredValues as $xmlId => $label) {
+            $xmlId = (string)$xmlId;
+            if (isset($existing[$xmlId])) {
+                $enum->Update($existing[$xmlId], ['VALUE' => $label, 'SORT' => $sort, 'XML_ID' => $xmlId]);
+            } else {
+                $enum->Add(['PROPERTY_ID' => $propertyId, 'VALUE' => $label, 'SORT' => $sort, 'XML_ID' => $xmlId]);
+            }
+            $sort += 100;
         }
     }
 
@@ -1424,17 +1477,22 @@ final class Installer
 
     private static function getImageRatioEnumValues(): array
     {
-        return ['16:9' => '16:9', '4:3' => '4:3', '1:1' => '1:1', '3:4' => '3:4'];
+        return ['1:1' => '1:1', '3:4' => '3:4', '4:3' => '4:3', '9:16' => '9:16', '16:9' => '16:9'];
     }
 
     private static function getQuestionImageRatioValues(): array
     {
-        return ['inherit' => 'Как у квиза', '16:9' => '16:9', '4:3' => '4:3', '1:1' => '1:1', '3:4' => '3:4'];
+        return ['inherit' => 'Как у квиза', '1:1' => '1:1', '3:4' => '3:4', '4:3' => '4:3', '9:16' => '9:16', '16:9' => '16:9'];
     }
 
     private static function getImageFitEnumValues(): array
     {
         return ['cover' => 'Cover (с обрезкой)', 'contain' => 'Contain (целиком)'];
+    }
+
+    private static function getQuestionImageFitValues(): array
+    {
+        return ['inherit' => 'Как у квиза', 'cover' => 'Cover, с обрезкой', 'contain' => 'Contain, целиком'];
     }
 
     private static function getQuestionTypeValues(): array

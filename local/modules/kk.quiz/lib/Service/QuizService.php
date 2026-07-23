@@ -45,10 +45,18 @@ final class QuizService
             'success_text' => $quiz['success_text'],
             'theme' => $quiz['theme'] !== '' ? $quiz['theme'] : 'default',
             'appearance' => [
+                'theme' => $quiz['theme'] !== '' ? $quiz['theme'] : 'light',
                 'accent_color' => $quiz['accent_color'] ?? '#2563eb',
                 'accent_hover_color' => $quiz['accent_hover_color'] ?? '#1d4ed8',
+                'active_color' => $quiz['active_color'] ?? '#2563eb',
+                'progress_color' => $quiz['progress_color'] ?? '#2563eb',
                 'border_radius' => (int)($quiz['border_radius'] ?? 20),
-                'answer_image_ratio' => $quiz['answer_image_ratio'] ?? '16:9',
+                'container_radius' => (int)($quiz['container_radius'] ?? 24),
+                'card_radius' => (int)($quiz['card_radius'] ?? 16),
+                'button_radius' => (int)($quiz['button_radius'] ?? 12),
+                'input_radius' => (int)($quiz['input_radius'] ?? 10),
+                'image_radius' => (int)($quiz['image_radius'] ?? 12),
+                'answer_image_ratio' => $quiz['answer_image_ratio'] ?? '4:3',
                 'answer_image_fit' => $quiz['answer_image_fit'] ?? 'cover',
             ],
             'form_fields' => $quiz['form_fields'],
@@ -69,9 +77,23 @@ final class QuizService
                 $questions,
                 (int)($quiz['start_question_id'] ?? 0)
             ),
-            'questions' => $questions,
+            'questions' => $this->resolveQuestionAppearance($questions, $quiz),
             'results' => $results,
         ];
+    }
+
+    private function resolveQuestionAppearance(array $questions, array $quiz): array
+    {
+        $globalRatio = (string)($quiz['answer_image_ratio'] ?? '4:3');
+        $globalFit = (string)($quiz['answer_image_fit'] ?? 'cover');
+
+        foreach ($questions as &$question) {
+            $question['resolved_answer_image_ratio'] = (string)($question['answer_image_ratio'] ?? '') ?: $globalRatio;
+            $question['resolved_answer_image_fit'] = (string)($question['answer_image_fit'] ?? '') ?: $globalFit;
+        }
+        unset($question);
+
+        return $questions;
     }
 
 

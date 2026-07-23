@@ -1557,10 +1557,14 @@
 
         const type = getQuestionType(question);
         const template = getDisplayTemplate(question);
-        const ratio = String(question.answer_image_ratio || '');
-        nodes.question.style.setProperty('--kk-quiz-question-image-ratio', ['16:9', '4:3', '1:1', '3:4'].includes(ratio)
+        const ratio = String(question.resolved_answer_image_ratio || '');
+        const fit = String(question.resolved_answer_image_fit || '');
+        nodes.question.style.setProperty('--kk-quiz-question-image-ratio', ['1:1', '3:4', '4:3', '9:16', '16:9'].includes(ratio)
             ? ratio.replace(':', ' / ')
             : 'var(--kk-quiz-image-ratio)');
+        nodes.question.style.setProperty('--kk-quiz-question-image-fit', ['cover', 'contain'].includes(fit)
+            ? fit
+            : 'var(--kk-quiz-image-fit)');
 
         const progress = renderProgress(quiz, state);
         if (progress) {

@@ -123,6 +123,8 @@ final class QuizImportService
 
     private function createSection(int $iblockId, string $code, string $name, array $quiz, array $settings): int
     {
+        $accentColor = $this->normalizeHexColor($settings['accent_color'] ?? null, '#2563eb');
+        $accentHoverColor = $this->normalizeHexColor($settings['accent_hover_color'] ?? null, '#1d4ed8');
         $fields = [
             'IBLOCK_ID' => $iblockId,
             'ACTIVE' => 'Y',
@@ -149,11 +151,18 @@ final class QuizImportService
             'UF_KK_CATALOG_IBLOCK_ID' => $this->toNullableInt($settings['catalog_iblock_id'] ?? null),
             'UF_KK_CATALOG_IBLOCK_IDS' => $this->mapUserFieldEnumValues('UF_KK_CATALOG_IBLOCK_IDS', $settings['catalog_iblock_ids'] ?? []),
             'UF_KK_THEME' => $this->getSectionUserFieldEnumId('UF_KK_THEME', (string)($settings['theme'] ?? 'default')),
-            'UF_KK_ACCENT_COLOR' => (string)($settings['accent_color'] ?? ''),
-            'UF_KK_ACCENT_HOVER' => (string)($settings['accent_hover_color'] ?? ''),
-            'UF_KK_BORDER_RADIUS' => isset($settings['border_radius']) ? max(0, min(48, (int)$settings['border_radius'])) : null,
-            'UF_KK_IMAGE_RATIO' => $this->getSectionUserFieldEnumId('UF_KK_IMAGE_RATIO', (string)($settings['answer_image_ratio'] ?? '')),
-            'UF_KK_IMAGE_FIT' => $this->getSectionUserFieldEnumId('UF_KK_IMAGE_FIT', (string)($settings['answer_image_fit'] ?? '')),
+            'UF_KK_ACCENT_COLOR' => $accentColor,
+            'UF_KK_ACCENT_HOVER' => $accentHoverColor,
+            'UF_KK_ACTIVE_COLOR' => $this->normalizeHexColor($settings['active_color'] ?? null, $accentColor),
+            'UF_KK_PROGRESS_COLOR' => $this->normalizeHexColor($settings['progress_color'] ?? null, $accentColor),
+            'UF_KK_BORDER_RADIUS' => $this->normalizeOptionalRadius($settings['border_radius'] ?? null),
+            'UF_KK_CONTAINER_RADIUS' => $this->normalizeOptionalRadius($settings['container_radius'] ?? null),
+            'UF_KK_CARD_RADIUS' => $this->normalizeOptionalRadius($settings['card_radius'] ?? null),
+            'UF_KK_BUTTON_RADIUS' => $this->normalizeOptionalRadius($settings['button_radius'] ?? null),
+            'UF_KK_INPUT_RADIUS' => $this->normalizeOptionalRadius($settings['input_radius'] ?? null),
+            'UF_KK_IMAGE_RADIUS' => $this->normalizeOptionalRadius($settings['image_radius'] ?? null),
+            'UF_KK_IMAGE_RATIO' => $this->getSectionUserFieldEnumId('UF_KK_IMAGE_RATIO', $this->normalizeImageRatio($settings['answer_image_ratio'] ?? $settings['image_ratio'] ?? null, '4:3')),
+            'UF_KK_IMAGE_FIT' => $this->getSectionUserFieldEnumId('UF_KK_IMAGE_FIT', $this->normalizeImageFit($settings['answer_image_fit'] ?? $settings['image_fit'] ?? null, 'cover')),
             'UF_KK_ALLOW_POPUP_URL' => $this->toBool($settings['allow_popup_url'] ?? null) ? 1 : 0,
             'UF_KK_PRIVACY_TEXT' => (string)($settings['privacy_text'] ?? ''),
             'UF_KK_PRIVACY_URL' => (string)($settings['privacy_url'] ?? ''),
@@ -210,7 +219,8 @@ final class QuizImportService
             'KK_PUBLIC_TITLE' => (string)($question['public_title'] ?? ''),
             'KK_QUESTION_TYPE' => $this->getPropertyEnumId($iblockId, 'KK_QUESTION_TYPE', (string)($question['question_type'] ?? 'radio')),
             'KK_DISPLAY_TEMPLATE' => $this->getPropertyEnumId($iblockId, 'KK_DISPLAY_TEMPLATE', (string)($question['display_template'] ?? 'list')),
-            'KK_IMAGE_RATIO' => $this->getPropertyEnumId($iblockId, 'KK_IMAGE_RATIO', (string)($question['answer_image_ratio'] ?? '')),
+            'KK_IMAGE_RATIO' => $this->getPropertyEnumId($iblockId, 'KK_IMAGE_RATIO', $this->normalizeImageRatio($question['answer_image_ratio'] ?? $question['image_ratio'] ?? null, 'inherit')),
+            'KK_IMAGE_FIT' => $this->getPropertyEnumId($iblockId, 'KK_IMAGE_FIT', $this->normalizeImageFit($question['answer_image_fit'] ?? $question['image_fit'] ?? null, 'inherit')),
             'KK_IS_REQUIRED' => $this->getPropertyEnumId($iblockId, 'KK_IS_REQUIRED', $this->toBool($question['is_required'] ?? null) ? 'Y' : 'N'),
             'KK_PLACEHOLDER' => (string)($question['placeholder'] ?? ''),
             'KK_ALLOW_CUSTOM_ANSWER' => $this->getPropertyEnumId($iblockId, 'KK_ALLOW_CUSTOM_ANSWER', $this->toBool($question['allow_custom_answer'] ?? null) ? 'Y' : 'N'),
@@ -508,6 +518,36 @@ final class QuizImportService
     private function toBool(mixed $value): bool
     {
         return $value === true || $value === 'Y' || $value === '1' || $value === 1 || $value === 'Да';
+    }
+
+    private function normalizeHexColor(mixed $value, string $fallback): string
+    {
+        $value = trim((string)$value);
+
+        return preg_match('/^#[0-9a-f]{6}$/i', $value) === 1 ? strtolower($value) : $fallback;
+    }
+
+    private function normalizeOptionalRadius(mixed $value): ?int
+    {
+        return $value === null || trim((string)$value) === '' ? null : min(64, max(0, (int)$value));
+    }
+
+    private function normalizeImageRatio(mixed $value, string $fallback): string
+    {
+        $value = strtolower(trim((string)$value));
+        $allowed = $fallback === 'inherit'
+            ? ['inherit', '1:1', '3:4', '4:3', '9:16', '16:9']
+            : ['1:1', '3:4', '4:3', '9:16', '16:9'];
+
+        return in_array($value, $allowed, true) ? $value : $fallback;
+    }
+
+    private function normalizeImageFit(mixed $value, string $fallback): string
+    {
+        $value = strtolower(trim((string)$value));
+        $allowed = $fallback === 'inherit' ? ['inherit', 'cover', 'contain'] : ['cover', 'contain'];
+
+        return in_array($value, $allowed, true) ? $value : $fallback;
     }
 
     private function toNullableInt(mixed $value): ?int
