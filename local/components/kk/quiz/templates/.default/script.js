@@ -1445,9 +1445,15 @@
         return candidates[0] || null;
     };
 
-    const getFixedHeaderOffset = () => window.matchMedia('(max-width: 640px)').matches ? 76 : 24;
+    const isMobileViewport = () => window.matchMedia('(max-width: 640px)').matches;
+
+    const getFixedHeaderOffset = () => isMobileViewport() ? 76 : 24;
 
     const scrollToCurrentStep = (nodes) => {
+        if (!isMobileViewport()) {
+            return;
+        }
+
         if (!nodes || !nodes.root) {
             return;
         }
