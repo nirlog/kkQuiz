@@ -98,6 +98,109 @@ final class QuizEventMaintenanceService
         return $result;
     }
 
+    public function cleanupAllEvents(?string $quizCode = null): array
+    {
+        $quizCode = $this->normalizeOptionalQuizCode($quizCode);
+        $result = ['success' => true, 'deleted' => 0, 'quiz_code' => $quizCode ?? '', 'errors' => []];
+        if (!$this->eventTableExists()) {
+            return $result;
+        }
+
+        try {
+            $filter = $quizCode !== null ? ['=QUIZ_CODE' => $quizCode] : [];
+            do {
+                $ids = $this->selectEventIds($filter, self::DELETE_BATCH_SIZE);
+                if ($ids === []) {
+                    break;
+                }
+                $result['deleted'] += $this->deleteEventIds($ids);
+            } while (count($ids) >= self::DELETE_BATCH_SIZE);
+        } catch (\Throwable $exception) {
+            $result['success'] = false;
+            $result['errors'][] = $exception->getMessage() ?: 'CLEANUP_ALL_EVENTS_FAILED';
+        }
+
+        return $result;
+    }
+
+    public function cleanupLeadElements(?string $quizCode = null): array
+    {
+        $quizCode = $this->normalizeOptionalQuizCode($quizCode);
+        $result = ['success' => true, 'deleted' => 0, 'quiz_code' => $quizCode ?? '', 'errors' => []];
+
+        if (!Loader::includeModule('iblock')) {
+            return array_merge($result, ['success' => false, 'errors' => ['LEADS_IBLOCK_NOT_FOUND']]);
+        }
+
+        $iblock = \CIBlock::GetList([], [
+            'TYPE' => Installer::IBLOCK_TYPE_ID,
+            'CODE' => Installer::LEADS_IBLOCK_CODE,
+        ])->Fetch();
+        $iblockId = is_array($iblock) ? (int)($iblock['ID'] ?? 0) : 0;
+        if ($iblockId <= 0) {
+            return array_merge($result, ['success' => false, 'errors' => ['LEADS_IBLOCK_NOT_FOUND']]);
+        }
+
+        try {
+            $filter = ['IBLOCK_ID' => $iblockId];
+            if ($quizCode !== null) {
+                $filter['=PROPERTY_KK_LEAD_QUIZ_CODE'] = $quizCode;
+            }
+
+            do {
+                $ids = [];
+                $elements = \CIBlockElement::GetList(['ID' => 'ASC'], $filter, false, ['nTopCount' => self::DELETE_BATCH_SIZE], ['ID']);
+                while ($element = $elements->Fetch()) {
+                    $id = (int)($element['ID'] ?? 0);
+                    if ($id > 0) {
+                        $ids[] = $id;
+                    }
+                }
+                if ($ids === []) {
+                    break;
+                }
+
+                $deletedInBatch = 0;
+                foreach ($ids as $id) {
+                    if (\CIBlockElement::Delete($id)) {
+                        $deletedInBatch++;
+                    } else {
+                        $result['success'] = false;
+                        $result['errors'][] = 'LEAD_DELETE_FAILED:' . $id;
+                    }
+                }
+                $result['deleted'] += $deletedInBatch;
+                if ($deletedInBatch === 0) {
+                    break;
+                }
+            } while (count($ids) >= self::DELETE_BATCH_SIZE);
+        } catch (\Throwable $exception) {
+            $result['success'] = false;
+            $result['errors'][] = $exception->getMessage() ?: 'CLEANUP_LEADS_FAILED';
+        }
+
+        $result['errors'] = array_values(array_unique($result['errors']));
+
+        return $result;
+    }
+
+    public function cleanupFull(?string $quizCode = null): array
+    {
+        $events = $this->cleanupAllEvents($quizCode);
+        $leads = $this->cleanupLeadElements($quizCode);
+        $eventsDeleted = (int)($events['deleted'] ?? 0);
+        $leadsDeleted = (int)($leads['deleted'] ?? 0);
+
+        return [
+            'success' => ($events['success'] ?? false) === true && ($leads['success'] ?? false) === true,
+            'events' => $events,
+            'leads' => $leads,
+            'deleted' => ['events' => $eventsDeleted, 'leads' => $leadsDeleted, 'total' => $eventsDeleted + $leadsDeleted],
+            'quiz_code' => $events['quiz_code'] ?? '',
+            'errors' => array_values(array_unique(array_merge((array)($events['errors'] ?? []), (array)($leads['errors'] ?? [])))),
+        ];
+    }
+
     public function getOrphanQuizCodes(): array
     {
         if (!$this->eventTableExists()) {
@@ -147,6 +250,13 @@ final class QuizEventMaintenanceService
         sort($codes, SORT_STRING);
 
         return $codes;
+    }
+
+    private function normalizeOptionalQuizCode(?string $quizCode): ?string
+    {
+        $quizCode = trim((string)$quizCode);
+
+        return $quizCode !== '' ? $quizCode : null;
     }
 
     private function getExistingQuizCodes(array $quizCodes): array
