@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kk\Quiz\Iblock;
 
 use Bitrix\Main\Application;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\SystemException;
@@ -908,8 +909,19 @@ final class Installer
             ['FIELD_NAME' => 'UF_KK_FORM_FIELDS', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Поля формы', 'MULTIPLE' => 'Y', 'VALUES' => self::getFormFieldEnumValues()],
             ['FIELD_NAME' => 'UF_KK_REQUIRED_FIELDS', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Обязательные поля формы', 'MULTIPLE' => 'Y', 'VALUES' => self::getFormFieldEnumValues()],
             ['FIELD_NAME' => 'UF_KK_METRIKA_COUNTER_ID', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'ID счётчика Метрики'],
-            ['FIELD_NAME' => 'UF_KK_METRIKA_GOAL', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Цель Метрики'],
+            ['FIELD_NAME' => 'UF_KK_METRIKA_FIRST_ANSWER_GOAL', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Цель Метрики: первый ответ'],
+            ['FIELD_NAME' => 'UF_KK_METRIKA_RESULT_GOAL', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Цель Метрики: показ результата'],
+            ['FIELD_NAME' => 'UF_KK_METRIKA_RESULT_CTA_GOAL', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Цель Метрики: клик по CTA результата'],
+            ['FIELD_NAME' => 'UF_KK_METRIKA_PRODUCT_CLICK_GOAL', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Цель Метрики: клик по рекомендации'],
+            ['FIELD_NAME' => 'UF_KK_METRIKA_GOAL', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Цель Метрики: отправка формы'],
             ['FIELD_NAME' => 'UF_KK_USE_METRIKA', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Использовать Метрику'],
+            ['FIELD_NAME' => 'UF_KK_USE_GA', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Использовать Google Analytics'],
+            ['FIELD_NAME' => 'UF_KK_GA_MEASUREMENT_ID', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Google Measurement ID'],
+            ['FIELD_NAME' => 'UF_KK_GA_FIRST_ANSWER_EVENT', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'GA4 event: первый ответ'],
+            ['FIELD_NAME' => 'UF_KK_GA_RESULT_EVENT', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'GA4 event: показ результата'],
+            ['FIELD_NAME' => 'UF_KK_GA_RESULT_CTA_EVENT', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'GA4 event: клик по CTA результата'],
+            ['FIELD_NAME' => 'UF_KK_GA_PRODUCT_CLICK_EVENT', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'GA4 event: клик по рекомендации'],
+            ['FIELD_NAME' => 'UF_KK_GA_FORM_SUBMIT_EVENT', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'GA4 event: отправка формы'],
             ['FIELD_NAME' => 'UF_KK_USE_CATALOG', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Показывать рекомендации'],
             ['FIELD_NAME' => 'UF_KK_CATALOG_IBLOCK_ID', 'USER_TYPE_ID' => 'integer', 'EDIT_FORM_LABEL' => 'ID инфоблока рекомендаций'],
             ['FIELD_NAME' => 'UF_KK_CATALOG_IBLOCK_IDS', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Инфоблоки рекомендаций', 'MULTIPLE' => 'Y', 'VALUES' => self::getCatalogIblockEnumValues()],
@@ -944,6 +956,7 @@ final class Installer
         }
 
         self::syncCatalogIblockUserFieldEnums($entityId);
+        self::migrateGlobalAnalyticsSettingsToQuizSections($iblockId);
     }
 
     private static function updateExistingUserFieldLabels(int $fieldId, array $field): void
@@ -964,6 +977,60 @@ final class Installer
             $updateFields['HELP_MESSAGE'] = ['ru' => (string)$field['HELP_MESSAGE']];
         }
         $userTypeEntity->Update($fieldId, $updateFields);
+    }
+
+    private static function migrateGlobalAnalyticsSettingsToQuizSections(int $iblockId): void
+    {
+        $migrationOption = 'external_analytics_quiz_migration_v1';
+        if (Option::get('kk.quiz', $migrationOption, 'N') === 'Y') {
+            return;
+        }
+
+        $mapping = [
+            'yandex_metrika_enabled' => 'UF_KK_USE_METRIKA',
+            'yandex_metrika_counter_id' => 'UF_KK_METRIKA_COUNTER_ID',
+            'yandex_metrika_first_answer_goal' => 'UF_KK_METRIKA_FIRST_ANSWER_GOAL',
+            'yandex_metrika_result_goal' => 'UF_KK_METRIKA_RESULT_GOAL',
+            'yandex_metrika_result_cta_click_goal' => 'UF_KK_METRIKA_RESULT_CTA_GOAL',
+            'yandex_metrika_product_click_goal' => 'UF_KK_METRIKA_PRODUCT_CLICK_GOAL',
+            'yandex_metrika_goal' => 'UF_KK_METRIKA_GOAL',
+            'google_analytics_enabled' => 'UF_KK_USE_GA',
+            'google_analytics_measurement_id' => 'UF_KK_GA_MEASUREMENT_ID',
+            'google_analytics_first_answer_event_name' => 'UF_KK_GA_FIRST_ANSWER_EVENT',
+            'google_analytics_result_event_name' => 'UF_KK_GA_RESULT_EVENT',
+            'google_analytics_result_cta_click_event_name' => 'UF_KK_GA_RESULT_CTA_EVENT',
+            'google_analytics_product_click_event_name' => 'UF_KK_GA_PRODUCT_CLICK_EVENT',
+            'google_analytics_event_name' => 'UF_KK_GA_FORM_SUBMIT_EVENT',
+        ];
+        $legacyValues = [];
+        foreach ($mapping as $optionName => $fieldName) {
+            $value = trim(Option::get('kk.quiz', $optionName, ''));
+            if ($value !== '') {
+                $legacyValues[$fieldName] = $value;
+            }
+        }
+
+        if ($legacyValues !== []) {
+            $select = array_merge(['ID'], array_values($mapping));
+            $sections = \CIBlockSection::GetList([], ['IBLOCK_ID' => $iblockId], false, $select);
+            while ($section = $sections->Fetch()) {
+                $updates = [];
+                foreach ($legacyValues as $fieldName => $value) {
+                    $currentValue = $section[$fieldName] ?? null;
+                    if ($currentValue !== null && $currentValue !== '') {
+                        continue;
+                    }
+                    $updates[$fieldName] = in_array($fieldName, ['UF_KK_USE_METRIKA', 'UF_KK_USE_GA'], true)
+                        ? ($value === 'Y' ? 1 : 0)
+                        : $value;
+                }
+                if ($updates !== []) {
+                    (new \CIBlockSection())->Update((int)$section['ID'], $updates);
+                }
+            }
+        }
+
+        Option::set('kk.quiz', $migrationOption, 'Y');
     }
 
     private static function addUserField(string $entityId, array $field): void
@@ -1532,9 +1599,20 @@ final class Installer
             'UF_KK_EMAIL_TO' => 'Email получателя уведомлений о новых заявках. Если пусто, используется глобальная настройка модуля.',
             'UF_KK_FORM_FIELDS' => 'Поля, которые будут показаны пользователю в финальной форме.',
             'UF_KK_REQUIRED_FIELDS' => 'Поля финальной формы, обязательные для заполнения.',
-            'UF_KK_METRIKA_COUNTER_ID' => 'ID счётчика Яндекс Метрики для этого квиза. Если пусто, используется глобальная настройка.',
-            'UF_KK_METRIKA_GOAL' => 'Название цели Метрики, которая будет отправлена при заявке.',
+            'UF_KK_METRIKA_COUNTER_ID' => 'ID счётчика Яндекс Метрики для этого квиза. Если поле пустое, Метрика для этого квиза не используется.',
+            'UF_KK_METRIKA_FIRST_ANSWER_GOAL' => 'Название цели Яндекс Метрики, которая отправляется после первого ответа пользователя.',
+            'UF_KK_METRIKA_RESULT_GOAL' => 'Название цели Яндекс Метрики, которая отправляется при показе финального результата.',
+            'UF_KK_METRIKA_RESULT_CTA_GOAL' => 'Название цели Яндекс Метрики, которая отправляется при клике по основной CTA-кнопке результата.',
+            'UF_KK_METRIKA_PRODUCT_CLICK_GOAL' => 'Название цели Яндекс Метрики, которая отправляется при клике по рекомендованному товару.',
+            'UF_KK_METRIKA_GOAL' => 'Название цели Яндекс Метрики, которая отправляется после успешной отправки формы квиза.',
             'UF_KK_USE_METRIKA' => 'Включает отправку целей и событий в Яндекс Метрику для этого квиза.',
+            'UF_KK_USE_GA' => 'Включает отправку событий этого квиза в Google Analytics / GA4.',
+            'UF_KK_GA_MEASUREMENT_ID' => 'Measurement ID потока данных GA4, например G-XXXXXXXXXX. Если поле пустое, GA4 для этого квиза не используется.',
+            'UF_KK_GA_FIRST_ANSWER_EVENT' => 'Название GA4 event, который отправляется после первого ответа пользователя.',
+            'UF_KK_GA_RESULT_EVENT' => 'Название GA4 event, который отправляется при показе финального результата.',
+            'UF_KK_GA_RESULT_CTA_EVENT' => 'Название GA4 event, который отправляется при клике по основной CTA-кнопке результата.',
+            'UF_KK_GA_PRODUCT_CLICK_EVENT' => 'Название GA4 event, который отправляется при клике по рекомендованному товару.',
+            'UF_KK_GA_FORM_SUBMIT_EVENT' => 'Название GA4 event, который отправляется после успешной отправки формы квиза.',
             'UF_KK_USE_CATALOG' => 'Включает показ товарных рекомендаций в результатах квиза.',
             'UF_KK_CATALOG_IBLOCK_ID' => 'Legacy-поле ID инфоблока рекомендаций. Используется для обратной совместимости.',
             'UF_KK_CATALOG_IBLOCK_IDS' => 'Инфоблоки, из которых можно выбирать разделы и товары для рекомендаций.',

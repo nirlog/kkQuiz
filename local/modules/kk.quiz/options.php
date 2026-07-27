@@ -33,8 +33,6 @@ $checkboxOptions = [
     'webhook_enabled',
     'amocrm_enabled',
     'amocrm_long_lived_token',
-    'yandex_metrika_enabled',
-    'google_analytics_enabled',
     'save_answers_data',
     'rate_limit_enabled',
     'honeypot_enabled',
@@ -234,7 +232,7 @@ $tabs = [
     ['DIV' => 'telegram', 'TAB' => 'Telegram', 'TITLE' => 'Telegram-уведомления'],
     ['DIV' => 'crm', 'TAB' => 'CRM', 'TITLE' => 'CRM'],
     ['DIV' => 'amocrm', 'TAB' => 'amoCRM', 'TITLE' => 'amoCRM'],
-    ['DIV' => 'analytics', 'TAB' => 'Аналитика', 'TITLE' => 'Аналитика'],
+    ['DIV' => 'analytics', 'TAB' => 'Внутренняя аналитика', 'TITLE' => 'Внутренняя аналитика'],
     ['DIV' => 'leads', 'TAB' => 'Заявки и антиспам', 'TITLE' => 'Заявки и антиспам'],
     ['DIV' => 'privacy', 'TAB' => 'Privacy', 'TITLE' => 'Privacy'],
     ['DIV' => 'diagnostics', 'TAB' => 'Диагностика', 'TITLE' => 'Диагностика'],
@@ -418,26 +416,12 @@ if ($message !== null) {
 
     <?php
     $tabControl->BeginNextTab();
-    $renderCheckbox('yandex_metrika_enabled', 'Включить Яндекс.Метрику');
-    $renderInput('yandex_metrika_counter_id', 'ID счётчика Яндекс.Метрики');
-    $renderInput('yandex_metrika_first_answer_goal', 'Цель Метрики: ответил на первый вопрос');
-    $renderInput('yandex_metrika_result_goal', 'Цель Метрики: дошёл до финала');
-    $renderInput('yandex_metrika_result_cta_click_goal', 'Yandex.Metrika: цель клика по CTA результата');
-    $renderInput('yandex_metrika_product_click_goal', 'Yandex.Metrika: цель клика по рекомендации');
-    $renderInput('yandex_metrika_goal', 'Цель Метрики: отправил форму');
     $renderSelect('analytics_retention_days', 'Срок хранения событий внутренней аналитики', [
         '90' => '90 дней',
         '180' => '180 дней',
         '365' => '365 дней',
         '0' => 'Не удалять автоматически',
     ], 'События внутренней аналитики используются для воронки, отвалов по вопросам и популярных ответов. UTM, IP и User-Agent здесь не хранятся.');
-    $renderCheckbox('google_analytics_enabled', 'Включить Google Analytics');
-    $renderInput('google_analytics_measurement_id', 'Google Measurement ID');
-    $renderInput('google_analytics_first_answer_event_name', 'GA4 event: ответил на первый вопрос');
-    $renderInput('google_analytics_result_event_name', 'GA4 event: дошёл до финала');
-    $renderInput('google_analytics_result_cta_click_event_name', 'GA4: событие клика по CTA результата');
-    $renderInput('google_analytics_product_click_event_name', 'GA4: событие клика по рекомендации');
-    $renderInput('google_analytics_event_name', 'GA4 event: отправил форму');
     ?>
 
     <?php $tabControl->BeginNextTab(); ?>

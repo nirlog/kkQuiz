@@ -63,7 +63,7 @@ final class QuizService
             'form_fields' => $quiz['form_fields'],
             'required_fields' => $quiz['required_fields'],
             'metrika' => $this->buildMetrikaSettings($quiz),
-            'google_analytics' => $this->buildGoogleAnalyticsSettings(),
+            'google_analytics' => $this->buildGoogleAnalyticsSettings($quiz),
             'catalog' => [
                 'enabled' => $quiz['use_catalog'],
                 'iblock_id' => $quiz['catalog_iblock_id'],
@@ -178,95 +178,47 @@ final class QuizService
 
     private function buildMetrikaSettings(array $quiz): array
     {
-        $quizEnabled = (bool)($quiz['use_metrika'] ?? false);
-        $globalEnabled = ModuleSettingsService::getBool('yandex_metrika_enabled');
-
         $counterId = trim((string)($quiz['metrika_counter_id'] ?? ''));
-        if ($counterId === '') {
-            $counterId = trim(ModuleSettingsService::get('yandex_metrika_counter_id'));
-        }
-
-        $formSubmitGoal = trim((string)($quiz['metrika_goal'] ?? ''));
-        if ($formSubmitGoal === '') {
-            $formSubmitGoal = trim(ModuleSettingsService::get('yandex_metrika_goal'));
-        }
-        if ($formSubmitGoal === '') {
-            $formSubmitGoal = 'kk_quiz_lead';
-        }
-
-        $firstAnswerGoal = trim(ModuleSettingsService::get('yandex_metrika_first_answer_goal'));
-        if ($firstAnswerGoal === '') {
-            $firstAnswerGoal = 'kk_quiz_first_answer';
-        }
-
-        $resultReachedGoal = trim(ModuleSettingsService::get('yandex_metrika_result_goal'));
-        if ($resultReachedGoal === '') {
-            $resultReachedGoal = 'kk_quiz_result_reached';
-        }
-
-        $resultCtaClickGoal = trim(ModuleSettingsService::get('yandex_metrika_result_cta_click_goal'));
-        if ($resultCtaClickGoal === '') {
-            $resultCtaClickGoal = 'kk_quiz_result_cta_click';
-        }
-
-        $productClickGoal = trim(ModuleSettingsService::get('yandex_metrika_product_click_goal'));
-        if ($productClickGoal === '') {
-            $productClickGoal = 'kk_quiz_recommendation_click';
-        }
+        $formSubmitGoal = $this->resolveAnalyticsName($quiz['metrika_goal'] ?? '', 'kk_quiz_lead');
 
         return [
-            'enabled' => ($quizEnabled || $globalEnabled) && $counterId !== '',
+            'enabled' => (bool)($quiz['use_metrika'] ?? false) && $counterId !== '',
             'counter_id' => $counterId,
             'goal' => $formSubmitGoal,
             'goals' => [
-                'first_answer' => $firstAnswerGoal,
-                'result_reached' => $resultReachedGoal,
-                'result_cta_click' => $resultCtaClickGoal,
-                'product_click' => $productClickGoal,
+                'first_answer' => $this->resolveAnalyticsName($quiz['metrika_first_answer_goal'] ?? '', 'kk_quiz_first_answer'),
+                'result_reached' => $this->resolveAnalyticsName($quiz['metrika_result_goal'] ?? '', 'kk_quiz_result_reached'),
+                'result_cta_click' => $this->resolveAnalyticsName($quiz['metrika_result_cta_click_goal'] ?? '', 'kk_quiz_result_cta_click'),
+                'product_click' => $this->resolveAnalyticsName($quiz['metrika_product_click_goal'] ?? '', 'kk_quiz_recommendation_click'),
                 'form_submit' => $formSubmitGoal,
             ],
         ];
     }
 
-    private function buildGoogleAnalyticsSettings(): array
+    private function buildGoogleAnalyticsSettings(array $quiz): array
     {
-        $formSubmitEventName = trim(ModuleSettingsService::get('google_analytics_event_name'));
-        if ($formSubmitEventName === '') {
-            $formSubmitEventName = 'generate_lead';
-        }
-
-        $firstAnswerEventName = trim(ModuleSettingsService::get('google_analytics_first_answer_event_name'));
-        if ($firstAnswerEventName === '') {
-            $firstAnswerEventName = 'kk_quiz_first_answer';
-        }
-
-        $resultReachedEventName = trim(ModuleSettingsService::get('google_analytics_result_event_name'));
-        if ($resultReachedEventName === '') {
-            $resultReachedEventName = 'kk_quiz_result_reached';
-        }
-
-        $resultCtaClickEventName = trim(ModuleSettingsService::get('google_analytics_result_cta_click_event_name'));
-        if ($resultCtaClickEventName === '') {
-            $resultCtaClickEventName = 'kk_quiz_result_cta_click';
-        }
-
-        $productClickEventName = trim(ModuleSettingsService::get('google_analytics_product_click_event_name'));
-        if ($productClickEventName === '') {
-            $productClickEventName = 'kk_quiz_recommendation_click';
-        }
+        $measurementId = trim((string)($quiz['ga_measurement_id'] ?? ''));
+        $formSubmitEventName = $this->resolveAnalyticsName($quiz['ga_form_submit_event_name'] ?? '', 'generate_lead');
 
         return [
-            'enabled' => ModuleSettingsService::getBool('google_analytics_enabled'),
-            'measurement_id' => trim(ModuleSettingsService::get('google_analytics_measurement_id')),
+            'enabled' => (bool)($quiz['use_ga'] ?? false) && $measurementId !== '',
+            'measurement_id' => $measurementId,
             'event_name' => $formSubmitEventName,
             'events' => [
-                'first_answer' => $firstAnswerEventName,
-                'result_reached' => $resultReachedEventName,
-                'result_cta_click' => $resultCtaClickEventName,
-                'product_click' => $productClickEventName,
+                'first_answer' => $this->resolveAnalyticsName($quiz['ga_first_answer_event_name'] ?? '', 'kk_quiz_first_answer'),
+                'result_reached' => $this->resolveAnalyticsName($quiz['ga_result_event_name'] ?? '', 'kk_quiz_result_reached'),
+                'result_cta_click' => $this->resolveAnalyticsName($quiz['ga_result_cta_click_event_name'] ?? '', 'kk_quiz_result_cta_click'),
+                'product_click' => $this->resolveAnalyticsName($quiz['ga_product_click_event_name'] ?? '', 'kk_quiz_recommendation_click'),
                 'form_submit' => $formSubmitEventName,
             ],
         ];
+    }
+
+    private function resolveAnalyticsName(mixed $value, string $fallback): string
+    {
+        $value = trim((string)$value);
+
+        return $value !== '' ? $value : $fallback;
     }
 
 

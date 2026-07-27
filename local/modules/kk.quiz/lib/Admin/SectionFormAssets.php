@@ -293,6 +293,8 @@ final class SectionFormAssets
             . 'const groupAppearanceFields = () => {'
             . 'addFieldGroup("Оформление", ["UF_KK_THEME", "UF_KK_MAX_WIDTH", "UF_KK_ACCENT_COLOR", "UF_KK_ACCENT_HOVER", "UF_KK_ACTIVE_COLOR", "UF_KK_PROGRESS_COLOR", "UF_KK_CONTAINER_RADIUS", "UF_KK_CARD_RADIUS", "UF_KK_BUTTON_RADIUS", "UF_KK_INPUT_RADIUS", "UF_KK_IMAGE_RADIUS"]);'
             . 'addFieldGroup("Изображения ответов", ["UF_KK_IMAGE_RATIO", "UF_KK_IMAGE_FIT"]);'
+            . 'addFieldGroup("Яндекс Метрика", ["UF_KK_USE_METRIKA", "UF_KK_METRIKA_COUNTER_ID", "UF_KK_METRIKA_FIRST_ANSWER_GOAL", "UF_KK_METRIKA_RESULT_GOAL", "UF_KK_METRIKA_RESULT_CTA_GOAL", "UF_KK_METRIKA_PRODUCT_CLICK_GOAL", "UF_KK_METRIKA_GOAL"]);'
+            . 'addFieldGroup("Google Analytics", ["UF_KK_USE_GA", "UF_KK_GA_MEASUREMENT_ID", "UF_KK_GA_FIRST_ANSWER_EVENT", "UF_KK_GA_RESULT_EVENT", "UF_KK_GA_RESULT_CTA_EVENT", "UF_KK_GA_PRODUCT_CLICK_EVENT", "UF_KK_GA_FORM_SUBMIT_EVENT"]);'
             . '};'
             . 'const init = () => { renderEmbedTab(); enhanceStartQuestionField(); groupAppearanceFields(); };'
             . 'if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();'
