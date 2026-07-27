@@ -926,7 +926,7 @@ final class Installer
             ['FIELD_NAME' => 'UF_KK_CATALOG_IBLOCK_ID', 'USER_TYPE_ID' => 'integer', 'EDIT_FORM_LABEL' => 'ID инфоблока рекомендаций'],
             ['FIELD_NAME' => 'UF_KK_CATALOG_IBLOCK_IDS', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Инфоблоки рекомендаций', 'MULTIPLE' => 'Y', 'VALUES' => self::getCatalogIblockEnumValues()],
             ['FIELD_NAME' => 'UF_KK_THEME', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Тема оформления', 'VALUES' => self::getThemeEnumValues()],
-            ['FIELD_NAME' => 'UF_KK_MAX_WIDTH', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Максимальная ширина квиза', 'SORT' => 520],
+            ['FIELD_NAME' => 'UF_KK_MAX_WIDTH', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Максимальная ширина квиза'],
             ['FIELD_NAME' => 'UF_KK_ACCENT_COLOR', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Акцентный цвет (HEX)'],
             ['FIELD_NAME' => 'UF_KK_ACCENT_HOVER', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Акцентный цвет при наведении (HEX)'],
             ['FIELD_NAME' => 'UF_KK_ACTIVE_COLOR', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Цвет активного элемента (HEX)'],
@@ -946,8 +946,11 @@ final class Installer
         ];
 
         $hints = self::getQuizSectionFieldHints();
+        $sorts = self::getQuizSectionFieldSorts();
         foreach ($fields as &$field) {
-            $field['HELP_MESSAGE'] = $hints[(string)$field['FIELD_NAME']] ?? '';
+            $fieldName = (string)$field['FIELD_NAME'];
+            $field['HELP_MESSAGE'] = $hints[$fieldName] ?? '';
+            $field['SORT'] = $sorts[$fieldName];
         }
         unset($field);
 
@@ -976,7 +979,64 @@ final class Installer
         if (array_key_exists('HELP_MESSAGE', $field)) {
             $updateFields['HELP_MESSAGE'] = ['ru' => (string)$field['HELP_MESSAGE']];
         }
+        if (isset($field['SORT'])) {
+            $updateFields['SORT'] = (int)$field['SORT'];
+        }
         $userTypeEntity->Update($fieldId, $updateFields);
+    }
+
+    private static function getQuizSectionFieldSorts(): array
+    {
+        return [
+            'UF_KK_TITLE' => 100,
+            'UF_KK_SUBTITLE' => 110,
+            'UF_KK_BUTTON_TEXT' => 120,
+            'UF_KK_START_TEXT' => 130,
+            'UF_KK_START_QUESTION' => 140,
+            'UF_KK_PROGRESS_TOTAL' => 150,
+            'UF_KK_SUCCESS_TEXT' => 160,
+            'UF_KK_FORM_TITLE' => 200,
+            'UF_KK_FORM_SUBTITLE' => 210,
+            'UF_KK_FORM_BUTTON_TEXT' => 220,
+            'UF_KK_FORM_FIELDS' => 230,
+            'UF_KK_REQUIRED_FIELDS' => 240,
+            'UF_KK_EMAIL_TO' => 250,
+            'UF_KK_THEME' => 300,
+            'UF_KK_MAX_WIDTH' => 310,
+            'UF_KK_ACCENT_COLOR' => 320,
+            'UF_KK_ACCENT_HOVER' => 330,
+            'UF_KK_ACTIVE_COLOR' => 340,
+            'UF_KK_PROGRESS_COLOR' => 350,
+            'UF_KK_BORDER_RADIUS' => 360,
+            'UF_KK_CONTAINER_RADIUS' => 370,
+            'UF_KK_CARD_RADIUS' => 380,
+            'UF_KK_BUTTON_RADIUS' => 390,
+            'UF_KK_INPUT_RADIUS' => 400,
+            'UF_KK_IMAGE_RADIUS' => 410,
+            'UF_KK_IMAGE_RATIO' => 500,
+            'UF_KK_IMAGE_FIT' => 510,
+            'UF_KK_USE_METRIKA' => 600,
+            'UF_KK_METRIKA_COUNTER_ID' => 610,
+            'UF_KK_METRIKA_FIRST_ANSWER_GOAL' => 620,
+            'UF_KK_METRIKA_RESULT_GOAL' => 630,
+            'UF_KK_METRIKA_RESULT_CTA_GOAL' => 640,
+            'UF_KK_METRIKA_PRODUCT_CLICK_GOAL' => 650,
+            'UF_KK_METRIKA_GOAL' => 660,
+            'UF_KK_USE_GA' => 700,
+            'UF_KK_GA_MEASUREMENT_ID' => 710,
+            'UF_KK_GA_FIRST_ANSWER_EVENT' => 720,
+            'UF_KK_GA_RESULT_EVENT' => 730,
+            'UF_KK_GA_RESULT_CTA_EVENT' => 740,
+            'UF_KK_GA_PRODUCT_CLICK_EVENT' => 750,
+            'UF_KK_GA_FORM_SUBMIT_EVENT' => 760,
+            'UF_KK_USE_CATALOG' => 800,
+            'UF_KK_CATALOG_IBLOCK_IDS' => 810,
+            'UF_KK_CATALOG_IBLOCK_ID' => 820,
+            'UF_KK_ALLOW_POPUP_URL' => 900,
+            'UF_KK_PRIVACY_TEXT' => 910,
+            'UF_KK_PRIVACY_URL' => 920,
+            'UF_KK_REQUIRE_AGREEMENT' => 930,
+        ];
     }
 
     private static function migrateGlobalAnalyticsSettingsToQuizSections(int $iblockId): void
