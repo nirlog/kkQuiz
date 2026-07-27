@@ -17,6 +17,11 @@ return [
     'items_id' => 'menu_kk_quiz',
     'items' => [
         [
+            'text' => 'Квизы',
+            'url' => 'kk_quiz_quizzes.php?lang=' . (defined('LANGUAGE_ID') ? LANGUAGE_ID : 'ru'),
+            'title' => 'Список квизов',
+        ],
+        [
             'text' => 'Статистика',
             'url' => 'kk_quiz_statistics.php?lang=' . (defined('LANGUAGE_ID') ? LANGUAGE_ID : 'ru'),
             'title' => 'Статистика квизов',
