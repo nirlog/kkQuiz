@@ -316,6 +316,18 @@ final class Installer
 
         $files = [
             [
+                'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_import.php',
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_import.php',
+                'missing' => 'KK Quiz admin import stub source not found.',
+                'write' => 'Cannot write /bitrix/admin/kk_quiz_import.php.',
+            ],
+            [
+                'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_export.php',
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_export.php',
+                'missing' => 'KK Quiz admin export stub source not found.',
+                'write' => 'Cannot write /bitrix/admin/kk_quiz_export.php.',
+            ],
+            [
                 'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_quizzes.php',
                 'target' => $documentRoot . '/bitrix/admin/kk_quiz_quizzes.php',
                 'missing' => 'KK Quiz admin quizzes stub source not found.',
@@ -371,6 +383,14 @@ final class Installer
         }
 
         $files = [
+            [
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_import.php',
+                'marker' => 'kk.quiz/admin/import.php',
+            ],
+            [
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_export.php',
+                'marker' => 'kk.quiz/admin/export.php',
+            ],
             [
                 'target' => $documentRoot . '/bitrix/admin/kk_quiz_quizzes.php',
                 'marker' => 'kk.quiz/admin/quizzes.php',

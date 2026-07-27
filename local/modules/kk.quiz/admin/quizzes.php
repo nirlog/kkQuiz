@@ -78,6 +78,7 @@ if ($iblockId > 0) {
             'apply_filter' => 'Y',
             'set_filter' => 'Y',
         ]);
+        $exportUrl = 'kk_quiz_export.php?' . $query(['ID' => $sectionId]);
         $technicalUrl = 'iblock_section_edit.php?' . $query(['IBLOCK_ID' => $iblockId, 'type' => Installer::IBLOCK_TYPE_ID, 'ID' => $sectionId]);
         $statisticsUrl = 'kk_quiz_statistics.php?' . $query(['quiz_code' => (string)$section['CODE']]);
         $row = &$list->AddRow((string)$sectionId, $section, $settingsUrl);
@@ -88,6 +89,7 @@ if ($iblockId > 0) {
         $row->AddActions([
             ['TEXT' => 'Настройки', 'ACTION' => $list->ActionRedirect($settingsUrl), 'DEFAULT' => true],
             ['TEXT' => 'Вопросы и результаты', 'ACTION' => $list->ActionRedirect($contentUrl)],
+            ['TEXT' => 'Экспорт', 'ACTION' => $list->ActionRedirect($exportUrl)],
             ['TEXT' => 'Стандартное редактирование раздела', 'ACTION' => $list->ActionRedirect($technicalUrl)],
             ['TEXT' => 'Статистика', 'ACTION' => $list->ActionRedirect($statisticsUrl)],
         ]);
@@ -107,6 +109,11 @@ $context = new CAdminContextMenu([
         'TEXT' => 'Создать квиз',
         'LINK' => 'kk_quiz_quiz_edit.php?' . http_build_query(['create' => 'Y', 'lang' => $lang]),
         'ICON' => 'btn_new',
+    ],
+    [
+        'TEXT' => 'Импорт квиза',
+        'LINK' => 'kk_quiz_import.php?' . http_build_query(['lang' => $lang]),
+        'ICON' => 'btn_upload',
     ],
 ]);
 $context->Show();

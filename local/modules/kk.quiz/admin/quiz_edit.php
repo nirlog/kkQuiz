@@ -275,10 +275,12 @@ $contentUrl = 'iblock_list_admin.php?' . http_build_query([
     'lang' => $lang,
 ]);
 $technicalUrl = 'iblock_section_edit.php?' . http_build_query(['IBLOCK_ID' => $iblockId, 'type' => Installer::IBLOCK_TYPE_ID, 'ID' => $sectionId, 'lang' => $lang]);
+$exportUrl = 'kk_quiz_export.php?' . http_build_query(['ID' => $sectionId, 'lang' => $lang]);
 $statisticsUrl = 'kk_quiz_statistics.php?' . http_build_query(['quiz_code' => $quizCode, 'lang' => $lang]);
 $contextItems = [['TEXT' => 'К списку квизов', 'LINK' => $listUrl, 'ICON' => 'btn_list']];
 if (!$isCreateMode) {
     $contextItems[] = ['TEXT' => 'Вопросы и результаты', 'LINK' => $contentUrl];
+    $contextItems[] = ['TEXT' => 'Экспорт', 'LINK' => $exportUrl];
     $contextItems[] = ['TEXT' => 'Стандартная форма раздела', 'LINK' => $technicalUrl];
     $contextItems[] = ['TEXT' => 'Статистика', 'LINK' => $statisticsUrl];
 }
