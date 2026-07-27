@@ -316,6 +316,12 @@ final class Installer
 
         $files = [
             [
+                'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_schema.php',
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_schema.php',
+                'missing' => 'KK Quiz admin schema stub source not found.',
+                'write' => 'Cannot write /bitrix/admin/kk_quiz_schema.php.',
+            ],
+            [
                 'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_delete.php',
                 'target' => $documentRoot . '/bitrix/admin/kk_quiz_delete.php',
                 'missing' => 'KK Quiz admin delete stub source not found.',
@@ -389,6 +395,10 @@ final class Installer
         }
 
         $files = [
+            [
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_schema.php',
+                'marker' => 'kk.quiz/admin/schema.php',
+            ],
             [
                 'target' => $documentRoot . '/bitrix/admin/kk_quiz_delete.php',
                 'marker' => 'kk.quiz/admin/delete.php',

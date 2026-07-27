@@ -79,6 +79,7 @@ if ($iblockId > 0) {
             'set_filter' => 'Y',
         ]);
         $exportUrl = 'kk_quiz_export.php?' . $query(['ID' => $sectionId]);
+        $schemaUrl = 'kk_quiz_schema.php?' . $query(['ID' => $sectionId]);
         $deleteUrl = 'kk_quiz_delete.php?' . $query(['ID' => $sectionId]);
         $technicalUrl = 'iblock_section_edit.php?' . $query(['IBLOCK_ID' => $iblockId, 'type' => Installer::IBLOCK_TYPE_ID, 'ID' => $sectionId]);
         $statisticsUrl = 'kk_quiz_statistics.php?' . $query(['quiz_code' => (string)$section['CODE']]);
@@ -89,6 +90,7 @@ if ($iblockId > 0) {
         $row->AddViewField('RESULTS', (string)($counts[$sectionId]['RESULT'] ?? 0));
         $row->AddActions([
             ['TEXT' => 'Настройки', 'ACTION' => $list->ActionRedirect($settingsUrl), 'DEFAULT' => true],
+            ['TEXT' => 'Схема', 'ACTION' => $list->ActionRedirect($schemaUrl)],
             ['TEXT' => 'Вопросы и результаты', 'ACTION' => $list->ActionRedirect($contentUrl)],
             ['TEXT' => 'Экспорт', 'ACTION' => $list->ActionRedirect($exportUrl)],
             ['TEXT' => 'Стандартное редактирование раздела', 'ACTION' => $list->ActionRedirect($technicalUrl)],
