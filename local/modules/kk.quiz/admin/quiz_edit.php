@@ -9,8 +9,6 @@ require_once($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_ad
 
 global $APPLICATION, $USER;
 
-$APPLICATION->SetTitle('KK Quiz — настройки квиза');
-
 if (!Loader::includeModule('kk.quiz') || !Loader::includeModule('iblock')) {
     require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_after.php');
     CAdminMessage::ShowMessage('Модуль kk.quiz или iblock не установлен.');
@@ -24,12 +22,30 @@ if (!is_object($USER) || !$USER->IsAuthorized() || !$USER->IsAdmin()) {
 
 $lang = defined('LANGUAGE_ID') ? (string)LANGUAGE_ID : 'ru';
 $sectionId = (int)($_REQUEST['ID'] ?? 0);
+$isCreateMode = (string)($_REQUEST['create'] ?? '') === 'Y' || $sectionId <= 0;
+$APPLICATION->SetTitle($isCreateMode ? 'KK Quiz — создание квиза' : 'KK Quiz — настройки квиза');
 $iblock = CIBlock::GetList([], ['TYPE' => Installer::IBLOCK_TYPE_ID, 'CODE' => Installer::QUIZZES_IBLOCK_CODE])->Fetch();
 $iblockId = is_array($iblock) ? (int)$iblock['ID'] : 0;
 $entityId = 'IBLOCK_' . $iblockId . '_SECTION';
-$section = $sectionId > 0 && $iblockId > 0
-    ? CIBlockSection::GetList([], ['ID' => $sectionId, 'IBLOCK_ID' => $iblockId], false, ['*', 'UF_*'])->Fetch()
-    : false;
+$section = false;
+if ($isCreateMode && $iblockId > 0) {
+    $section = [
+        'ID' => 0,
+        'NAME' => '',
+        'CODE' => '',
+        'ACTIVE' => 'Y',
+        'SORT' => 500,
+        'UF_KK_TITLE' => '',
+        'UF_KK_SUBTITLE' => '',
+        'UF_KK_BUTTON_TEXT' => 'Начать',
+        'UF_KK_START_TEXT' => '',
+        'UF_KK_START_QUESTION' => 0,
+        'UF_KK_PROGRESS_TOTAL' => 0,
+        'UF_KK_SUCCESS_TEXT' => 'Спасибо! Заявка отправлена.',
+    ];
+} elseif ($sectionId > 0 && $iblockId > 0) {
+    $section = CIBlockSection::GetList([], ['ID' => $sectionId, 'IBLOCK_ID' => $iblockId], false, ['*', 'UF_*'])->Fetch();
+}
 
 $listUrl = 'kk_quiz_quizzes.php?' . http_build_query(['lang' => $lang]);
 if ((string)($_POST['cancel'] ?? '') !== '' && check_bitrix_sessid()) {
@@ -89,7 +105,7 @@ foreach ($enumFieldNames as $fieldName) {
 }
 
 $questions = [];
-if (is_array($section)) {
+if (is_array($section) && !$isCreateMode) {
     $questionResult = CIBlockElement::GetList(['SORT' => 'ASC', 'ID' => 'ASC'], [
         'IBLOCK_ID' => $iblockId,
         'SECTION_ID' => $sectionId,
@@ -115,6 +131,9 @@ if ($isPost && is_array($section) && ((string)($_POST['save'] ?? '') !== '' || (
     $maxWidthRaw = trim((string)($_POST['UF_KK_MAX_WIDTH'] ?? ''));
     $hexFields = ['UF_KK_ACCENT_COLOR', 'UF_KK_ACCENT_HOVER', 'UF_KK_ACTIVE_COLOR', 'UF_KK_PROGRESS_COLOR'];
     $errors = [];
+    if ($sanitizeString($_POST['NAME'] ?? '') === '') {
+        $errors[] = 'Название квиза обязательно.';
+    }
     if ($code === '') {
         $errors[] = 'Код квиза обязателен.';
     } elseif (preg_match('/^[a-zA-Z0-9_-]+$/', $code) !== 1) {
@@ -171,13 +190,25 @@ if ($isPost && is_array($section) && ((string)($_POST['save'] ?? '') !== '' || (
             $fields[$fieldName] = $normalizeUserFieldEnumPostValue($_POST[$fieldName] ?? [], $enums[$fieldName], $multiple);
         }
         $sectionUpdater = new CIBlockSection();
-        if ($sectionUpdater->Update($sectionId, $fields)) {
-            $target = (string)($_POST['apply'] ?? '') !== ''
-                ? 'kk_quiz_quiz_edit.php?' . http_build_query(['ID' => $sectionId, 'lang' => $lang, 'saved' => 'Y'])
-                : 'kk_quiz_quizzes.php?' . http_build_query(['lang' => $lang, 'saved' => 'Y']);
-            LocalRedirect($target);
+        if ($isCreateMode) {
+            $fields['IBLOCK_ID'] = $iblockId;
+            $newSectionId = (int)$sectionUpdater->Add($fields);
+            if ($newSectionId > 0) {
+                $target = (string)($_POST['apply'] ?? '') !== ''
+                    ? 'kk_quiz_quiz_edit.php?' . http_build_query(['ID' => $newSectionId, 'lang' => $lang, 'saved' => 'Y'])
+                    : 'kk_quiz_quizzes.php?' . http_build_query(['lang' => $lang, 'saved' => 'Y']);
+                LocalRedirect($target);
+            }
+            $errors[] = $sectionUpdater->LAST_ERROR ?: 'Не удалось создать квиз.';
+        } else {
+            if ($sectionUpdater->Update($sectionId, $fields)) {
+                $target = (string)($_POST['apply'] ?? '') !== ''
+                    ? 'kk_quiz_quiz_edit.php?' . http_build_query(['ID' => $sectionId, 'lang' => $lang, 'saved' => 'Y'])
+                    : 'kk_quiz_quizzes.php?' . http_build_query(['lang' => $lang, 'saved' => 'Y']);
+                LocalRedirect($target);
+            }
+            $errors[] = $sectionUpdater->LAST_ERROR ?: 'Не удалось сохранить настройки квиза.';
         }
-        $errors[] = $sectionUpdater->LAST_ERROR ?: 'Не удалось сохранить настройки квиза.';
     }
     $error = implode('<br>', array_map('htmlspecialcharsbx', $errors));
     foreach (['ACTIVE', 'UF_KK_USE_METRIKA', 'UF_KK_USE_GA', 'UF_KK_USE_CATALOG', 'UF_KK_ALLOW_POPUP_URL', 'UF_KK_REQUIRE_AGREEMENT'] as $checkboxName) {
@@ -234,15 +265,24 @@ $enumRow = static function (string $name, string $label, bool $multiple = false)
 };
 
 $quizCode = (string)$section['CODE'];
-$contentUrl = 'iblock_list_admin.php?' . http_build_query(['IBLOCK_ID' => $iblockId, 'type' => Installer::IBLOCK_TYPE_ID, 'SECTION_ID' => $sectionId, 'lang' => $lang]);
+$contentUrl = 'iblock_list_admin.php?' . http_build_query([
+    'IBLOCK_ID' => $iblockId,
+    'type' => Installer::IBLOCK_TYPE_ID,
+    'SECTION_ID' => $sectionId,
+    'find_section_section' => $sectionId,
+    'apply_filter' => 'Y',
+    'set_filter' => 'Y',
+    'lang' => $lang,
+]);
 $technicalUrl = 'iblock_section_edit.php?' . http_build_query(['IBLOCK_ID' => $iblockId, 'type' => Installer::IBLOCK_TYPE_ID, 'ID' => $sectionId, 'lang' => $lang]);
 $statisticsUrl = 'kk_quiz_statistics.php?' . http_build_query(['quiz_code' => $quizCode, 'lang' => $lang]);
-$context = new CAdminContextMenu([
-    ['TEXT' => 'К списку квизов', 'LINK' => $listUrl, 'ICON' => 'btn_list'],
-    ['TEXT' => 'Вопросы и результаты', 'LINK' => $contentUrl],
-    ['TEXT' => 'Стандартная форма раздела', 'LINK' => $technicalUrl],
-    ['TEXT' => 'Статистика', 'LINK' => $statisticsUrl],
-]);
+$contextItems = [['TEXT' => 'К списку квизов', 'LINK' => $listUrl, 'ICON' => 'btn_list']];
+if (!$isCreateMode) {
+    $contextItems[] = ['TEXT' => 'Вопросы и результаты', 'LINK' => $contentUrl];
+    $contextItems[] = ['TEXT' => 'Стандартная форма раздела', 'LINK' => $technicalUrl];
+    $contextItems[] = ['TEXT' => 'Статистика', 'LINK' => $statisticsUrl];
+}
+$context = new CAdminContextMenu($contextItems);
 $context->Show();
 
 $tabs = [
@@ -258,7 +298,7 @@ $tabs = [
 ];
 $tabControl = new CAdminTabControl('kk_quiz_settings_tabs', $tabs);
 ?>
-<form method="post" action="<?= $escape('kk_quiz_quiz_edit.php?' . http_build_query(['ID' => $sectionId, 'lang' => $lang])) ?>">
+<form method="post" action="<?= $escape('kk_quiz_quiz_edit.php?' . http_build_query(array_filter(['ID' => $sectionId, 'create' => $isCreateMode ? 'Y' : '', 'lang' => $lang]))) ?>">
     <?= bitrix_sessid_post() ?>
     <?php $tabControl->Begin(); ?>
     <?php $tabControl->BeginNextTab(); ?>
@@ -286,6 +326,9 @@ $tabControl = new CAdminTabControl('kk_quiz_settings_tabs', $tabs);
     <?php $tabControl->BeginNextTab(); ?>
     <?php $boolRow('UF_KK_ALLOW_POPUP_URL', 'Разрешить URL для popup'); $textRow('UF_KK_PRIVACY_TEXT', 'Текст политики', true); $textRow('UF_KK_PRIVACY_URL', 'Ссылка на политику'); $boolRow('UF_KK_REQUIRE_AGREEMENT', 'Требовать согласие'); ?>
     <?php $tabControl->BeginNextTab(); ?>
+    <?php if ($isCreateMode): ?>
+        <tr><td colspan="2"><div class="adm-info-message">Примеры вставки будут доступны после сохранения квиза.</div></td></tr>
+    <?php else: ?>
     <?php
     $examples = [
         'Универсальный loader для popup' => '<?$APPLICATION->IncludeComponent("kk:quiz", ".default", [' . "\n" . '    "DISPLAY_MODE" => "loader"' . "\n" . ']);?>',
@@ -297,6 +340,7 @@ $tabControl = new CAdminTabControl('kk_quiz_settings_tabs', $tabs);
     foreach ($examples as $title => $example): ?>
         <tr><td width="20%"><b><?= $escape($title) ?></b></td><td><pre style="display:inline-block;max-width:75%;white-space:pre-wrap;vertical-align:top"><?= $escape($example) ?></pre> <button type="button" class="adm-btn kk-quiz-copy" data-copy="<?= $escape($example) ?>">Скопировать</button></td></tr>
     <?php endforeach; ?>
+    <?php endif; ?>
     <?php $tabControl->Buttons(); ?>
     <input type="submit" name="save" value="Сохранить" class="adm-btn-save">
     <input type="submit" name="apply" value="Применить">

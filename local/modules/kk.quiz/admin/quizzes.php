@@ -70,7 +70,14 @@ if ($iblockId > 0) {
         $sectionId = (int)$section['ID'];
         $query = static fn (array $values): string => http_build_query(array_merge($values, ['lang' => $lang]));
         $settingsUrl = 'kk_quiz_quiz_edit.php?' . $query(['ID' => $sectionId]);
-        $contentUrl = 'iblock_list_admin.php?' . $query(['IBLOCK_ID' => $iblockId, 'type' => Installer::IBLOCK_TYPE_ID, 'SECTION_ID' => $sectionId]);
+        $contentUrl = 'iblock_list_admin.php?' . $query([
+            'IBLOCK_ID' => $iblockId,
+            'type' => Installer::IBLOCK_TYPE_ID,
+            'SECTION_ID' => $sectionId,
+            'find_section_section' => $sectionId,
+            'apply_filter' => 'Y',
+            'set_filter' => 'Y',
+        ]);
         $technicalUrl = 'iblock_section_edit.php?' . $query(['IBLOCK_ID' => $iblockId, 'type' => Installer::IBLOCK_TYPE_ID, 'ID' => $sectionId]);
         $statisticsUrl = 'kk_quiz_statistics.php?' . $query(['quiz_code' => (string)$section['CODE']]);
         $row = &$list->AddRow((string)$sectionId, $section, $settingsUrl);
@@ -95,5 +102,13 @@ if ((string)($_GET['saved'] ?? '') === 'Y') {
 if ($iblockId <= 0) {
     CAdminMessage::ShowMessage('Инфоблок квизов не найден.');
 }
+$context = new CAdminContextMenu([
+    [
+        'TEXT' => 'Создать квиз',
+        'LINK' => 'kk_quiz_quiz_edit.php?' . http_build_query(['create' => 'Y', 'lang' => $lang]),
+        'ICON' => 'btn_new',
+    ],
+]);
+$context->Show();
 $list->DisplayList();
 require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/epilog_admin.php');
