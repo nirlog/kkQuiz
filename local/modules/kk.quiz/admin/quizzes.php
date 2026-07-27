@@ -38,15 +38,31 @@ $list->AddHeaders([
 
 if ($iblockId > 0) {
     $counts = [];
-    $elements = CIBlockElement::GetList([], ['IBLOCK_ID' => $iblockId, 'SECTION_ID' => false], false, false, ['ID', 'IBLOCK_ID', 'IBLOCK_SECTION_ID']);
+    $elements = CIBlockElement::GetList(
+        [],
+        ['IBLOCK_ID' => $iblockId],
+        false,
+        false,
+        ['ID', 'IBLOCK_ID', 'IBLOCK_SECTION_ID']
+    );
     while ($element = $elements->GetNextElement()) {
         $fields = $element->GetFields();
         $properties = $element->GetProperties();
         $sectionId = (int)($fields['IBLOCK_SECTION_ID'] ?? 0);
-        $type = strtoupper((string)($properties['KK_ENTITY_TYPE']['VALUE_XML_ID'] ?? $properties['KK_ENTITY_TYPE']['VALUE'] ?? ''));
-        if ($sectionId > 0 && in_array($type, ['QUESTION', 'RESULT'], true)) {
-            $counts[$sectionId][$type] = (int)($counts[$sectionId][$type] ?? 0) + 1;
+        if ($sectionId <= 0) {
+            continue;
         }
+
+        $type = strtoupper((string)($properties['KK_ENTITY_TYPE']['VALUE_XML_ID'] ?? ''));
+        if ($type === '') {
+            $type = strtoupper((string)($properties['KK_ENTITY_TYPE']['VALUE'] ?? ''));
+        }
+
+        if (!in_array($type, ['QUESTION', 'RESULT'], true)) {
+            continue;
+        }
+
+        $counts[$sectionId][$type] = (int)($counts[$sectionId][$type] ?? 0) + 1;
     }
 
     $sections = CIBlockSection::GetList(['SORT' => 'ASC', 'ID' => 'ASC'], ['IBLOCK_ID' => $iblockId], false, ['ID', 'NAME', 'CODE', 'ACTIVE', 'SORT']);
