@@ -15,6 +15,20 @@ $subtitle = $quiz !== null ? (string)($quiz['subtitle'] ?? '') : '';
 $startText = $quiz !== null ? (string)($quiz['start_text'] ?? '') : '';
 $buttonText = $quiz !== null && (string)($quiz['button_text'] ?? '') !== '' ? (string)$quiz['button_text'] : 'Начать';
 $quizCode = $quiz !== null ? (string)($quiz['code'] ?? '') : '';
+$appearance = is_array($quiz['appearance'] ?? null) ? $quiz['appearance'] : [];
+$themeValue = (string)($appearance['theme'] ?? $quiz['theme'] ?? '');
+$theme = in_array($themeValue, ['dark', 'light'], true) ? $themeValue : 'light';
+$accentColor = preg_match('/^#[0-9a-f]{6}$/i', (string)($appearance['accent_color'] ?? '')) ? (string)$appearance['accent_color'] : '#2563eb';
+$accentHoverColor = preg_match('/^#[0-9a-f]{6}$/i', (string)($appearance['accent_hover_color'] ?? '')) ? (string)$appearance['accent_hover_color'] : '#1d4ed8';
+$activeColor = preg_match('/^#[0-9a-f]{6}$/i', (string)($appearance['active_color'] ?? '')) ? (string)$appearance['active_color'] : $accentColor;
+$progressColor = preg_match('/^#[0-9a-f]{6}$/i', (string)($appearance['progress_color'] ?? '')) ? (string)$appearance['progress_color'] : $accentColor;
+$containerRadius = min(64, max(0, (int)($appearance['container_radius'] ?? 24)));
+$cardRadius = min(64, max(0, (int)($appearance['card_radius'] ?? 16)));
+$buttonRadius = min(64, max(0, (int)($appearance['button_radius'] ?? 12)));
+$inputRadius = min(64, max(0, (int)($appearance['input_radius'] ?? 10)));
+$imageRadius = min(64, max(0, (int)($appearance['image_radius'] ?? 12)));
+$imageRatio = in_array((string)($appearance['answer_image_ratio'] ?? ''), ['1:1', '3:4', '4:3', '9:16', '16:9'], true) ? (string)$appearance['answer_image_ratio'] : '4:3';
+$imageFit = in_array((string)($appearance['answer_image_fit'] ?? ''), ['cover', 'contain'], true) ? (string)$appearance['answer_image_fit'] : 'cover';
 $isButtonMode = $displayMode === 'button';
 $isPopupMode = $displayMode === 'popup' || $isButtonMode;
 $rootDisplayMode = $isPopupMode ? 'popup' : 'block';
@@ -27,7 +41,8 @@ $rootDisplayMode = $isPopupMode ? 'popup' : 'block';
     <button class="kk-quiz__button kk-quiz__popup-trigger" type="button" data-kk-quiz-popup="<?= htmlspecialcharsbx($quizCode) ?>"><?= htmlspecialcharsbx($buttonText) ?></button>
 <?php endif; ?>
 <div
-    class="kk-quiz kk-quiz--<?= htmlspecialcharsbx($rootDisplayMode) ?>"
+    class="kk-quiz kk-quiz--<?= htmlspecialcharsbx($rootDisplayMode) ?> kk-quiz--theme-<?= htmlspecialcharsbx($theme) ?>"
+    style="--kk-quiz-accent: <?= htmlspecialcharsbx($accentColor) ?>; --kk-quiz-accent-hover: <?= htmlspecialcharsbx($accentHoverColor) ?>; --kk-quiz-active: <?= htmlspecialcharsbx($activeColor) ?>; --kk-quiz-progress: <?= htmlspecialcharsbx($progressColor) ?>; --kk-quiz-container-radius: <?= $containerRadius ?>px; --kk-quiz-card-radius: <?= $cardRadius ?>px; --kk-quiz-button-radius: <?= $buttonRadius ?>px; --kk-quiz-input-radius: <?= $inputRadius ?>px; --kk-quiz-image-radius: <?= $imageRadius ?>px; --kk-quiz-image-ratio: <?= htmlspecialcharsbx(str_replace(':', ' / ', $imageRatio)) ?>; --kk-quiz-image-fit: <?= htmlspecialcharsbx($imageFit) ?>;"
     data-kk-quiz
     data-kk-quiz-sessid="<?= htmlspecialcharsbx(bitrix_sessid()) ?>"
     <?php if ($isPopupMode): ?>data-kk-quiz-popup-root data-kk-quiz-code="<?= htmlspecialcharsbx($quizCode) ?>" hidden<?php endif; ?>
