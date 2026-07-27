@@ -10,6 +10,7 @@
 .kk-quiz__result {
     display: flex;
     flex-direction: column;
+    width: 100%;
     gap: 18px;
 }
 
@@ -74,6 +75,7 @@
 
 .kk-quiz__answers {
     display: grid;
+    width: 100%;
     gap: 14px;
 }
 
@@ -391,6 +393,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 100%;
     max-width: none;
     margin: 0;
     padding: 24px;
@@ -464,6 +467,7 @@
 
 /* KK Quiz public visual refresh */
 .kk-quiz {
+    --kk-quiz-max-width: 920px;
     --kk-quiz-bg: #f5f7fb;
     --kk-quiz-surface: #ffffff;
     --kk-quiz-surface-soft: #f8fafc;
@@ -492,8 +496,10 @@
     --kk-quiz-input-border: #d1d5db;
     --kk-quiz-input-focus: #2f6fed;
     --kk-quiz-input-disabled-bg: #f3f4f6;
+    box-sizing: border-box;
     color-scheme: light;
-    max-width: 920px;
+    width: 100%;
+    max-width: var(--kk-quiz-max-width, 920px);
     margin: 32px auto;
     padding: 28px;
     border: 1px solid var(--kk-quiz-border);
@@ -942,6 +948,9 @@
 }
 
 .kk-quiz--popup {
+    width: 100%;
+    max-width: none;
+    margin: 0;
     background: rgba(15, 23, 42, 0.68);
     backdrop-filter: blur(6px);
 }
@@ -973,6 +982,8 @@
 
 @media (max-width: 640px) {
     .kk-quiz {
+        width: 100%;
+        max-width: 100%;
         margin: 16px 0;
         padding: 18px;
         border-radius: var(--kk-quiz-card-radius, 16px);
