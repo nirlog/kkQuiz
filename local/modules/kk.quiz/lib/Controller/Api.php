@@ -209,7 +209,7 @@ final class Api extends Controller
         }
     }
 
-    public function cleanupQuizEventsAction(string $mode = ''): array
+    public function cleanupQuizEventsAction(string $mode = '', string $quizCode = ''): array
     {
         if (!$this->isAdminAllowed()) {
             return [
@@ -219,10 +219,18 @@ final class Api extends Controller
         }
 
         $mode = $this->getCleanupModeFromRequest($mode);
-        if (!in_array($mode, ['old', 'orphan', 'all'], true)) {
+        if (!in_array($mode, ['old', 'orphan', 'all', 'events_all', 'leads_all', 'full'], true)) {
             return [
                 'success' => false,
                 'errors' => ['INVALID_CLEANUP_MODE'],
+            ];
+        }
+
+        $quizCode = $this->getCleanupQuizCodeFromRequest($quizCode);
+        if ($quizCode !== '' && preg_match('/^[a-zA-Z0-9_-]+$/', $quizCode) !== 1) {
+            return [
+                'success' => false,
+                'errors' => ['INVALID_QUIZ_CODE'],
             ];
         }
 
@@ -238,7 +246,19 @@ final class Api extends Controller
                 $response['orphan'] = $service->cleanupOrphanQuizEvents();
             }
 
-            foreach (['old', 'orphan'] as $resultKey) {
+            if ($mode === 'events_all') {
+                $response['events'] = $service->cleanupAllEvents($quizCode !== '' ? $quizCode : null);
+            }
+
+            if ($mode === 'leads_all') {
+                $response['leads'] = $service->cleanupLeadElements($quizCode !== '' ? $quizCode : null);
+            }
+
+            if ($mode === 'full') {
+                $response['full'] = $service->cleanupFull($quizCode !== '' ? $quizCode : null);
+            }
+
+            foreach (['old', 'orphan', 'events', 'leads', 'full'] as $resultKey) {
                 if (isset($response[$resultKey]) && is_array($response[$resultKey]) && ($response[$resultKey]['success'] ?? true) !== true) {
                     $response['success'] = false;
                     $response['errors'] = array_merge($response['errors'] ?? [], (array)($response[$resultKey]['errors'] ?? []));
@@ -716,6 +736,41 @@ final class Api extends Controller
         }
 
         return is_array($decoded) ? trim((string)($decoded['mode'] ?? '')) : '';
+    }
+
+    private function getCleanupQuizCodeFromRequest(string $quizCode): string
+    {
+        $quizCode = trim($quizCode);
+        if ($quizCode !== '') {
+            return $quizCode;
+        }
+
+        $requestQuizCode = $this->getRequest()->getPost('quiz_code');
+        if (is_scalar($requestQuizCode)) {
+            $quizCode = trim((string)$requestQuizCode);
+        }
+        if ($quizCode !== '') {
+            return $quizCode;
+        }
+
+        $input = method_exists($this->getRequest(), 'getInput')
+            ? (string)$this->getRequest()->getInput()
+            : (string)file_get_contents('php://input');
+        if (trim($input) === '') {
+            return '';
+        }
+
+        try {
+            $decoded = Json::decode($input);
+        } catch (\Throwable) {
+            return '';
+        }
+
+        $payload = is_array($decoded['payload'] ?? null) ? $decoded['payload'] : $decoded;
+
+        return is_array($payload) && is_scalar($payload['quiz_code'] ?? null)
+            ? trim((string)$payload['quiz_code'])
+            : '';
     }
 
     private function getTrackingPayloadFromRequest(): array
