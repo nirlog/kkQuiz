@@ -400,6 +400,7 @@
             lead_id: params.lead_id || '',
             cta_text: params.cta_text || '',
             cta_link: params.cta_link || '',
+            cta_target: params.cta_target || '',
             product_id: params.product_id || '',
             product_name: params.product_name || '',
             product_url: params.product_url || ''
@@ -489,6 +490,7 @@
             lead_id: params.lead_id || '',
             cta_text: params.cta_text || '',
             cta_link: params.cta_link || '',
+            cta_target: params.cta_target || '',
             product_id: params.product_id || '',
             product_name: params.product_name || '',
             product_url: params.product_url || ''
@@ -1352,6 +1354,11 @@
             const actions = create('div', 'kk-quiz__result-actions');
             const link = create('a', 'kk-quiz__button kk-quiz__button--link kk-quiz__result-catalog-link', result.cta_text);
             link.href = String(result.cta_link);
+            const ctaTarget = String(result.cta_target || 'same_tab');
+            if (ctaTarget === 'new_tab') {
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+            }
 
             link.addEventListener('click', () => {
                 sendAnalyticsEvent(quiz, 'result_cta_click', {
@@ -1359,7 +1366,8 @@
                     result_id: result.id || '',
                     result_code: result.code || '',
                     cta_text: result.cta_text || '',
-                    cta_link: result.cta_link || ''
+                    cta_link: result.cta_link || '',
+                    cta_target: ctaTarget
                 });
             });
 

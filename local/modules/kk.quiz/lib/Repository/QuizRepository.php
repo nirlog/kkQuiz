@@ -309,6 +309,13 @@ final class QuizRepository
         return in_array($value, ['cover', 'contain'], true) ? $value : 'cover';
     }
 
+    private function normalizeCtaTarget(mixed $value): string
+    {
+        $value = trim((string)$value);
+
+        return in_array($value, ['same_tab', 'new_tab'], true) ? $value : 'same_tab';
+    }
+
     private function normalizeQuestionImageFit(mixed $value): string
     {
         $value = strtolower(trim((string)$value));
@@ -391,6 +398,7 @@ final class QuizRepository
             'priority' => (int)$this->getElementPropertyValue($properties, 'KK_RESULT_PRIORITY'),
             'cta_text' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_CTA_TEXT'),
             'cta_link' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_CTA_LINK'),
+            'cta_target' => $this->normalizeCtaTarget($this->getElementPropertyEnumXmlId($properties, 'KK_RESULT_CTA_TARGET')),
             'video' => $this->buildResultVideo($properties),
             'show_form' => $this->toBool($this->getElementPropertyEnumXmlId($properties, 'KK_RESULT_SHOW_FORM')),
             'catalog_section_id' => $this->toNullableInt($this->getElementPropertyValue($properties, 'KK_RESULT_CATALOG_SECTION')),

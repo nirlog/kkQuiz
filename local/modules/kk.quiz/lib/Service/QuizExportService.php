@@ -254,6 +254,7 @@ final class QuizExportService
             'priority' => (int)$this->getPropertyValue($properties, 'KK_RESULT_PRIORITY'),
             'cta_text' => (string)$this->getPropertyValue($properties, 'KK_RESULT_CTA_TEXT'),
             'cta_link' => (string)$this->getPropertyValue($properties, 'KK_RESULT_CTA_LINK'),
+            'cta_target' => $this->normalizeCtaTarget($this->getEnumXmlId($properties['KK_RESULT_CTA_TARGET'] ?? [])),
             'video_url' => (string)$this->getPropertyValue($properties, 'KK_RESULT_VIDEO_URL'),
             'video_title' => (string)$this->getPropertyValue($properties, 'KK_RESULT_VIDEO_TITLE'),
             'video_position' => (string)$this->getEnumXmlId($properties['KK_RESULT_VIDEO_POSITION'] ?? []),
@@ -267,6 +268,13 @@ final class QuizExportService
     private function toBool(mixed $value): bool
     {
         return $value === true || $value === 'Y' || $value === '1' || $value === 1 || $value === 'Да';
+    }
+
+    private function normalizeCtaTarget(mixed $value): string
+    {
+        $value = trim((string)$value);
+
+        return in_array($value, ['same_tab', 'new_tab'], true) ? $value : 'same_tab';
     }
 
     private function toNullableInt(mixed $value): ?int

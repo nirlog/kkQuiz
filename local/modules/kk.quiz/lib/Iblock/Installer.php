@@ -1056,6 +1056,7 @@ final class Installer
             ['CODE' => 'KK_RESULT_NOTE_TEXT', 'NAME' => 'Что важно учесть', 'SORT' => 338, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 4],
             ['CODE' => 'KK_RESULT_CTA_TEXT', 'NAME' => 'Текст CTA', 'SORT' => 340, 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_RESULT_CTA_LINK', 'NAME' => 'Ссылка CTA', 'SORT' => 350, 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_RESULT_CTA_TARGET', 'NAME' => 'Открытие CTA-ссылки', 'SORT' => 351, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getResultCtaTargetValues()],
             ['CODE' => 'KK_RESULT_VIDEO_URL', 'NAME' => 'Видео результата — URL', 'SORT' => 352, 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_RESULT_VIDEO_TITLE', 'NAME' => 'Видео результата — заголовок', 'SORT' => 354, 'PROPERTY_TYPE' => 'S'],
             ['CODE' => 'KK_RESULT_VIDEO_POSITION', 'NAME' => 'Позиция видео результата', 'SORT' => 356, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getResultVideoPositionValues()],
@@ -1584,6 +1585,7 @@ final class Installer
             'KK_RESULT_NOTE_TEXT' => 'Важное примечание или рекомендация для клиента.',
             'KK_RESULT_CTA_TEXT' => 'Текст основной кнопки результата.',
             'KK_RESULT_CTA_LINK' => 'Ссылка основной кнопки результата. Можно указать раздел каталога или другую страницу.',
+            'KK_RESULT_CTA_TARGET' => 'Выберите, как открывать ссылку основной CTA-кнопки результата: в текущей вкладке или в новой.',
             'KK_RESULT_VIDEO_URL' => 'Ссылка на видео, которое будет показано в результате.',
             'KK_RESULT_VIDEO_TITLE' => 'Заголовок видео в результате.',
             'KK_RESULT_VIDEO_POSITION' => 'Где показывать видео относительно текста, формы и рекомендаций.',
@@ -1656,6 +1658,14 @@ final class Installer
             'before_form' => 'Перед формой заявки',
             'after_form' => 'После формы заявки',
             'before_products' => 'Перед рекомендациями',
+        ];
+    }
+
+    private static function getResultCtaTargetValues(): array
+    {
+        return [
+            'same_tab' => ['VALUE' => 'В той же вкладке', 'DEF' => 'Y'],
+            'new_tab' => 'В новой вкладке',
         ];
     }
 

@@ -40,6 +40,7 @@ final class ElementFormAssets
         'KK_RESULT_NOTE_TEXT',
         'KK_RESULT_CTA_TEXT',
         'KK_RESULT_CTA_LINK',
+        'KK_RESULT_CTA_TARGET',
         'KK_RESULT_VIDEO_URL',
         'KK_RESULT_VIDEO_TITLE',
         'KK_RESULT_VIDEO_POSITION',

@@ -194,6 +194,7 @@ final class QuizImportService
             'KK_RESULT_NOTE_TEXT' => (string)($result['note_text'] ?? ''),
             'KK_RESULT_CTA_TEXT' => (string)($result['cta_text'] ?? ''),
             'KK_RESULT_CTA_LINK' => (string)($result['cta_link'] ?? ''),
+            'KK_RESULT_CTA_TARGET' => $this->getPropertyEnumId($iblockId, 'KK_RESULT_CTA_TARGET', $this->normalizeCtaTarget($result['cta_target'] ?? null)),
             'KK_RESULT_VIDEO_URL' => (string)($result['video_url'] ?? $video['url'] ?? ''),
             'KK_RESULT_VIDEO_TITLE' => (string)($result['video_title'] ?? $video['title'] ?? ''),
             'KK_RESULT_VIDEO_POSITION' => $this->getPropertyEnumId(
@@ -519,6 +520,13 @@ final class QuizImportService
     private function toBool(mixed $value): bool
     {
         return $value === true || $value === 'Y' || $value === '1' || $value === 1 || $value === 'Да';
+    }
+
+    private function normalizeCtaTarget(mixed $value): string
+    {
+        $value = trim((string)$value);
+
+        return in_array($value, ['same_tab', 'new_tab'], true) ? $value : 'same_tab';
     }
 
     private function normalizeHexColor(mixed $value, string $fallback): string
