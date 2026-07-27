@@ -79,6 +79,7 @@ if ($iblockId > 0) {
             'set_filter' => 'Y',
         ]);
         $exportUrl = 'kk_quiz_export.php?' . $query(['ID' => $sectionId]);
+        $deleteUrl = 'kk_quiz_delete.php?' . $query(['ID' => $sectionId]);
         $technicalUrl = 'iblock_section_edit.php?' . $query(['IBLOCK_ID' => $iblockId, 'type' => Installer::IBLOCK_TYPE_ID, 'ID' => $sectionId]);
         $statisticsUrl = 'kk_quiz_statistics.php?' . $query(['quiz_code' => (string)$section['CODE']]);
         $row = &$list->AddRow((string)$sectionId, $section, $settingsUrl);
@@ -92,6 +93,8 @@ if ($iblockId > 0) {
             ['TEXT' => 'Экспорт', 'ACTION' => $list->ActionRedirect($exportUrl)],
             ['TEXT' => 'Стандартное редактирование раздела', 'ACTION' => $list->ActionRedirect($technicalUrl)],
             ['TEXT' => 'Статистика', 'ACTION' => $list->ActionRedirect($statisticsUrl)],
+            ['SEPARATOR' => true],
+            ['TEXT' => 'Удалить', 'ACTION' => $list->ActionRedirect($deleteUrl)],
         ]);
     }
 }
@@ -100,6 +103,9 @@ $list->CheckListMode();
 require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_after.php');
 if ((string)($_GET['saved'] ?? '') === 'Y') {
     CAdminMessage::ShowMessage(['MESSAGE' => 'Настройки квиза сохранены', 'TYPE' => 'OK']);
+}
+if ((string)($_GET['deleted'] ?? '') === 'Y') {
+    CAdminMessage::ShowMessage(['MESSAGE' => 'Квиз удалён', 'TYPE' => 'OK']);
 }
 if ($iblockId <= 0) {
     CAdminMessage::ShowMessage('Инфоблок квизов не найден.');
