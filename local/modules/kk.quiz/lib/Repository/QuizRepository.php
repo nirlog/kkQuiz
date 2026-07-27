@@ -101,6 +101,18 @@ final class QuizRepository
                 'UF_KK_CATALOG_IBLOCK_ID',
                 'UF_KK_CATALOG_IBLOCK_IDS',
                 'UF_KK_THEME',
+                'UF_KK_ACCENT_COLOR',
+                'UF_KK_ACCENT_HOVER',
+                'UF_KK_ACTIVE_COLOR',
+                'UF_KK_PROGRESS_COLOR',
+                'UF_KK_BORDER_RADIUS',
+                'UF_KK_CONTAINER_RADIUS',
+                'UF_KK_CARD_RADIUS',
+                'UF_KK_BUTTON_RADIUS',
+                'UF_KK_INPUT_RADIUS',
+                'UF_KK_IMAGE_RADIUS',
+                'UF_KK_IMAGE_RATIO',
+                'UF_KK_IMAGE_FIT',
                 'UF_KK_ALLOW_POPUP_URL',
                 'UF_KK_PRIVACY_TEXT',
                 'UF_KK_PRIVACY_URL',
@@ -123,6 +135,10 @@ final class QuizRepository
         if ($catalogIblockIds === [] && $legacyCatalogIblockId !== null) {
             $catalogIblockIds = [$legacyCatalogIblockId];
         }
+
+        $legacyRadius = $this->normalizeOptionalRadius($section['UF_KK_BORDER_RADIUS'] ?? null);
+        $accentColor = $this->normalizeHexColor($section['UF_KK_ACCENT_COLOR'] ?? '', '#2563eb');
+        $accentHoverColor = $this->normalizeHexColor($section['UF_KK_ACCENT_HOVER'] ?? '', '#1d4ed8');
 
         return [
             'id' => (int)$section['ID'],
@@ -150,6 +166,18 @@ final class QuizRepository
             'catalog_iblock_id' => $legacyCatalogIblockId,
             'catalog_iblock_ids' => $catalogIblockIds,
             'theme' => $this->normalizeUserFieldEnumValue($section['UF_KK_THEME'] ?? 'default') ?: 'default',
+            'accent_color' => $accentColor,
+            'accent_hover_color' => $accentHoverColor,
+            'active_color' => $this->normalizeHexColor($section['UF_KK_ACTIVE_COLOR'] ?? '', $accentColor),
+            'progress_color' => $this->normalizeHexColor($section['UF_KK_PROGRESS_COLOR'] ?? '', $accentColor),
+            'border_radius' => $legacyRadius,
+            'container_radius' => $this->resolveRadius($section['UF_KK_CONTAINER_RADIUS'] ?? null, $legacyRadius, 24),
+            'card_radius' => $this->resolveRadius($section['UF_KK_CARD_RADIUS'] ?? null, $legacyRadius, 16),
+            'button_radius' => $this->resolveRadius($section['UF_KK_BUTTON_RADIUS'] ?? null, $legacyRadius, 12),
+            'input_radius' => $this->resolveRadius($section['UF_KK_INPUT_RADIUS'] ?? null, $legacyRadius, 10),
+            'image_radius' => $this->resolveRadius($section['UF_KK_IMAGE_RADIUS'] ?? null, $legacyRadius, 12),
+            'answer_image_ratio' => $this->normalizeImageRatio($this->normalizeUserFieldEnumValue($section['UF_KK_IMAGE_RATIO'] ?? '4:3'), '4:3'),
+            'answer_image_fit' => $this->normalizeImageFit($this->normalizeUserFieldEnumValue($section['UF_KK_IMAGE_FIT'] ?? 'cover')),
             'allow_popup_url' => $this->toBool($section['UF_KK_ALLOW_POPUP_URL'] ?? null),
             'privacy_text' => (string)($section['UF_KK_PRIVACY_TEXT'] ?? ''),
             'privacy_url' => (string)($section['UF_KK_PRIVACY_URL'] ?? ''),
@@ -234,6 +262,8 @@ final class QuizRepository
             'sort' => (int)($element['SORT'] ?? 0),
             'question_type' => $questionType,
             'display_template' => $displayTemplate,
+            'answer_image_ratio' => $this->normalizeImageRatio($this->getElementPropertyEnumXmlId($properties, 'KK_IMAGE_RATIO'), ''),
+            'answer_image_fit' => $this->normalizeQuestionImageFit($this->getElementPropertyEnumXmlId($properties, 'KK_IMAGE_FIT')),
             'is_required' => $this->toBool($this->getElementPropertyEnumXmlId($properties, 'KK_IS_REQUIRED')),
             'placeholder' => (string)$this->getElementPropertyValue($properties, 'KK_PLACEHOLDER'),
             'default_next_question_id' => $this->toNullableInt($this->getElementPropertyValue($properties, 'KK_DEFAULT_NEXT_QUESTION')),
@@ -241,6 +271,44 @@ final class QuizRepository
             'allow_custom_answer' => $this->toBool($this->getElementPropertyEnumXmlId($properties, 'KK_ALLOW_CUSTOM_ANSWER')),
             'answers' => $this->normalizeAnswers($this->getElementPropertyValue($properties, 'KK_ANSWERS')),
         ];
+    }
+
+    private function normalizeHexColor(mixed $value, string $default): string
+    {
+        $value = trim((string)$value);
+
+        return preg_match('/^#[0-9a-f]{6}$/i', $value) === 1 ? strtolower($value) : $default;
+    }
+
+    private function normalizeImageRatio(mixed $value, string $default): string
+    {
+        $value = strtolower(trim((string)$value));
+
+        return in_array($value, ['1:1', '3:4', '4:3', '9:16', '16:9'], true) ? $value : $default;
+    }
+
+    private function normalizeImageFit(mixed $value): string
+    {
+        $value = strtolower(trim((string)$value));
+
+        return in_array($value, ['cover', 'contain'], true) ? $value : 'cover';
+    }
+
+    private function normalizeQuestionImageFit(mixed $value): string
+    {
+        $value = strtolower(trim((string)$value));
+
+        return in_array($value, ['cover', 'contain'], true) ? $value : '';
+    }
+
+    private function normalizeOptionalRadius(mixed $value): ?int
+    {
+        return $value === null || trim((string)$value) === '' ? null : min(64, max(0, (int)$value));
+    }
+
+    private function resolveRadius(mixed $value, ?int $legacyRadius, int $default): int
+    {
+        return $this->normalizeOptionalRadius($value) ?? $legacyRadius ?? $default;
     }
 
     private function normalizeQuestionType(?string $questionType): string
