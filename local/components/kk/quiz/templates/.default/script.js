@@ -1445,6 +1445,40 @@
         return candidates[0] || null;
     };
 
+    const isMobileViewport = () => window.matchMedia('(max-width: 640px)').matches;
+
+    const getFixedHeaderOffset = () => isMobileViewport() ? 76 : 24;
+
+    const scrollToCurrentStep = (nodes) => {
+        if (!isMobileViewport()) {
+            return;
+        }
+
+        if (!nodes || !nodes.root) {
+            return;
+        }
+
+        const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+        const popupCard = nodes.root.querySelector('.kk-quiz__popup-card');
+        if (popupCard) {
+            if (typeof popupCard.scrollTo === 'function') {
+                popupCard.scrollTo({ top: 0, behavior });
+            } else {
+                popupCard.scrollTop = 0;
+            }
+            return;
+        }
+
+        const rect = nodes.root.getBoundingClientRect();
+        const top = window.pageYOffset + rect.top - getFixedHeaderOffset();
+        window.scrollTo({ top: Math.max(0, top), behavior });
+    };
+
+    const renderNextStep = (nodes, callback) => {
+        callback();
+        window.requestAnimationFrame(() => scrollToCurrentStep(nodes));
+    };
+
     const goNext = (nodes, quiz, state, question, answer) => {
         const selectedAnswers = Array.isArray(answer) ? answer : (answer ? [answer] : []);
         addAnswerScores(state.scores, selectedAnswers);
@@ -1495,29 +1529,29 @@
 
         const resultAnswer = selectedAnswers.find((item) => item.result_id);
         if (resultAnswer) {
-            showResult(nodes, quiz, state, resultAnswer.result_id);
+            renderNextStep(nodes, () => showResult(nodes, quiz, state, resultAnswer.result_id));
             return;
         }
 
         const nextAnswer = selectedAnswers.find((item) => item.next_question_id);
         const nextQuestionId = nextAnswer ? nextAnswer.next_question_id : question.default_next_question_id;
         if (nextQuestionId) {
-            showQuestion(nodes, quiz, state, nextQuestionId);
+            renderNextStep(nodes, () => showQuestion(nodes, quiz, state, nextQuestionId));
             return;
         }
 
         const scoredResult = findScoredResult(quiz, state.scores);
         if (scoredResult) {
-            showResult(nodes, quiz, state, scoredResult.id);
+            renderNextStep(nodes, () => showResult(nodes, quiz, state, scoredResult.id));
             return;
         }
 
         if (question.default_result_id) {
-            showResult(nodes, quiz, state, question.default_result_id);
+            renderNextStep(nodes, () => showResult(nodes, quiz, state, question.default_result_id));
             return;
         }
 
-        showFinalForm(nodes, quiz, state, null);
+        renderNextStep(nodes, () => showFinalForm(nodes, quiz, state, null));
     };
 
     const renderAnswerMedia = (button, answer) => {
@@ -1557,6 +1591,14 @@
 
         const type = getQuestionType(question);
         const template = getDisplayTemplate(question);
+        const ratio = String(question.resolved_answer_image_ratio || '');
+        const fit = String(question.resolved_answer_image_fit || '');
+        nodes.question.style.setProperty('--kk-quiz-question-image-ratio', ['1:1', '3:4', '4:3', '9:16', '16:9'].includes(ratio)
+            ? ratio.replace(':', ' / ')
+            : 'var(--kk-quiz-image-ratio)');
+        nodes.question.style.setProperty('--kk-quiz-question-image-fit', ['cover', 'contain'].includes(fit)
+            ? fit
+            : 'var(--kk-quiz-image-fit)');
 
         const progress = renderProgress(quiz, state);
         if (progress) {
