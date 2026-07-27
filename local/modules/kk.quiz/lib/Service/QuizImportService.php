@@ -151,6 +151,7 @@ final class QuizImportService
             'UF_KK_CATALOG_IBLOCK_ID' => $this->toNullableInt($settings['catalog_iblock_id'] ?? null),
             'UF_KK_CATALOG_IBLOCK_IDS' => $this->mapUserFieldEnumValues('UF_KK_CATALOG_IBLOCK_IDS', $settings['catalog_iblock_ids'] ?? []),
             'UF_KK_THEME' => $this->getSectionUserFieldEnumId('UF_KK_THEME', (string)($settings['theme'] ?? 'default')),
+            'UF_KK_MAX_WIDTH' => $this->normalizeMaxWidth($settings['max_width'] ?? null),
             'UF_KK_ACCENT_COLOR' => $accentColor,
             'UF_KK_ACCENT_HOVER' => $accentHoverColor,
             'UF_KK_ACTIVE_COLOR' => $this->normalizeHexColor($settings['active_color'] ?? null, $accentColor),
@@ -525,6 +526,19 @@ final class QuizImportService
         $value = trim((string)$value);
 
         return preg_match('/^#[0-9a-f]{6}$/i', $value) === 1 ? strtolower($value) : $fallback;
+    }
+
+    private function normalizeMaxWidth(mixed $value, string $fallback = '920px'): string
+    {
+        $value = trim((string)$value);
+        if (preg_match('/^(\d+)$/', $value, $matches) === 1 || preg_match('/^(\d+)px$/i', $value, $matches) === 1) {
+            return min(1920, max(320, (int)$matches[1])) . 'px';
+        }
+        if (preg_match('/^(\d{1,3})%$/', $value, $matches) === 1) {
+            return min(100, max(10, (int)$matches[1])) . '%';
+        }
+
+        return $fallback;
     }
 
     private function normalizeOptionalRadius(mixed $value): ?int

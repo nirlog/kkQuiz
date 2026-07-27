@@ -291,7 +291,7 @@ final class SectionFormAssets
             . 'row.insertAdjacentElement("beforebegin", heading);'
             . '};'
             . 'const groupAppearanceFields = () => {'
-            . 'addFieldGroup("Оформление", ["UF_KK_THEME", "UF_KK_ACCENT_COLOR", "UF_KK_ACCENT_HOVER", "UF_KK_ACTIVE_COLOR", "UF_KK_PROGRESS_COLOR", "UF_KK_CONTAINER_RADIUS", "UF_KK_CARD_RADIUS", "UF_KK_BUTTON_RADIUS", "UF_KK_INPUT_RADIUS", "UF_KK_IMAGE_RADIUS"]);'
+            . 'addFieldGroup("Оформление", ["UF_KK_THEME", "UF_KK_MAX_WIDTH", "UF_KK_ACCENT_COLOR", "UF_KK_ACCENT_HOVER", "UF_KK_ACTIVE_COLOR", "UF_KK_PROGRESS_COLOR", "UF_KK_CONTAINER_RADIUS", "UF_KK_CARD_RADIUS", "UF_KK_BUTTON_RADIUS", "UF_KK_INPUT_RADIUS", "UF_KK_IMAGE_RADIUS"]);'
             . 'addFieldGroup("Изображения ответов", ["UF_KK_IMAGE_RATIO", "UF_KK_IMAGE_FIT"]);'
             . '};'
             . 'const init = () => { renderEmbedTab(); enhanceStartQuestionField(); groupAppearanceFields(); };'

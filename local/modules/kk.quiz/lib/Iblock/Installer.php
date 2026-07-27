@@ -914,6 +914,7 @@ final class Installer
             ['FIELD_NAME' => 'UF_KK_CATALOG_IBLOCK_ID', 'USER_TYPE_ID' => 'integer', 'EDIT_FORM_LABEL' => 'ID инфоблока рекомендаций'],
             ['FIELD_NAME' => 'UF_KK_CATALOG_IBLOCK_IDS', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Инфоблоки рекомендаций', 'MULTIPLE' => 'Y', 'VALUES' => self::getCatalogIblockEnumValues()],
             ['FIELD_NAME' => 'UF_KK_THEME', 'USER_TYPE_ID' => 'enumeration', 'EDIT_FORM_LABEL' => 'Тема оформления', 'VALUES' => self::getThemeEnumValues()],
+            ['FIELD_NAME' => 'UF_KK_MAX_WIDTH', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Максимальная ширина квиза', 'SORT' => 520],
             ['FIELD_NAME' => 'UF_KK_ACCENT_COLOR', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Акцентный цвет (HEX)'],
             ['FIELD_NAME' => 'UF_KK_ACCENT_HOVER', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Акцентный цвет при наведении (HEX)'],
             ['FIELD_NAME' => 'UF_KK_ACTIVE_COLOR', 'USER_TYPE_ID' => 'string', 'EDIT_FORM_LABEL' => 'Цвет активного элемента (HEX)'],
@@ -932,6 +933,12 @@ final class Installer
             ['FIELD_NAME' => 'UF_KK_REQUIRE_AGREEMENT', 'USER_TYPE_ID' => 'boolean', 'EDIT_FORM_LABEL' => 'Требовать согласие'],
         ];
 
+        $hints = self::getQuizSectionFieldHints();
+        foreach ($fields as &$field) {
+            $field['HELP_MESSAGE'] = $hints[(string)$field['FIELD_NAME']] ?? '';
+        }
+        unset($field);
+
         foreach ($fields as $field) {
             self::addUserField($entityId, $field);
         }
@@ -948,11 +955,15 @@ final class Installer
         $label = ['ru' => (string)$field['EDIT_FORM_LABEL']];
 
         $userTypeEntity = new \CUserTypeEntity();
-        $userTypeEntity->Update($fieldId, [
+        $updateFields = [
             'EDIT_FORM_LABEL' => $label,
             'LIST_COLUMN_LABEL' => $label,
             'LIST_FILTER_LABEL' => $label,
-        ]);
+        ];
+        if (array_key_exists('HELP_MESSAGE', $field)) {
+            $updateFields['HELP_MESSAGE'] = ['ru' => (string)$field['HELP_MESSAGE']];
+        }
+        $userTypeEntity->Update($fieldId, $updateFields);
     }
 
     private static function addUserField(string $entityId, array $field): void
@@ -982,6 +993,9 @@ final class Installer
         $field['EDIT_FORM_LABEL'] = ['ru' => $field['EDIT_FORM_LABEL']];
         $field['LIST_COLUMN_LABEL'] = $field['EDIT_FORM_LABEL'];
         $field['LIST_FILTER_LABEL'] = $field['EDIT_FORM_LABEL'];
+        if (array_key_exists('HELP_MESSAGE', $field)) {
+            $field['HELP_MESSAGE'] = ['ru' => (string)$field['HELP_MESSAGE']];
+        }
 
         $userTypeEntity = new \CUserTypeEntity();
         $userFieldId = $userTypeEntity->Add($field);
@@ -1020,7 +1034,7 @@ final class Installer
     private static function installQuizProperties(int $iblockId): void
     {
         $properties = [
-            ['CODE' => 'KK_ENTITY_TYPE', 'NAME' => 'Тип сущности', 'SORT' => 100, 'PROPERTY_TYPE' => 'L', 'VALUES' => ['QUESTION' => 'QUESTION', 'RESULT' => 'RESULT'], 'SHOW_IN_LIST' => 'Y', 'FILTRABLE' => 'Y', 'LIST_COLUMN_LABEL' => 'Тип сущности', 'LIST_FILTER_LABEL' => 'Тип сущности'],
+            ['CODE' => 'KK_ENTITY_TYPE', 'NAME' => 'Тип сущности', 'SORT' => 100, 'PROPERTY_TYPE' => 'L', 'VALUES' => ['QUESTION' => 'Вопрос', 'RESULT' => 'Результат'], 'SHOW_IN_LIST' => 'Y', 'FILTRABLE' => 'Y', 'LIST_COLUMN_LABEL' => 'Тип сущности', 'LIST_FILTER_LABEL' => 'Тип сущности'],
             ['CODE' => 'KK_PUBLIC_TITLE', 'NAME' => 'Заголовок на сайте', 'SORT' => 105, 'PROPERTY_TYPE' => 'S', 'SHOW_IN_LIST' => 'Y', 'LIST_COLUMN_LABEL' => 'Заголовок на сайте', 'LIST_FILTER_LABEL' => 'Заголовок на сайте'],
             ['CODE' => 'KK_ADMIN_NOTE', 'NAME' => 'Комментарий администратора', 'SORT' => 900, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
             ['CODE' => 'KK_QUESTION_TYPE', 'NAME' => 'Тип вопроса', 'SORT' => 200, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getQuestionTypeValues(), 'SHOW_IN_LIST' => 'Y', 'FILTRABLE' => 'Y', 'LIST_COLUMN_LABEL' => 'Тип вопроса', 'LIST_FILTER_LABEL' => 'Тип вопроса'],
@@ -1053,6 +1067,12 @@ final class Installer
             ['CODE' => 'KK_RESULT_CATALOG_PRODUCTS', 'NAME' => 'Рекомендуемые элементы', 'SORT' => 390, 'PROPERTY_TYPE' => 'E', 'MULTIPLE' => 'Y'],
             ['CODE' => 'KK_RESULT_BADGE', 'NAME' => 'Бейдж результата', 'SORT' => 330, 'PROPERTY_TYPE' => 'S'],
         ];
+
+        $hints = self::getQuizPropertyHints();
+        foreach ($properties as &$property) {
+            $property['HINT'] = $hints[(string)$property['CODE']] ?? '';
+        }
+        unset($property);
 
         self::addIblockProperties($iblockId, $properties);
     }
@@ -1217,7 +1237,7 @@ final class Installer
             $fields['NAME'] = $property['NAME'];
         }
 
-        foreach (['SHOW_IN_LIST', 'FILTRABLE', 'LIST_COLUMN_LABEL', 'LIST_FILTER_LABEL'] as $fieldName) {
+        foreach (['SHOW_IN_LIST', 'FILTRABLE', 'LIST_COLUMN_LABEL', 'LIST_FILTER_LABEL', 'HINT'] as $fieldName) {
             if (isset($property[$fieldName])) {
                 $fields[$fieldName] = $property[$fieldName];
             }
@@ -1492,6 +1512,87 @@ final class Installer
             'light' => 'Светлая',
             'dark' => 'Тёмная',
             'compact' => 'Компактная',
+        ];
+    }
+
+    private static function getQuizSectionFieldHints(): array
+    {
+        return [
+            'UF_KK_TITLE' => 'Заголовок стартового экрана квиза. Показывается пользователю до начала прохождения.',
+            'UF_KK_SUBTITLE' => 'Короткий подзаголовок под заголовком стартового экрана.',
+            'UF_KK_BUTTON_TEXT' => 'Текст кнопки запуска квиза на стартовом экране.',
+            'UF_KK_FORM_BUTTON_TEXT' => 'Текст кнопки отправки финальной формы. Используется, когда пользователь оставляет заявку.',
+            'UF_KK_FORM_TITLE' => 'Заголовок финальной формы заявки.',
+            'UF_KK_FORM_SUBTITLE' => 'Поясняющий текст под заголовком финальной формы.',
+            'UF_KK_START_TEXT' => 'Основной текст стартового экрана. Можно кратко объяснить пользу квиза и сколько времени он займёт.',
+            'UF_KK_START_QUESTION' => 'ID вопроса, с которого начинается квиз. Если не заполнено, используется первый активный вопрос по сортировке.',
+            'UF_KK_PROGRESS_TOTAL' => 'Количество шагов, которое будет показано в прогрессе. Если 0 или пусто, прогресс считается автоматически.',
+            'UF_KK_SUCCESS_TEXT' => 'Текст, который показывается после успешной отправки заявки.',
+            'UF_KK_EMAIL_TO' => 'Email получателя уведомлений о новых заявках. Если пусто, используется глобальная настройка модуля.',
+            'UF_KK_FORM_FIELDS' => 'Поля, которые будут показаны пользователю в финальной форме.',
+            'UF_KK_REQUIRED_FIELDS' => 'Поля финальной формы, обязательные для заполнения.',
+            'UF_KK_METRIKA_COUNTER_ID' => 'ID счётчика Яндекс Метрики для этого квиза. Если пусто, используется глобальная настройка.',
+            'UF_KK_METRIKA_GOAL' => 'Название цели Метрики, которая будет отправлена при заявке.',
+            'UF_KK_USE_METRIKA' => 'Включает отправку целей и событий в Яндекс Метрику для этого квиза.',
+            'UF_KK_USE_CATALOG' => 'Включает показ товарных рекомендаций в результатах квиза.',
+            'UF_KK_CATALOG_IBLOCK_ID' => 'Legacy-поле ID инфоблока рекомендаций. Используется для обратной совместимости.',
+            'UF_KK_CATALOG_IBLOCK_IDS' => 'Инфоблоки, из которых можно выбирать разделы и товары для рекомендаций.',
+            'UF_KK_THEME' => 'Тема оформления публичного квиза: светлая или тёмная.',
+            'UF_KK_MAX_WIDTH' => 'Укажите максимальную ширину блока квиза. Просто число считается пикселями, например 920. Значение с % считается процентами, например 80% или 100%. Если поле пустое, используется 920px.',
+            'UF_KK_ACCENT_COLOR' => 'Основной акцентный цвет. Используйте HEX-формат, например #e53935.',
+            'UF_KK_ACCENT_HOVER' => 'Цвет кнопок и ссылок при наведении. Используйте HEX-формат.',
+            'UF_KK_ACTIVE_COLOR' => 'Цвет активного или выбранного варианта ответа.',
+            'UF_KK_PROGRESS_COLOR' => 'Цвет заполненной части прогресс-бара.',
+            'UF_KK_BORDER_RADIUS' => 'Legacy-поле общего скругления. Используется как fallback для новых radius-полей.',
+            'UF_KK_CONTAINER_RADIUS' => 'Скругление внешнего контейнера квиза в пикселях.',
+            'UF_KK_CARD_RADIUS' => 'Скругление карточек ответов и блоков результата в пикселях.',
+            'UF_KK_BUTTON_RADIUS' => 'Скругление кнопок квиза в пикселях.',
+            'UF_KK_INPUT_RADIUS' => 'Скругление полей формы в пикселях.',
+            'UF_KK_IMAGE_RADIUS' => 'Скругление изображений в карточках ответов.',
+            'UF_KK_IMAGE_RATIO' => 'Соотношение сторон изображений ответов по умолчанию для всего квиза.',
+            'UF_KK_IMAGE_FIT' => 'Режим отображения изображений ответов по умолчанию: cover обрезает, contain показывает целиком.',
+            'UF_KK_ALLOW_POPUP_URL' => 'Разрешает открывать квиз в popup по URL-параметру, например ?kkquiz=quiz_code.',
+            'UF_KK_PRIVACY_TEXT' => 'Текст согласия с политикой обработки персональных данных.',
+            'UF_KK_PRIVACY_URL' => 'Ссылка на страницу политики конфиденциальности.',
+            'UF_KK_REQUIRE_AGREEMENT' => 'Если включено, пользователь должен подтвердить согласие перед отправкой заявки.',
+        ];
+    }
+
+    private static function getQuizPropertyHints(): array
+    {
+        return [
+            'KK_ENTITY_TYPE' => 'Тип элемента квиза. Вопрос используется для шагов квиза, результат — для финального экрана.',
+            'KK_PUBLIC_TITLE' => 'Заголовок, который будет показан пользователю на сайте. Если пусто, используется название элемента.',
+            'KK_ADMIN_NOTE' => 'Внутренний комментарий администратора. На сайте не показывается.',
+            'KK_QUESTION_TYPE' => 'Тип вопроса: один вариант, несколько вариантов, текстовое поле, телефон или email.',
+            'KK_DISPLAY_TEMPLATE' => 'Шаблон отображения ответов: список, карточки, карточки с изображениями или выпадающий список.',
+            'KK_IMAGE_RATIO' => 'Переопределяет соотношение сторон изображений ответов только для этого вопроса. Значение «Как у квиза» берёт настройку раздела.',
+            'KK_IMAGE_FIT' => 'Переопределяет режим отображения изображений только для этого вопроса. Cover обрезает, contain показывает картинку целиком.',
+            'KK_IS_REQUIRED' => 'Если включено, пользователь должен ответить на вопрос, чтобы перейти дальше.',
+            'KK_PLACEHOLDER' => 'Placeholder для текстового поля, телефона или email.',
+            'KK_DEFAULT_NEXT_QUESTION' => 'Вопрос, на который пользователь перейдёт, если у выбранного ответа не задан свой переход.',
+            'KK_DEFAULT_RESULT' => 'Результат, который будет показан, если у ответа не задан результат и нет следующего вопроса.',
+            'KK_ALLOW_CUSTOM_ANSWER' => 'Разрешает пользователю ввести свой вариант ответа, если это поддерживается типом вопроса.',
+            'KK_ANSWERS' => 'Список вариантов ответа. Для каждого ответа можно указать текст, код, изображение, переход к вопросу, переход к результату или баллы.',
+            'KK_RESULT_PRIORITY' => 'Приоритет результата. Используется при выборе между несколькими подходящими результатами.',
+            'KK_RESULT_MIN_SCORE' => 'Минимальный балл, при котором результат может быть выбран.',
+            'KK_RESULT_MAX_SCORE' => 'Максимальный балл, при котором результат может быть выбран.',
+            'KK_RESULT_BADGE' => 'Короткий бейдж над результатом, например «Оптимальный выбор».',
+            'KK_RESULT_SUMMARY' => 'Краткий вывод результата. Показывается в верхней части финального экрана.',
+            'KK_RESULT_WHY_TEXT' => 'Текст блока «Почему подходит».',
+            'KK_RESULT_SPECS_TEXT' => 'Текст блока с ориентиром по комплектующим.',
+            'KK_RESULT_NOTE_TEXT' => 'Важное примечание или рекомендация для клиента.',
+            'KK_RESULT_CTA_TEXT' => 'Текст основной кнопки результата.',
+            'KK_RESULT_CTA_LINK' => 'Ссылка основной кнопки результата. Можно указать раздел каталога или другую страницу.',
+            'KK_RESULT_VIDEO_URL' => 'Ссылка на видео, которое будет показано в результате.',
+            'KK_RESULT_VIDEO_TITLE' => 'Заголовок видео в результате.',
+            'KK_RESULT_VIDEO_POSITION' => 'Где показывать видео относительно текста, формы и рекомендаций.',
+            'KK_RESULT_SHOW_FORM' => 'Показывать ли форму заявки в этом результате.',
+            'KK_RESULT_FORM_TITLE' => 'Заголовок блока формы в конкретном результате.',
+            'KK_RESULT_FORM_INTRO' => 'Поясняющий текст перед формой в конкретном результате.',
+            'KK_RESULT_FORM_BUTTON_TEXT' => 'Текст кнопки открытия или отправки формы для этого результата.',
+            'KK_RESULT_CATALOG_SECTION' => 'Раздел каталога, товары из которого можно рекомендовать в результате.',
+            'KK_RESULT_CATALOG_PRODUCTS' => 'Конкретные товары, которые будут показаны как рекомендации в результате.',
         ];
     }
 

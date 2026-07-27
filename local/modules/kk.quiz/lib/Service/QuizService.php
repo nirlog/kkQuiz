@@ -46,6 +46,7 @@ final class QuizService
             'theme' => $quiz['theme'] !== '' ? $quiz['theme'] : 'default',
             'appearance' => [
                 'theme' => $quiz['theme'] !== '' ? $quiz['theme'] : 'light',
+                'max_width' => $quiz['max_width'] ?? '920px',
                 'accent_color' => $quiz['accent_color'] ?? '#2563eb',
                 'accent_hover_color' => $quiz['accent_hover_color'] ?? '#1d4ed8',
                 'active_color' => $quiz['active_color'] ?? '#2563eb',

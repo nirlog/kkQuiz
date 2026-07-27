@@ -101,6 +101,7 @@ final class QuizRepository
                 'UF_KK_CATALOG_IBLOCK_ID',
                 'UF_KK_CATALOG_IBLOCK_IDS',
                 'UF_KK_THEME',
+                'UF_KK_MAX_WIDTH',
                 'UF_KK_ACCENT_COLOR',
                 'UF_KK_ACCENT_HOVER',
                 'UF_KK_ACTIVE_COLOR',
@@ -166,6 +167,7 @@ final class QuizRepository
             'catalog_iblock_id' => $legacyCatalogIblockId,
             'catalog_iblock_ids' => $catalogIblockIds,
             'theme' => $this->normalizeUserFieldEnumValue($section['UF_KK_THEME'] ?? 'default') ?: 'default',
+            'max_width' => $this->normalizeMaxWidth($section['UF_KK_MAX_WIDTH'] ?? ''),
             'accent_color' => $accentColor,
             'accent_hover_color' => $accentHoverColor,
             'active_color' => $this->normalizeHexColor($section['UF_KK_ACTIVE_COLOR'] ?? '', $accentColor),
@@ -278,6 +280,19 @@ final class QuizRepository
         $value = trim((string)$value);
 
         return preg_match('/^#[0-9a-f]{6}$/i', $value) === 1 ? strtolower($value) : $default;
+    }
+
+    private function normalizeMaxWidth(mixed $value, string $fallback = '920px'): string
+    {
+        $value = trim((string)$value);
+        if (preg_match('/^(\d+)$/', $value, $matches) === 1 || preg_match('/^(\d+)px$/i', $value, $matches) === 1) {
+            return min(1920, max(320, (int)$matches[1])) . 'px';
+        }
+        if (preg_match('/^(\d{1,3})%$/', $value, $matches) === 1) {
+            return min(100, max(10, (int)$matches[1])) . '%';
+        }
+
+        return $fallback;
     }
 
     private function normalizeImageRatio(mixed $value, string $default): string
