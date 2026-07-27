@@ -342,7 +342,9 @@ $orphanExtraCount = max(0, count($orphanQuizCodes) - count($orphanPreview));
     <div class="kk-quiz-maintenance__actions">
         <button type="button" class="adm-btn" data-kk-quiz-cleanup="old">Очистить старые события</button>
         <button type="button" class="adm-btn" data-kk-quiz-cleanup="orphan">Очистить статистику удалённых квизов</button>
-        <button type="button" class="adm-btn adm-btn-save" data-kk-quiz-cleanup="all">Выполнить полную очистку</button>
+        <button type="button" class="adm-btn" data-kk-quiz-cleanup="events_all">Очистить все события аналитики</button>
+        <button type="button" class="adm-btn" data-kk-quiz-cleanup="leads_all">Очистить все заявки</button>
+        <button type="button" class="adm-btn adm-btn-save" data-kk-quiz-cleanup="full">Выполнить полную очистку</button>
     </div>
 </div>
 <script>
@@ -355,10 +357,16 @@ $orphanExtraCount = max(0, count($orphanQuizCodes) - count($orphanPreview));
         'quiz_label' => $selectedQuizLabel,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const messages = {
-        old: 'Очистить старые события аналитики? Это действие нельзя отменить.',
-        orphan: 'Очистить статистику квизов, которые уже удалены? Это действие нельзя отменить.',
-        all: 'Выполнить полную очистку старых событий и статистики удалённых квизов? Это действие нельзя отменить.'
+        old: 'Очистить старые события аналитики по сроку хранения? Это действие нельзя отменить.',
+        orphan: 'Очистить события квизов, которые уже удалены? Это действие нельзя отменить.',
+        events_all: 'Удалить все события аналитики выбранного квиза/всех квизов? Заявки останутся. Это действие нельзя отменить.',
+        leads_all: 'Удалить все заявки выбранного квиза/всех квизов? События аналитики останутся. Это действие нельзя отменить.',
+        full: 'Удалить все события аналитики и все заявки выбранного квиза/всех квизов? Это действие нельзя отменить.'
     };
+    const cleanupQuizCode = String(statisticsExportPayload.quiz_code || '');
+    const cleanupScopeMessage = cleanupQuizCode !== ''
+        ? `Будет очищен только квиз: ${cleanupQuizCode}`
+        : 'Будут очищены данные всех квизов.';
 
     const periodInput = document.querySelector('[data-kk-quiz-period-input]');
     document.querySelectorAll('[data-kk-quiz-custom-date]').forEach((input) => {
@@ -381,16 +389,28 @@ $orphanExtraCount = max(0, count($orphanQuizCodes) - count($orphanPreview));
 
     const getCleanupUrl = () => getAdminAjaxUrl('kk:quiz.api.cleanupQuizEvents');
 
-    const getDeletedCount = (data) => {
-        let deleted = 0;
-        if (data && data.old && Number.isFinite(Number(data.old.deleted))) {
-            deleted += Number(data.old.deleted);
-        }
-        if (data && data.orphan && Number.isFinite(Number(data.orphan.deleted))) {
-            deleted += Number(data.orphan.deleted);
+    const getDeletedCounts = (data) => {
+        const number = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
+        if (data && data.full) {
+            return {
+                events: number(data.full.deleted && data.full.deleted.events) || number(data.full.events && data.full.events.deleted),
+                leads: number(data.full.deleted && data.full.deleted.leads) || number(data.full.leads && data.full.leads.deleted)
+            };
         }
 
-        return deleted;
+        if (data && data.deleted && typeof data.deleted === 'object') {
+            return {
+                events: number(data.deleted.events),
+                leads: number(data.deleted.leads)
+            };
+        }
+
+        return {
+            events: number(data && data.old && data.old.deleted)
+                + number(data && data.orphan && data.orphan.deleted)
+                + number(data && data.events && data.events.deleted),
+            leads: number(data && data.leads && data.leads.deleted)
+        };
     };
 
     document.querySelectorAll('[data-kk-quiz-statistics-export]').forEach((button) => {
@@ -442,7 +462,10 @@ $orphanExtraCount = max(0, count($orphanQuizCodes) - count($orphanPreview));
     document.querySelectorAll('[data-kk-quiz-cleanup]').forEach((button) => {
         button.addEventListener('click', () => {
             const mode = button.getAttribute('data-kk-quiz-cleanup') || '';
-            if (!messages[mode] || !confirm(messages[mode])) {
+            const scopedConfirmation = ['events_all', 'leads_all', 'full'].includes(mode)
+                ? messages[mode] + '\n\n' + cleanupScopeMessage
+                : messages[mode];
+            if (!messages[mode] || !confirm(scopedConfirmation)) {
                 return;
             }
 
@@ -456,7 +479,7 @@ $orphanExtraCount = max(0, count($orphanQuizCodes) - count($orphanPreview));
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ mode })
+                body: JSON.stringify({ mode, quiz_code: cleanupQuizCode })
             })
                 .then((response) => response.json())
                 .then((response) => {
@@ -466,7 +489,8 @@ $orphanExtraCount = max(0, count($orphanQuizCodes) - count($orphanPreview));
                         throw new Error('CLEANUP_FAILED');
                     }
 
-                    alert('Удалено событий: ' + getDeletedCount(data));
+                    const deleted = getDeletedCounts(data);
+                    alert(`Удалено событий: ${deleted.events}. Удалено заявок: ${deleted.leads}.`);
                     window.location.reload();
                 })
                 .catch((error) => {
