@@ -84,11 +84,35 @@ final class QuizExportService
                     'required_fields' => $this->normalizeStringList($section['UF_KK_REQUIRED_FIELDS'] ?? []),
                     'metrika_counter_id' => (string)($section['UF_KK_METRIKA_COUNTER_ID'] ?? ''),
                     'metrika_goal' => (string)($section['UF_KK_METRIKA_GOAL'] ?? ''),
+                    'metrika_first_answer_goal' => (string)($section['UF_KK_METRIKA_FIRST_ANSWER_GOAL'] ?? ''),
+                    'metrika_result_goal' => (string)($section['UF_KK_METRIKA_RESULT_GOAL'] ?? ''),
+                    'metrika_result_cta_click_goal' => (string)($section['UF_KK_METRIKA_RESULT_CTA_GOAL'] ?? ''),
+                    'metrika_product_click_goal' => (string)($section['UF_KK_METRIKA_PRODUCT_CLICK_GOAL'] ?? ''),
                     'use_metrika' => $this->toBool($section['UF_KK_USE_METRIKA'] ?? null),
+                    'use_ga' => $this->toBool($section['UF_KK_USE_GA'] ?? null),
+                    'ga_measurement_id' => (string)($section['UF_KK_GA_MEASUREMENT_ID'] ?? ''),
+                    'ga_first_answer_event_name' => (string)($section['UF_KK_GA_FIRST_ANSWER_EVENT'] ?? ''),
+                    'ga_result_event_name' => (string)($section['UF_KK_GA_RESULT_EVENT'] ?? ''),
+                    'ga_result_cta_click_event_name' => (string)($section['UF_KK_GA_RESULT_CTA_EVENT'] ?? ''),
+                    'ga_product_click_event_name' => (string)($section['UF_KK_GA_PRODUCT_CLICK_EVENT'] ?? ''),
+                    'ga_form_submit_event_name' => (string)($section['UF_KK_GA_FORM_SUBMIT_EVENT'] ?? ''),
                     'use_catalog' => $this->toBool($section['UF_KK_USE_CATALOG'] ?? null),
                     'catalog_iblock_id' => $legacyCatalogIblockId,
                     'catalog_iblock_ids' => $catalogIblockIds,
                     'theme' => $this->normalizeStringList($section['UF_KK_THEME'] ?? 'default')[0] ?? 'default',
+                    'max_width' => (string)($section['UF_KK_MAX_WIDTH'] ?? ''),
+                    'accent_color' => (string)($section['UF_KK_ACCENT_COLOR'] ?? ''),
+                    'accent_hover_color' => (string)($section['UF_KK_ACCENT_HOVER'] ?? ''),
+                    'active_color' => (string)($section['UF_KK_ACTIVE_COLOR'] ?? ''),
+                    'progress_color' => (string)($section['UF_KK_PROGRESS_COLOR'] ?? ''),
+                    'border_radius' => ($section['UF_KK_BORDER_RADIUS'] ?? '') !== '' ? (int)$section['UF_KK_BORDER_RADIUS'] : null,
+                    'container_radius' => ($section['UF_KK_CONTAINER_RADIUS'] ?? '') !== '' ? (int)$section['UF_KK_CONTAINER_RADIUS'] : null,
+                    'card_radius' => ($section['UF_KK_CARD_RADIUS'] ?? '') !== '' ? (int)$section['UF_KK_CARD_RADIUS'] : null,
+                    'button_radius' => ($section['UF_KK_BUTTON_RADIUS'] ?? '') !== '' ? (int)$section['UF_KK_BUTTON_RADIUS'] : null,
+                    'input_radius' => ($section['UF_KK_INPUT_RADIUS'] ?? '') !== '' ? (int)$section['UF_KK_INPUT_RADIUS'] : null,
+                    'image_radius' => ($section['UF_KK_IMAGE_RADIUS'] ?? '') !== '' ? (int)$section['UF_KK_IMAGE_RADIUS'] : null,
+                    'answer_image_ratio' => $this->normalizeStringList($section['UF_KK_IMAGE_RATIO'] ?? '')[0] ?? '',
+                    'answer_image_fit' => $this->normalizeStringList($section['UF_KK_IMAGE_FIT'] ?? '')[0] ?? '',
                     'allow_popup_url' => $this->toBool($section['UF_KK_ALLOW_POPUP_URL'] ?? null),
                     'privacy_text' => (string)($section['UF_KK_PRIVACY_TEXT'] ?? ''),
                     'privacy_url' => (string)($section['UF_KK_PRIVACY_URL'] ?? ''),
@@ -113,8 +137,15 @@ final class QuizExportService
                 'UF_KK_FORM_TITLE', 'UF_KK_FORM_SUBTITLE', 'UF_KK_START_TEXT', 'UF_KK_START_QUESTION',
                 'UF_KK_PROGRESS_TOTAL',
                 'UF_KK_SUCCESS_TEXT', 'UF_KK_EMAIL_TO', 'UF_KK_FORM_FIELDS', 'UF_KK_REQUIRED_FIELDS',
-                'UF_KK_METRIKA_COUNTER_ID', 'UF_KK_METRIKA_GOAL', 'UF_KK_USE_METRIKA', 'UF_KK_USE_CATALOG',
-                'UF_KK_CATALOG_IBLOCK_ID', 'UF_KK_CATALOG_IBLOCK_IDS', 'UF_KK_THEME', 'UF_KK_ALLOW_POPUP_URL',
+                'UF_KK_METRIKA_COUNTER_ID', 'UF_KK_METRIKA_GOAL', 'UF_KK_METRIKA_FIRST_ANSWER_GOAL',
+                'UF_KK_METRIKA_RESULT_GOAL', 'UF_KK_METRIKA_RESULT_CTA_GOAL', 'UF_KK_METRIKA_PRODUCT_CLICK_GOAL',
+                'UF_KK_USE_METRIKA', 'UF_KK_USE_GA', 'UF_KK_GA_MEASUREMENT_ID', 'UF_KK_GA_FIRST_ANSWER_EVENT',
+                'UF_KK_GA_RESULT_EVENT', 'UF_KK_GA_RESULT_CTA_EVENT', 'UF_KK_GA_PRODUCT_CLICK_EVENT',
+                'UF_KK_GA_FORM_SUBMIT_EVENT', 'UF_KK_USE_CATALOG',
+                'UF_KK_CATALOG_IBLOCK_ID', 'UF_KK_CATALOG_IBLOCK_IDS', 'UF_KK_THEME', 'UF_KK_MAX_WIDTH',
+                'UF_KK_ACCENT_COLOR', 'UF_KK_ACCENT_HOVER', 'UF_KK_ACTIVE_COLOR', 'UF_KK_PROGRESS_COLOR',
+                'UF_KK_BORDER_RADIUS', 'UF_KK_CONTAINER_RADIUS', 'UF_KK_CARD_RADIUS', 'UF_KK_BUTTON_RADIUS',
+                'UF_KK_INPUT_RADIUS', 'UF_KK_IMAGE_RADIUS', 'UF_KK_IMAGE_RATIO', 'UF_KK_IMAGE_FIT', 'UF_KK_ALLOW_POPUP_URL',
                 'UF_KK_PRIVACY_TEXT', 'UF_KK_PRIVACY_URL', 'UF_KK_REQUIRE_AGREEMENT',
             ]
         );
@@ -172,6 +203,8 @@ final class QuizExportService
             'detail_text' => (string)($element['DETAIL_TEXT'] ?? ''),
             'question_type' => strtolower($this->getEnumXmlId($properties['KK_QUESTION_TYPE'] ?? [])) ?: 'radio',
             'display_template' => strtolower($this->getEnumXmlId($properties['KK_DISPLAY_TEMPLATE'] ?? [])) ?: 'list',
+            'answer_image_ratio' => strtolower($this->getEnumXmlId($properties['KK_IMAGE_RATIO'] ?? [])),
+            'answer_image_fit' => strtolower($this->getEnumXmlId($properties['KK_IMAGE_FIT'] ?? [])),
             'is_required' => $this->toBool($this->getEnumXmlId($properties['KK_IS_REQUIRED'] ?? [])),
             'placeholder' => (string)$this->getPropertyValue($properties, 'KK_PLACEHOLDER'),
             'default_next_question_code' => $defaultNextQuestionId !== null ? $this->getElementCodeById($defaultNextQuestionId, $questionCodeMap) : '',
@@ -236,6 +269,7 @@ final class QuizExportService
             'priority' => (int)$this->getPropertyValue($properties, 'KK_RESULT_PRIORITY'),
             'cta_text' => (string)$this->getPropertyValue($properties, 'KK_RESULT_CTA_TEXT'),
             'cta_link' => (string)$this->getPropertyValue($properties, 'KK_RESULT_CTA_LINK'),
+            'cta_target' => $this->normalizeCtaTarget($this->getEnumXmlId($properties['KK_RESULT_CTA_TARGET'] ?? [])),
             'video_url' => (string)$this->getPropertyValue($properties, 'KK_RESULT_VIDEO_URL'),
             'video_title' => (string)$this->getPropertyValue($properties, 'KK_RESULT_VIDEO_TITLE'),
             'video_position' => (string)$this->getEnumXmlId($properties['KK_RESULT_VIDEO_POSITION'] ?? []),
@@ -249,6 +283,13 @@ final class QuizExportService
     private function toBool(mixed $value): bool
     {
         return $value === true || $value === 'Y' || $value === '1' || $value === 1 || $value === 'Да';
+    }
+
+    private function normalizeCtaTarget(mixed $value): string
+    {
+        $value = trim((string)$value);
+
+        return in_array($value, ['same_tab', 'new_tab'], true) ? $value : 'same_tab';
     }
 
     private function toNullableInt(mixed $value): ?int
