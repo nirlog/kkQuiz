@@ -280,6 +280,25 @@ foreach ($edges as $edge) {
         $scoreIncoming[$edge['to']] = (int)($scoreIncoming[$edge['to']] ?? 0) + 1;
     }
 }
+$incomingConditions = [];
+foreach ($edges as $edge) {
+    if (!empty($edge['broken'])) {
+        continue;
+    }
+    $targetId = (string)($edge['to'] ?? '');
+    if ($targetId === '' || $targetId === 'start') {
+        continue;
+    }
+    $label = trim((string)($edge['label'] ?? ''));
+    if ($label === '') {
+        continue;
+    }
+    $incomingConditions[$targetId][] = [
+        'from' => (string)($edge['from'] ?? ''),
+        'label' => $label,
+        'type' => (string)($edge['type'] ?? ''),
+    ];
+}
 $levels = ['start' => 0];
 $queue = ['start'];
 while ($queue !== []) {
@@ -318,7 +337,79 @@ if ($hasCycle) {
 $maxNavigationLevel = max(array_values($levels) ?: [0]);
 $scoreResultsLevel = $maxNavigationLevel + 1;
 $orphanLevel = $maxNavigationLevel + 2;
-$nodes = [['id' => 'start', 'entity_id' => 0, 'type' => 'start', 'code' => '', 'name' => 'Старт', 'title' => 'Старт', 'active' => true, 'sort' => 0, 'answers_count' => 0, 'edit_url' => '', 'level' => 0, 'unreachable' => false, 'score_only' => false]];
+$shortText = static function (string $text, int $limit = 70): string {
+    $text = trim($text);
+    if (mb_strlen($text) <= $limit) {
+        return $text;
+    }
+    return mb_substr($text, 0, $limit - 1) . '…';
+};
+$sourceTitles = ['start' => 'Старт'];
+foreach ($questions as $id => $question) {
+    $sourceTitles['question_' . $id] = $question['title'];
+}
+foreach ($results as $id => $result) {
+    $sourceTitles['result_' . $id] = $result['title'];
+}
+$buildIncomingData = static function (string $nodeId) use ($incomingConditions, $sourceTitles, $shortText): array {
+    $conditions = $incomingConditions[$nodeId] ?? [];
+    if ($conditions === []) {
+        return ['incoming_conditions' => [], 'incoming_count' => 0, 'incoming_preview' => '', 'incoming_title' => ''];
+    }
+    $lines = [];
+    foreach ($conditions as $condition) {
+        $sourceTitle = (string)($sourceTitles[$condition['from']] ?? $condition['from']);
+        $label = (string)$condition['label'];
+        switch ($condition['type']) {
+            case 'start':
+                $lines[] = 'Стартовый вопрос';
+                break;
+            case 'default_question':
+                $lines[] = 'По умолчанию из «' . $sourceTitle . '»';
+                break;
+            case 'default_result':
+                $lines[] = 'Результат по умолчанию из «' . $sourceTitle . '»';
+                break;
+            case 'score':
+                $lines[] = 'Баллы: «' . $label . '» из «' . $sourceTitle . '»';
+                break;
+            default:
+                $lines[] = 'При ответе: «' . $label . '» из «' . $sourceTitle . '»';
+        }
+    }
+    $count = count($conditions);
+    if ($count === 1) {
+        $condition = $conditions[0];
+        $preview = match ($condition['type']) {
+            'start' => 'Стартовый вопрос',
+            'default_question' => 'По умолчанию',
+            'default_result' => 'Результат по умолчанию',
+            'score' => 'Баллы: ' . $condition['label'],
+            default => 'При ответе: ' . $condition['label'],
+        };
+    } else {
+        $labels = array_values(array_unique(array_column($conditions, 'label')));
+        $types = array_values(array_unique(array_column($conditions, 'type')));
+        if (count($labels) === 1 && count($types) === 1) {
+            $preview = match ($types[0]) {
+                'start' => 'Стартовый вопрос',
+                'default_question' => 'По умолчанию',
+                'default_result' => 'Результат по умолчанию',
+                'score' => 'Баллы: ' . $labels[0],
+                default => 'При ответе: ' . $labels[0],
+            };
+        } else {
+            $preview = 'Входящих условий: ' . $count;
+        }
+    }
+    return [
+        'incoming_conditions' => $conditions,
+        'incoming_count' => $count,
+        'incoming_preview' => $shortText($preview),
+        'incoming_title' => implode("\n", $lines),
+    ];
+};
+$nodes = [array_merge(['id' => 'start', 'entity_id' => 0, 'type' => 'start', 'code' => '', 'name' => 'Старт', 'title' => 'Старт', 'active' => true, 'sort' => 0, 'answers_count' => 0, 'edit_url' => '', 'level' => 0, 'unreachable' => false, 'score_only' => false], $buildIncomingData('start'))];
 foreach ($questions as $id => $question) {
     $nodeId = 'question_' . $id;
     $unreachable = !isset($levels[$nodeId]);
@@ -328,7 +419,7 @@ foreach ($questions as $id => $question) {
     if (!$question['active'] && isset($navigationIncoming[$nodeId])) {
         $issues[] = ['type' => 'warning', 'node_id' => $nodeId, 'message' => 'В активной цепочке есть переход к неактивному вопросу «' . $question['title'] . '».'];
     }
-    $nodes[] = array_merge($question, ['id' => $nodeId, 'entity_id' => $id, 'type' => 'question', 'answers_count' => count($question['answers']), 'level' => $levels[$nodeId] ?? $orphanLevel, 'unreachable' => $unreachable, 'score_only' => false]);
+    $nodes[] = array_merge($question, ['id' => $nodeId, 'entity_id' => $id, 'type' => 'question', 'answers_count' => count($question['answers']), 'level' => $levels[$nodeId] ?? $orphanLevel, 'unreachable' => $unreachable, 'score_only' => false], $buildIncomingData($nodeId));
 }
 foreach ($results as $id => $result) {
     $nodeId = 'result_' . $id;
@@ -340,7 +431,7 @@ foreach ($results as $id => $result) {
     if (!$hasNavigationIncoming && !$hasScoreIncoming) {
         $issues[] = ['type' => 'warning', 'node_id' => $nodeId, 'message' => 'Результат «' . $result['title'] . '» без входящих связей.'];
     }
-    $nodes[] = array_merge($result, ['id' => $nodeId, 'entity_id' => $id, 'type' => 'result', 'answers_count' => 0, 'level' => $level, 'unreachable' => $unreachable, 'score_only' => $scoreOnly]);
+    $nodes[] = array_merge($result, ['id' => $nodeId, 'entity_id' => $id, 'type' => 'result', 'answers_count' => 0, 'level' => $level, 'unreachable' => $unreachable, 'score_only' => $scoreOnly], $buildIncomingData($nodeId));
 }
 $issueNodeIds = [];
 foreach ($issues as $issue) {
@@ -405,13 +496,13 @@ $escape = static fn (mixed $value): string => htmlspecialcharsbx((string)$value)
     </div>
     <div class="kk-quiz-schema__canvas-wrap" id="kk-quiz-schema-wrap">
         <svg class="kk-quiz-schema__edges" id="kk-quiz-schema-edges"><defs><marker id="kk-schema-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#87919c"/></marker></defs></svg>
-        <div class="kk-quiz-schema__canvas"><?php foreach ($columns as $level => $column): ?><div class="kk-schema-column"><div class="kk-schema-column__title"><?= $level === $scoreResultsLevel ? 'Результаты по баллам' : ($level === $orphanLevel ? 'Недостижимые / без связей' : 'Уровень ' . (int)$level) ?></div><?php foreach ($column as $node): ?><div id="kk-node-<?= $escape($node['id']) ?>" class="kk-quiz-schema-node kk-quiz-schema-node--<?= $escape($node['type']) ?><?= !$node['active'] ? ' is-inactive' : '' ?><?= $node['unreachable'] ? ' is-unreachable' : '' ?><?= $node['score_only'] ? ' is-score-only' : '' ?><?= $node['has_issue'] ? ' has-issue' : '' ?>" data-node-id="<?= $escape($node['id']) ?>" data-type="<?= $escape($node['type']) ?>" data-issue="<?= $node['has_issue'] ? 'Y' : 'N' ?>" data-search="<?= $escape(mb_strtolower($node['title'] . ' ' . $node['name'] . ' ' . $node['code'])) ?>"><div class="kk-quiz-schema-node__type"><?= $node['type'] === 'question' ? 'Вопрос' : ($node['type'] === 'result' ? 'Результат' : 'Старт') ?></div><div class="kk-quiz-schema-node__title"><?= $escape($node['title']) ?></div><?php if ($node['code'] !== ''): ?><div class="kk-quiz-schema-node__code"><?= $escape($node['code']) ?></div><?php endif; ?><?php if ($node['type'] === 'question'): ?><div class="kk-quiz-schema-node__meta">Ответов: <?= (int)$node['answers_count'] ?></div><?php endif; ?><?php if ($node['score_only']): ?><div class="kk-quiz-schema-node__meta">Используется в балльной логике</div><?php endif; ?><?php if ($node['edit_url'] !== ''): ?><a href="<?= $escape($node['edit_url']) ?>" class="adm-btn adm-btn-small">Редактировать</a><?php endif; ?></div><?php endforeach; ?></div><?php endforeach; ?></div>
+        <div class="kk-quiz-schema__canvas"><?php foreach ($columns as $level => $column): ?><div class="kk-schema-column"><div class="kk-schema-column__title"><?= $level === $scoreResultsLevel ? 'Результаты по баллам' : ($level === $orphanLevel ? 'Недостижимые / без связей' : 'Уровень ' . (int)$level) ?></div><?php foreach ($column as $node): ?><div id="kk-node-<?= $escape($node['id']) ?>" class="kk-quiz-schema-node kk-quiz-schema-node--<?= $escape($node['type']) ?><?= !$node['active'] ? ' is-inactive' : '' ?><?= $node['unreachable'] ? ' is-unreachable' : '' ?><?= $node['score_only'] ? ' is-score-only' : '' ?><?= $node['has_issue'] ? ' has-issue' : '' ?>" data-node-id="<?= $escape($node['id']) ?>" data-type="<?= $escape($node['type']) ?>" data-issue="<?= $node['has_issue'] ? 'Y' : 'N' ?>" data-search="<?= $escape(mb_strtolower($node['title'] . ' ' . $node['name'] . ' ' . $node['code'])) ?>"><div class="kk-quiz-schema-node__type"><?= $node['type'] === 'question' ? 'Вопрос' : ($node['type'] === 'result' ? 'Результат' : 'Старт') ?></div><div class="kk-quiz-schema-node__title"><?= $escape($node['title']) ?></div><?php if ($node['code'] !== ''): ?><div class="kk-quiz-schema-node__code"><?= $escape($node['code']) ?></div><?php endif; ?><?php if ($node['type'] === 'question'): ?><div class="kk-quiz-schema-node__meta">Ответов: <?= (int)$node['answers_count'] ?></div><?php endif; ?><?php if ($node['score_only']): ?><div class="kk-quiz-schema-node__meta">Используется в балльной логике</div><?php endif; ?><?php if ($node['incoming_preview'] !== ''): ?><div class="kk-quiz-schema-node__incoming" title="<?= $escape($node['incoming_title'] ?: $node['incoming_preview']) ?>"><?= $escape($node['incoming_preview']) ?></div><?php endif; ?><?php if ($node['edit_url'] !== ''): ?><a href="<?= $escape($node['edit_url']) ?>" class="adm-btn adm-btn-small">Редактировать</a><?php endif; ?></div><?php endforeach; ?></div><?php endforeach; ?></div>
     </div>
 </div>
 <h3>Связи</h3>
 <table class="adm-list-table"><thead><tr class="adm-list-table-header"><td class="adm-list-table-cell">Откуда</td><td class="adm-list-table-cell">Ответ / условие</td><td class="adm-list-table-cell">Куда</td><td class="adm-list-table-cell">Тип</td></tr></thead><tbody><?php foreach ($edges as $edge): ?><tr><td class="adm-list-table-cell"><?= $escape($nodesById[$edge['from']]['title'] ?? $edge['from']) ?></td><td class="adm-list-table-cell"><?= $escape($edge['label']) ?></td><td class="adm-list-table-cell"><?= $escape($nodesById[$edge['to']]['title'] ?? $edge['to']) ?><?= $edge['broken'] ? ' (не найдено)' : '' ?></td><td class="adm-list-table-cell"><?= $escape($edgeTypeLabels[$edge['type']] ?? $edge['type']) ?></td></tr><?php endforeach; ?><?php if ($edges === []): ?><tr><td colspan="4" class="adm-list-table-cell">Связей нет.</td></tr><?php endif; ?></tbody></table>
 <style>
-.kk-schema-issues{background:#fff;padding:14px 14px 14px 34px}.kk-schema-issue--error{color:#a11}.kk-schema-issue--warning{color:#8a5a00}.kk-quiz-schema__toolbar{display:flex;gap:10px;margin:15px 0}.kk-quiz-schema__canvas-wrap{position:relative;overflow:auto;background:#f4f6f8;border:1px solid #cdd2d7;min-height:420px;padding:25px}.kk-quiz-schema__canvas{position:relative;display:flex;align-items:flex-start;gap:70px;min-width:max-content}.kk-schema-column{width:250px;display:flex;flex-direction:column;gap:18px}.kk-schema-column__title{font-weight:bold;color:#68717b}.kk-quiz-schema-node{position:relative;z-index:2;background:#fff;border:2px solid #7d9ec0;border-radius:6px;padding:12px;box-sizing:border-box}.kk-quiz-schema-node--start{border-color:#87919c;background:#eef1f4}.kk-quiz-schema-node--result{border-color:#56a06b;background:#f2fbf4}.kk-quiz-schema-node.is-score-only{border-color:#b78a20;border-style:dashed;background:#fffaf0}.kk-quiz-schema-node.has-issue{border-color:#d64b4b}.kk-quiz-schema-node.is-inactive{opacity:.55}.kk-quiz-schema-node.is-unreachable{border-style:dashed}.kk-quiz-schema-node__type{font-size:11px;text-transform:uppercase;color:#68717b}.kk-quiz-schema-node__title{font-weight:bold;margin:5px 0}.kk-quiz-schema-node__code,.kk-quiz-schema-node__meta{font-size:12px;color:#68717b;margin-bottom:7px}.kk-quiz-schema__edges{position:absolute;inset:25px;width:calc(100% - 50px);height:calc(100% - 50px);overflow:visible;z-index:1;pointer-events:none}.kk-schema-edge{fill:none;stroke:#87919c;stroke-width:1.5}.kk-schema-edge.is-score{stroke:#b07800;stroke-dasharray:5 3}.kk-schema-edge-label{font-size:10px;fill:#505860}.adm-list-table{width:100%;margin-top:10px}
+.kk-schema-issues{background:#fff;padding:14px 14px 14px 34px}.kk-schema-issue--error{color:#a11}.kk-schema-issue--warning{color:#8a5a00}.kk-quiz-schema__toolbar{display:flex;gap:10px;margin:15px 0}.kk-quiz-schema__canvas-wrap{position:relative;overflow:auto;background:#f4f6f8;border:1px solid #cdd2d7;min-height:420px;padding:25px}.kk-quiz-schema__canvas{position:relative;display:flex;align-items:flex-start;gap:70px;min-width:max-content}.kk-schema-column{width:250px;display:flex;flex-direction:column;gap:18px}.kk-schema-column__title{font-weight:bold;color:#68717b}.kk-quiz-schema-node{position:relative;z-index:2;background:#fff;border:2px solid #7d9ec0;border-radius:6px;padding:12px;box-sizing:border-box}.kk-quiz-schema-node--start{border-color:#87919c;background:#eef1f4}.kk-quiz-schema-node--result{border-color:#56a06b;background:#f2fbf4}.kk-quiz-schema-node.is-score-only{border-color:#b78a20;border-style:dashed;background:#fffaf0}.kk-quiz-schema-node.has-issue{border-color:#d64b4b}.kk-quiz-schema-node.is-inactive{opacity:.55}.kk-quiz-schema-node.is-unreachable{border-style:dashed}.kk-quiz-schema-node__type{font-size:11px;text-transform:uppercase;color:#68717b}.kk-quiz-schema-node__title{font-weight:bold;margin:5px 0}.kk-quiz-schema-node__code,.kk-quiz-schema-node__meta{font-size:12px;color:#68717b;margin-bottom:7px}.kk-quiz-schema-node__incoming{margin:7px 0;padding:5px 7px;border-radius:4px;background:#eef5ff;color:#31506f;font-size:12px;line-height:1.35}.kk-quiz-schema-node.is-score-only .kk-quiz-schema-node__incoming{background:#fff3d7;color:#7a5600}.kk-quiz-schema__edges{position:absolute;inset:25px;width:calc(100% - 50px);height:calc(100% - 50px);overflow:visible;z-index:1;pointer-events:none}.kk-schema-edge{fill:none;stroke:#87919c;stroke-width:1.5}.kk-schema-edge.is-score{stroke:#b07800;stroke-dasharray:5 3}.kk-schema-edge-label{font-size:10px;fill:#505860}.adm-list-table{width:100%;margin-top:10px}
 </style>
 <script>window.KKQuizSchemaData = <?= json_encode($schemaData, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;</script>
 <script>
