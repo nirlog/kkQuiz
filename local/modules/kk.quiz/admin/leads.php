@@ -107,10 +107,21 @@ $property = static function (array $properties, string $code, bool $xmlId = fals
     }
     return is_scalar($value) ? trim((string)$value) : '';
 };
-$integrationStatus = static function (array $properties, string $prefix) use ($property, $escape, $short): string {
+$isDisabledIntegrationValue = static function (string $value): bool {
+    $value = mb_strtoupper(trim($value));
+
+    return $value !== '' && (strpos($value, 'DISABLED') !== false
+        || strpos($value, '_NOT_CONFIGURED') !== false
+        || strpos($value, 'ОТКЛЮЧ') !== false);
+};
+$integrationStatus = static function (array $properties, string $prefix) use ($property, $escape, $short, $isDisabledIntegrationValue): string {
     $sent = strtoupper($property($properties, $prefix . '_SENT', true));
     $status = $property($properties, $prefix . '_STATUS');
     $error = $property($properties, $prefix . '_ERROR');
+    if ($isDisabledIntegrationValue($status) || $isDisabledIntegrationValue($error)) {
+        $technicalValue = $isDisabledIntegrationValue($status) ? $status : $error;
+        return '<span class="kk-quiz-integration-disabled" title="' . $escape($technicalValue) . '">Отключено</span>';
+    }
     if ($error !== '') {
         return '<span style="color:#b42318" title="' . $escape($error) . '">Ошибка: ' . $escape($short($error, 35)) . '</span>';
     }
@@ -216,6 +227,7 @@ $filter->Buttons(['table_id' => $tableId, 'url' => $APPLICATION->GetCurPage(), '
 $filter->End();
 ?>
 <div style="margin:12px 0"><button type="button" class="adm-btn adm-btn-save" id="kk-quiz-export-leads">Экспорт CSV</button></div>
+<style>.kk-quiz-integration-disabled{color:#777}</style>
 <?php $list->DisplayList(); ?>
 <script>
 document.getElementById('kk-quiz-export-leads')?.addEventListener('click', (event) => {

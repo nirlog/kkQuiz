@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Bitrix\Main\Loader;
 use Kk\Quiz\Iblock\Installer;
 use Kk\Quiz\Service\LeadDeliveryLogService;
+use Kk\Quiz\Service\ModuleSettingsService;
 
 require_once($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_before.php');
 
@@ -174,6 +175,13 @@ $linkValue = static function (string $value) use ($escape): string {
 $isSent = static function (string $value): bool {
     return in_array(strtoupper($value), ['Y', '1', 'ДА', 'YES'], true);
 };
+$isDisabledIntegrationValue = static function (string $value): bool {
+    $value = mb_strtoupper(trim($value));
+
+    return $value !== '' && (strpos($value, 'DISABLED') !== false
+        || strpos($value, '_NOT_CONFIGURED') !== false
+        || strpos($value, 'ОТКЛЮЧ') !== false);
+};
 $formatAnswers = static function (string $detailText, mixed $answersData) use ($escape): string {
     if (trim($detailText) !== '') {
         return '<pre class="kk-lead-answers">' . $escape($detailText) . '</pre>';
@@ -212,16 +220,17 @@ $formatAnswers = static function (string $detailText, mixed $answersData) use ($
     $json = json_encode($answersData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
     return '<pre class="kk-lead-answers">' . $escape(is_string($json) ? $json : '') . '</pre>';
 };
-$integration = static function (string $title, string $prefix, array $extra = []) use ($properties, $property, $isSent, $escape): string {
+$integration = static function (string $title, string $prefix, array $extra = []) use ($properties, $property, $isSent, $escape, $isDisabledIntegrationValue): string {
     $sent = $isSent($property($properties, $prefix . '_SENT', true));
+    $status = $property($properties, $prefix . '_STATUS');
     $error = $property($properties, $prefix . '_ERROR');
-    $class = $error !== '' ? 'error' : ($sent ? 'success' : 'empty');
-    $state = $error !== '' ? 'Ошибка' : ($sent ? 'Отправлено' : 'Не отправлено');
+    $isDisabled = $isDisabledIntegrationValue($status) || $isDisabledIntegrationValue($error);
+    $class = $isDisabled ? 'disabled' : ($error !== '' ? 'error' : ($sent ? 'success' : 'empty'));
+    $state = $isDisabled ? 'Отключено' : ($error !== '' ? 'Ошибка' : ($sent ? 'Отправлено' : 'Не отправлено'));
     $html = '<div class="kk-lead-delivery"><h4>' . $escape($title) . '</h4>'
         . '<div class="kk-lead-status--' . $class . '">' . $state . '</div>'
         . '<dl><dt>Дата</dt><dd>' . $escape($property($properties, $prefix . '_SENT_AT') ?: '—') . '</dd>';
-    $status = $property($properties, $prefix . '_STATUS');
-    if ($status !== '') {
+    if ($status !== '' && !$isDisabled) {
         $html .= '<dt>Статус</dt><dd>' . $escape($status) . '</dd>';
     }
     foreach ($extra as $label => $code) {
@@ -230,15 +239,31 @@ $integration = static function (string $title, string $prefix, array $extra = []
             $html .= '<dt>' . $escape($label) . '</dt><dd>' . $escape($value) . '</dd>';
         }
     }
-    if ($error !== '') {
+    if ($isDisabled) {
+        $html .= '<dt>Причина</dt><dd>' . $escape($status !== '' ? $status : $error) . '</dd>';
+    } elseif ($error !== '') {
         $html .= '<dt>Ошибка</dt><dd class="kk-lead-status--error">' . $escape($error) . '</dd>';
     }
     return $html . '</dl></div>';
 };
+$integrationAvailability = [
+    'webhook' => ModuleSettingsService::getBool('webhook_enabled'),
+    'bitrix24' => ModuleSettingsService::getBool('bitrix24_enabled'),
+    'amocrm' => ModuleSettingsService::getBool('amocrm_enabled'),
+];
+$retryButton = static function (string $label, string $disabledLabel, string $action, bool $enabled) use ($escape): string {
+    if (!$enabled) {
+        return '<button type="button" class="adm-btn kk-lead-retry" disabled title="Интеграция отключена">'
+            . $escape($disabledLabel) . '</button>';
+    }
+
+    return '<button type="button" class="adm-btn adm-btn-save kk-lead-retry" data-action="' . $escape($action)
+        . '" data-name="' . $escape($label) . '">Повторить ' . $escape($label) . '</button>';
+};
 $statusLabel = $statusEnums[$currentStatusId]['value'] ?? ($currentStatus !== '' ? $currentStatus : $currentStatusXml);
 ?>
 <style>
-.kk-lead-detail{display:grid;gap:14px}.kk-lead-detail__header,.kk-lead-card{background:#fff;border:1px solid #cdd2d7;border-radius:6px;padding:14px;box-sizing:border-box}.kk-lead-detail__header h2,.kk-lead-card h3{margin:0 0 12px}.kk-lead-detail__header-meta{display:flex;gap:18px;flex-wrap:wrap}.kk-lead-detail__actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.kk-lead-detail__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.kk-lead-detail__rows{display:grid;grid-template-columns:170px minmax(0,1fr);gap:7px 10px}.kk-lead-detail__rows b{color:#555}.kk-lead-card--wide{min-width:0}.kk-lead-answers,.kk-lead-log-body{white-space:pre-wrap;overflow-wrap:anywhere;background:#f6f8fa;border:1px solid #e1e5ea;border-radius:4px;padding:10px}.kk-lead-answer{padding:7px 0;border-bottom:1px solid #e8ebef}.kk-lead-deliveries{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:10px}.kk-lead-delivery{background:#f6f8fa;border:1px solid #e1e5ea;border-radius:5px;padding:10px}.kk-lead-delivery h4{margin:0 0 7px}.kk-lead-delivery dl{margin:8px 0 0}.kk-lead-delivery dt{font-weight:bold;margin-top:5px}.kk-lead-delivery dd{margin:1px 0}.kk-lead-status--success{color:#287d3c;font-weight:bold}.kk-lead-status--error{color:#b42318;font-weight:bold}.kk-lead-status--empty,.kk-lead-empty{color:#777}.kk-lead-logs{width:100%;border-collapse:collapse}.kk-lead-logs th,.kk-lead-logs td{border:1px solid #d6dce5;padding:7px;vertical-align:top;text-align:left}.kk-lead-logs th{background:#eef2f7}.kk-lead-logs details{max-width:420px}.kk-lead-manage textarea{width:100%;min-height:110px;box-sizing:border-box}.kk-lead-manage select,.kk-lead-manage input[type=text]{max-width:100%;width:320px}
+.kk-lead-detail{display:grid;gap:14px}.kk-lead-detail__header,.kk-lead-card{background:#fff;border:1px solid #cdd2d7;border-radius:6px;padding:14px;box-sizing:border-box}.kk-lead-detail__header h2,.kk-lead-card h3{margin:0 0 12px}.kk-lead-detail__header-meta{display:flex;gap:18px;flex-wrap:wrap}.kk-lead-detail__actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.kk-lead-detail__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.kk-lead-detail__rows{display:grid;grid-template-columns:170px minmax(0,1fr);gap:7px 10px}.kk-lead-detail__rows b{color:#555}.kk-lead-card--wide{min-width:0}.kk-lead-answers,.kk-lead-log-body{white-space:pre-wrap;overflow-wrap:anywhere;background:#f6f8fa;border:1px solid #e1e5ea;border-radius:4px;padding:10px}.kk-lead-answer{padding:7px 0;border-bottom:1px solid #e8ebef}.kk-lead-deliveries{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:10px}.kk-lead-delivery{background:#f6f8fa;border:1px solid #e1e5ea;border-radius:5px;padding:10px}.kk-lead-delivery h4{margin:0 0 7px}.kk-lead-delivery dl{margin:8px 0 0}.kk-lead-delivery dt{font-weight:bold;margin-top:5px}.kk-lead-delivery dd{margin:1px 0}.kk-lead-status--success{color:#287d3c;font-weight:bold}.kk-lead-status--error{color:#b42318;font-weight:bold}.kk-lead-status--disabled{color:#777;font-weight:bold}.kk-lead-status--empty,.kk-lead-empty{color:#777}.kk-lead-logs{width:100%;border-collapse:collapse}.kk-lead-logs th,.kk-lead-logs td{border:1px solid #d6dce5;padding:7px;vertical-align:top;text-align:left}.kk-lead-logs th{background:#eef2f7}.kk-lead-logs details{max-width:420px}.kk-lead-manage textarea{width:100%;min-height:110px;box-sizing:border-box}.kk-lead-manage select,.kk-lead-manage input[type=text]{max-width:100%;width:320px}
 @media(max-width:1300px){.kk-lead-deliveries{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:1100px){.kk-lead-detail__grid,.kk-lead-deliveries{grid-template-columns:1fr}.kk-lead-detail__rows{grid-template-columns:1fr}.kk-lead-logs{display:block;overflow-x:auto}}
 </style>
 <div class="kk-lead-detail">
@@ -298,9 +323,9 @@ $statusLabel = $statusEnums[$currentStatusId]['value'] ?? ($currentStatus !== ''
         <?= $integration('Bitrix24', 'KK_LEAD_BITRIX24', ['ID лида' => 'KK_LEAD_BITRIX24_LEAD_ID']) ?>
         <?= $integration('amoCRM', 'KK_LEAD_AMOCRM', ['ID сделки' => 'KK_LEAD_AMOCRM_LEAD_ID', 'ID контакта' => 'KK_LEAD_AMOCRM_CONTACT_ID']) ?>
     </div><div class="kk-lead-detail__actions">
-        <button type="button" class="adm-btn adm-btn-save kk-lead-retry" data-action="kk:quiz.api.retryLeadWebhook" data-name="Webhook">Повторить Webhook</button>
-        <button type="button" class="adm-btn adm-btn-save kk-lead-retry" data-action="kk:quiz.api.retryLeadBitrix24" data-name="Bitrix24">Повторить Bitrix24</button>
-        <button type="button" class="adm-btn adm-btn-save kk-lead-retry" data-action="kk:quiz.api.retryLeadAmoCrm" data-name="amoCRM">Повторить amoCRM</button>
+        <?= $retryButton('Webhook', 'Webhook отключен', 'kk:quiz.api.retryLeadWebhook', $integrationAvailability['webhook']) ?>
+        <?= $retryButton('Bitrix24', 'Bitrix24 отключен', 'kk:quiz.api.retryLeadBitrix24', $integrationAvailability['bitrix24']) ?>
+        <?= $retryButton('amoCRM', 'amoCRM отключен', 'kk:quiz.api.retryLeadAmoCrm', $integrationAvailability['amocrm']) ?>
     </div></section>
     <section class="kk-lead-card kk-lead-card--wide"><h3>История доставок</h3>
         <table class="kk-lead-logs"><thead><tr><th>Дата</th><th>Канал</th><th>Успех</th><th>Статус</th><th>Ошибка</th><th>Время, мс</th><th>Запрос</th><th>Ответ</th></tr></thead><tbody>
@@ -308,9 +333,11 @@ $statusLabel = $statusEnums[$currentStatusId]['value'] ?? ($currentStatus !== ''
             $date = $log['DATE_CREATE'] ?? '';
             if (is_object($date) && method_exists($date, 'toString')) { $date = $date->toString(); }
             $success = (string)($log['SUCCESS'] ?? '') === 'Y';
+            $logDisabled = $isDisabledIntegrationValue((string)($log['STATUS'] ?? ''))
+                || $isDisabledIntegrationValue((string)($log['ERROR'] ?? ''));
             $requestBody = (string)($log['REQUEST_BODY'] ?? '');
             $responseBody = (string)($log['RESPONSE_BODY'] ?? '');
-        ?><tr><td><?= $escape($date) ?></td><td><?= $escape($log['CHANNEL'] ?? '') ?></td><td class="kk-lead-status--<?= $success ? 'success' : 'error' ?>"><?= $success ? 'Да' : 'Нет' ?></td><td><?= $displayValue((string)($log['STATUS'] ?? '')) ?></td><td title="<?= $escape($log['ERROR'] ?? '') ?>"><?= $displayValue($short($log['ERROR'] ?? '')) ?></td><td><?= (int)($log['DURATION_MS'] ?? 0) ?></td>
+        ?><tr><td><?= $escape($date) ?></td><td><?= $escape($log['CHANNEL'] ?? '') ?></td><td class="kk-lead-status--<?= $logDisabled ? 'disabled' : ($success ? 'success' : 'error') ?>"><?= $logDisabled ? 'Отключено' : ($success ? 'Да' : 'Нет') ?></td><td><?= $displayValue((string)($log['STATUS'] ?? '')) ?></td><td class="<?= $logDisabled ? 'kk-lead-status--disabled' : '' ?>" title="<?= $escape($log['ERROR'] ?? '') ?>"><?= $displayValue($short($log['ERROR'] ?? '')) ?></td><td><?= (int)($log['DURATION_MS'] ?? 0) ?></td>
         <td><?php if ($requestBody !== ''): ?><details><summary>Запрос</summary><pre class="kk-lead-log-body"><?= $escape($requestBody) ?></pre></details><?php else: ?>—<?php endif; ?></td>
         <td><?php if ($responseBody !== ''): ?><details><summary>Ответ</summary><pre class="kk-lead-log-body"><?= $escape($responseBody) ?></pre></details><?php else: ?>—<?php endif; ?></td></tr><?php endforeach; endif; ?>
         </tbody></table>
@@ -320,6 +347,9 @@ $statusLabel = $statusEnums[$currentStatusId]['value'] ?? ($currentStatus !== ''
 <script>
 document.querySelectorAll('.kk-lead-retry').forEach((button) => {
     button.addEventListener('click', () => {
+        if (button.disabled || !button.dataset.action) {
+            return;
+        }
         const originalText = button.textContent;
         button.disabled = true;
         button.textContent = 'Отправка...';
@@ -330,6 +360,10 @@ document.querySelectorAll('.kk-lead-retry').forEach((button) => {
             body: JSON.stringify({lead_id: <?= $leadId ?>})
         }).then((response) => response.json()).then((response) => {
             const data = response?.data || response;
+            if (data?.disabled === true) {
+                alert(data.message || data.error || 'Интеграция отключена.');
+                return;
+            }
             if (!data || data.success !== true) {
                 const errors = data?.errors ? data.errors.join(', ') : (data?.error || 'DELIVERY_RETRY_FAILED');
                 throw new Error(errors);
