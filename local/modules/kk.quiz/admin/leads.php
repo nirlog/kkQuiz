@@ -127,6 +127,7 @@ if ($leadsIblockId > 0) {
         $fields = $element->GetFields();
         $properties = $element->GetProperties();
         $leadId = (int)$fields['ID'];
+        $detailUrl = 'kk_quiz_lead_detail.php?' . http_build_query(['ID' => $leadId, 'lang' => $lang]);
         $editUrl = 'iblock_element_edit.php?' . http_build_query(['IBLOCK_ID' => $leadsIblockId, 'type' => Installer::IBLOCK_TYPE_ID, 'ID' => $leadId, 'lang' => $lang]);
         $quizSectionId = (int)$property($properties, 'KK_LEAD_QUIZ_SECTION_ID');
         $quizCode = $property($properties, 'KK_LEAD_QUIZ_CODE');
@@ -139,10 +140,10 @@ if ($leadsIblockId > 0) {
         $messenger = $property($properties, 'KK_LEAD_CLIENT_MESSENGER');
         $pageUrl = $property($properties, 'KK_LEAD_PAGE_URL');
         $status = $property($properties, 'KK_LEAD_STATUS');
-        $row = &$list->AddRow((string)$leadId, ['ID' => $leadId, 'DATE_CREATE' => $fields['DATE_CREATE']], $editUrl);
-        $row->AddViewField('ID', '<a href="' . $escape($editUrl) . '">' . $leadId . '</a>');
+        $row = &$list->AddRow((string)$leadId, ['ID' => $leadId, 'DATE_CREATE' => $fields['DATE_CREATE']], $detailUrl);
+        $row->AddViewField('ID', '<a href="' . $escape($detailUrl) . '">' . $leadId . '</a>');
         $row->AddViewField('STATUS', $escape($status !== '' ? $status : $property($properties, 'KK_LEAD_STATUS', true)));
-        $row->AddViewField('CLIENT', '<a href="' . $escape($editUrl) . '">' . $escape($clientName !== '' ? $clientName : 'Без имени') . '</a>');
+        $row->AddViewField('CLIENT', '<a href="' . $escape($detailUrl) . '">' . $escape($clientName !== '' ? $clientName : 'Без имени') . '</a>');
         $contacts = array_filter([$clientPhone, $clientEmail, $messenger], static fn (string $item): bool => $item !== '');
         $row->AddViewField('CONTACTS', $contacts !== [] ? implode('<br>', array_map($escape, $contacts)) : '—');
         $quizHtml = $escape($quizName !== '' ? $quizName : $quizCode);
@@ -168,7 +169,10 @@ if ($leadsIblockId > 0) {
         $row->AddViewField('AMOCRM', $integrationStatus($properties, 'KK_LEAD_AMOCRM'));
         $note = $property($properties, 'KK_LEAD_MANAGER_NOTE');
         $row->AddViewField('MANAGER_NOTE', $note !== '' ? '<span title="' . $escape($note) . '">' . $escape($short($note)) . '</span>' : '—');
-        $row->AddActions([['TEXT' => 'Открыть', 'ACTION' => $list->ActionRedirect($editUrl), 'DEFAULT' => true]]);
+        $row->AddActions([
+            ['TEXT' => 'Открыть', 'ACTION' => $list->ActionRedirect($detailUrl), 'DEFAULT' => true],
+            ['TEXT' => 'Стандартная карточка', 'ACTION' => $list->ActionRedirect($editUrl)],
+        ]);
     }
 }
 
