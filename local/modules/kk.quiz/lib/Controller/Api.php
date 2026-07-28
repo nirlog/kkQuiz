@@ -531,14 +531,13 @@ final class Api extends Controller
         }
 
         try {
-            \CIBlockElement::SetPropertyValuesEx($leadId, $iblockId, ['KK_LEAD_STATUS' => $enumId]);
+            \CIBlockElement::SetPropertyValuesEx($leadId, $iblockId, [
+                'KK_LEAD_STATUS' => $enumId,
+            ]);
+            if (class_exists('\CIBlock') && method_exists('\CIBlock', 'clearIblockTagCache')) {
+                \CIBlock::clearIblockTagCache($iblockId);
+            }
         } catch (\Throwable) {
-            return ['success' => false, 'errors' => ['STATUS_UPDATE_FAILED']];
-        }
-        $updatedStatus = \CIBlockElement::GetProperty($iblockId, $leadId, [], [
-            'CODE' => 'KK_LEAD_STATUS',
-        ])->Fetch();
-        if (!is_array($updatedStatus) || (int)($updatedStatus['VALUE_ENUM_ID'] ?? 0) !== $enumId) {
             return ['success' => false, 'errors' => ['STATUS_UPDATE_FAILED']];
         }
 
