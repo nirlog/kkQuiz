@@ -186,6 +186,7 @@ foreach ($questions as $questionId => $question) {
             $issues[] = ['type' => 'error', 'node_id' => $nodeId, 'message' => 'Битая ссылка вопроса «' . $question['title'] . '» на результат ID ' . $defaultResultId . '.'];
         }
     }
+    $hasQuestionDefaultNavigation = $defaultQuestionId > 0 || $defaultResultId > 0;
     foreach ($question['answers'] as $index => $answer) {
         $answerText = trim((string)($answer['text'] ?? $answer['TEXT'] ?? '')) ?: 'Ответ #' . ($index + 1);
         $nextId = $resolveId($answer, 'next_question_id', 'next_question_code', $questionCodeIds);
@@ -232,7 +233,7 @@ foreach ($questions as $questionId => $question) {
             $hasTarget = true;
             $issues[] = ['type' => 'error', 'node_id' => $nodeId, 'message' => 'Scoring-ответ «' . $answerText . '» содержит битую ссылку на результат.'];
         }
-        if (!$hasTarget) {
+        if (!$hasTarget && !$hasQuestionDefaultNavigation) {
             $issues[] = ['type' => 'warning', 'node_id' => $nodeId, 'message' => 'Ответ «' . $answerText . '» вопроса «' . $question['title'] . '» без перехода.'];
         }
     }
@@ -260,19 +261,30 @@ if ($configuredStartId > 0) {
     }
 }
 
-$adjacency = [];
-$incoming = [];
+$isNavigationEdge = static function (array $edge): bool {
+    return in_array((string)($edge['type'] ?? ''), ['start', 'default_question', 'default_result', 'answer', 'result'], true);
+};
+$isScoreEdge = static fn (array $edge): bool => (string)($edge['type'] ?? '') === 'score';
+$navigationAdjacency = [];
+$navigationIncoming = [];
+$scoreIncoming = [];
 foreach ($edges as $edge) {
-    if (!$edge['broken']) {
-        $adjacency[$edge['from']][] = $edge['to'];
-        $incoming[$edge['to']] = (int)($incoming[$edge['to']] ?? 0) + 1;
+    if ($edge['broken']) {
+        continue;
+    }
+    if ($isNavigationEdge($edge)) {
+        $navigationAdjacency[$edge['from']][] = $edge['to'];
+        $navigationIncoming[$edge['to']] = (int)($navigationIncoming[$edge['to']] ?? 0) + 1;
+    }
+    if ($isScoreEdge($edge)) {
+        $scoreIncoming[$edge['to']] = (int)($scoreIncoming[$edge['to']] ?? 0) + 1;
     }
 }
 $levels = ['start' => 0];
 $queue = ['start'];
 while ($queue !== []) {
     $from = array_shift($queue);
-    foreach ($adjacency[$from] ?? [] as $to) {
+    foreach ($navigationAdjacency[$from] ?? [] as $to) {
         $nextLevel = $levels[$from] + 1;
         if (!isset($levels[$to]) || $nextLevel < $levels[$to]) {
             $levels[$to] = $nextLevel;
@@ -283,7 +295,7 @@ while ($queue !== []) {
 $hasCycle = false;
 $visited = [];
 $path = [];
-$detectCycle = static function (string $node) use (&$detectCycle, &$visited, &$path, &$hasCycle, $adjacency): void {
+$detectCycle = static function (string $node) use (&$detectCycle, &$visited, &$path, &$hasCycle, $navigationAdjacency): void {
     if (isset($path[$node])) {
         $hasCycle = true;
         return;
@@ -293,7 +305,7 @@ $detectCycle = static function (string $node) use (&$detectCycle, &$visited, &$p
     }
     $visited[$node] = true;
     $path[$node] = true;
-    foreach ($adjacency[$node] ?? [] as $next) {
+    foreach ($navigationAdjacency[$node] ?? [] as $next) {
         $detectCycle($next);
     }
     unset($path[$node]);
@@ -303,25 +315,32 @@ if ($hasCycle) {
     $issues[] = ['type' => 'warning', 'node_id' => '', 'message' => 'Обнаружен потенциальный цикл переходов.'];
 }
 
-$nodes = [['id' => 'start', 'entity_id' => 0, 'type' => 'start', 'code' => '', 'name' => 'Старт', 'title' => 'Старт', 'active' => true, 'sort' => 0, 'answers_count' => 0, 'edit_url' => '', 'level' => 0, 'unreachable' => false]];
+$maxNavigationLevel = max(array_values($levels) ?: [0]);
+$scoreResultsLevel = $maxNavigationLevel + 1;
+$orphanLevel = $maxNavigationLevel + 2;
+$nodes = [['id' => 'start', 'entity_id' => 0, 'type' => 'start', 'code' => '', 'name' => 'Старт', 'title' => 'Старт', 'active' => true, 'sort' => 0, 'answers_count' => 0, 'edit_url' => '', 'level' => 0, 'unreachable' => false, 'score_only' => false]];
 foreach ($questions as $id => $question) {
     $nodeId = 'question_' . $id;
     $unreachable = !isset($levels[$nodeId]);
     if ($unreachable) {
         $issues[] = ['type' => 'warning', 'node_id' => $nodeId, 'message' => 'Вопрос «' . $question['title'] . '» недостижим от старта.'];
     }
-    if (!$question['active'] && isset($incoming[$nodeId])) {
+    if (!$question['active'] && isset($navigationIncoming[$nodeId])) {
         $issues[] = ['type' => 'warning', 'node_id' => $nodeId, 'message' => 'В активной цепочке есть переход к неактивному вопросу «' . $question['title'] . '».'];
     }
-    $nodes[] = array_merge($question, ['id' => $nodeId, 'entity_id' => $id, 'type' => 'question', 'answers_count' => count($question['answers']), 'level' => $levels[$nodeId] ?? 999, 'unreachable' => $unreachable]);
+    $nodes[] = array_merge($question, ['id' => $nodeId, 'entity_id' => $id, 'type' => 'question', 'answers_count' => count($question['answers']), 'level' => $levels[$nodeId] ?? $orphanLevel, 'unreachable' => $unreachable, 'score_only' => false]);
 }
 foreach ($results as $id => $result) {
     $nodeId = 'result_' . $id;
-    $unreachable = !isset($levels[$nodeId]);
-    if (!isset($incoming[$nodeId])) {
+    $hasNavigationIncoming = isset($navigationIncoming[$nodeId]);
+    $hasScoreIncoming = isset($scoreIncoming[$nodeId]);
+    $scoreOnly = !isset($levels[$nodeId]) && $hasScoreIncoming;
+    $unreachable = !isset($levels[$nodeId]) && !$hasScoreIncoming;
+    $level = $levels[$nodeId] ?? ($scoreOnly ? $scoreResultsLevel : $orphanLevel);
+    if (!$hasNavigationIncoming && !$hasScoreIncoming) {
         $issues[] = ['type' => 'warning', 'node_id' => $nodeId, 'message' => 'Результат «' . $result['title'] . '» без входящих связей.'];
     }
-    $nodes[] = array_merge($result, ['id' => $nodeId, 'entity_id' => $id, 'type' => 'result', 'answers_count' => 0, 'level' => $levels[$nodeId] ?? 999, 'unreachable' => $unreachable]);
+    $nodes[] = array_merge($result, ['id' => $nodeId, 'entity_id' => $id, 'type' => 'result', 'answers_count' => 0, 'level' => $level, 'unreachable' => $unreachable, 'score_only' => $scoreOnly]);
 }
 $issueNodeIds = [];
 foreach ($issues as $issue) {
@@ -329,11 +348,7 @@ foreach ($issues as $issue) {
         $issueNodeIds[$issue['node_id']] = true;
     }
 }
-$maxReachableLevel = max(array_filter(array_values($levels), static fn (int $level): bool => $level < 999) ?: [0]);
 foreach ($nodes as &$node) {
-    if ($node['level'] === 999) {
-        $node['level'] = $maxReachableLevel + 1;
-    }
     $node['has_issue'] = isset($issueNodeIds[$node['id']]);
 }
 unset($node);
@@ -345,6 +360,14 @@ foreach ($nodes as $node) {
     $columns[$node['level']][] = $node;
 }
 $schemaData = ['nodes' => $nodes, 'edges' => $edges, 'issues' => $issues];
+$edgeTypeLabels = [
+    'start' => 'старт',
+    'default_question' => 'переход по умолчанию',
+    'default_result' => 'результат по умолчанию',
+    'answer' => 'ответ',
+    'result' => 'результат',
+    'score' => 'баллы',
+];
 
 $editUrl = 'kk_quiz_quiz_edit.php?' . http_build_query(['ID' => $sectionId, 'lang' => $lang]);
 $contentUrl = 'iblock_list_admin.php?' . http_build_query(['IBLOCK_ID' => $iblockId, 'type' => Installer::IBLOCK_TYPE_ID, 'SECTION_ID' => $sectionId, 'find_section_section' => $sectionId, 'apply_filter' => 'Y', 'set_filter' => 'Y', 'lang' => $lang]);
@@ -382,13 +405,13 @@ $escape = static fn (mixed $value): string => htmlspecialcharsbx((string)$value)
     </div>
     <div class="kk-quiz-schema__canvas-wrap" id="kk-quiz-schema-wrap">
         <svg class="kk-quiz-schema__edges" id="kk-quiz-schema-edges"><defs><marker id="kk-schema-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#87919c"/></marker></defs></svg>
-        <div class="kk-quiz-schema__canvas"><?php foreach ($columns as $level => $column): ?><div class="kk-schema-column"><div class="kk-schema-column__title"><?= $level > $maxReachableLevel ? 'Недостижимые / без связей' : 'Уровень ' . (int)$level ?></div><?php foreach ($column as $node): ?><div id="kk-node-<?= $escape($node['id']) ?>" class="kk-quiz-schema-node kk-quiz-schema-node--<?= $escape($node['type']) ?><?= !$node['active'] ? ' is-inactive' : '' ?><?= $node['unreachable'] ? ' is-unreachable' : '' ?><?= $node['has_issue'] ? ' has-issue' : '' ?>" data-node-id="<?= $escape($node['id']) ?>" data-type="<?= $escape($node['type']) ?>" data-issue="<?= $node['has_issue'] ? 'Y' : 'N' ?>" data-search="<?= $escape(mb_strtolower($node['title'] . ' ' . $node['name'] . ' ' . $node['code'])) ?>"><div class="kk-quiz-schema-node__type"><?= $node['type'] === 'question' ? 'Вопрос' : ($node['type'] === 'result' ? 'Результат' : 'Старт') ?></div><div class="kk-quiz-schema-node__title"><?= $escape($node['title']) ?></div><?php if ($node['code'] !== ''): ?><div class="kk-quiz-schema-node__code"><?= $escape($node['code']) ?></div><?php endif; ?><?php if ($node['type'] === 'question'): ?><div class="kk-quiz-schema-node__meta">Ответов: <?= (int)$node['answers_count'] ?></div><?php endif; ?><?php if ($node['edit_url'] !== ''): ?><a href="<?= $escape($node['edit_url']) ?>" class="adm-btn adm-btn-small">Редактировать</a><?php endif; ?></div><?php endforeach; ?></div><?php endforeach; ?></div>
+        <div class="kk-quiz-schema__canvas"><?php foreach ($columns as $level => $column): ?><div class="kk-schema-column"><div class="kk-schema-column__title"><?= $level === $scoreResultsLevel ? 'Результаты по баллам' : ($level === $orphanLevel ? 'Недостижимые / без связей' : 'Уровень ' . (int)$level) ?></div><?php foreach ($column as $node): ?><div id="kk-node-<?= $escape($node['id']) ?>" class="kk-quiz-schema-node kk-quiz-schema-node--<?= $escape($node['type']) ?><?= !$node['active'] ? ' is-inactive' : '' ?><?= $node['unreachable'] ? ' is-unreachable' : '' ?><?= $node['score_only'] ? ' is-score-only' : '' ?><?= $node['has_issue'] ? ' has-issue' : '' ?>" data-node-id="<?= $escape($node['id']) ?>" data-type="<?= $escape($node['type']) ?>" data-issue="<?= $node['has_issue'] ? 'Y' : 'N' ?>" data-search="<?= $escape(mb_strtolower($node['title'] . ' ' . $node['name'] . ' ' . $node['code'])) ?>"><div class="kk-quiz-schema-node__type"><?= $node['type'] === 'question' ? 'Вопрос' : ($node['type'] === 'result' ? 'Результат' : 'Старт') ?></div><div class="kk-quiz-schema-node__title"><?= $escape($node['title']) ?></div><?php if ($node['code'] !== ''): ?><div class="kk-quiz-schema-node__code"><?= $escape($node['code']) ?></div><?php endif; ?><?php if ($node['type'] === 'question'): ?><div class="kk-quiz-schema-node__meta">Ответов: <?= (int)$node['answers_count'] ?></div><?php endif; ?><?php if ($node['score_only']): ?><div class="kk-quiz-schema-node__meta">Используется в балльной логике</div><?php endif; ?><?php if ($node['edit_url'] !== ''): ?><a href="<?= $escape($node['edit_url']) ?>" class="adm-btn adm-btn-small">Редактировать</a><?php endif; ?></div><?php endforeach; ?></div><?php endforeach; ?></div>
     </div>
 </div>
 <h3>Связи</h3>
-<table class="adm-list-table"><thead><tr class="adm-list-table-header"><td class="adm-list-table-cell">Откуда</td><td class="adm-list-table-cell">Ответ / условие</td><td class="adm-list-table-cell">Куда</td><td class="adm-list-table-cell">Тип</td></tr></thead><tbody><?php foreach ($edges as $edge): ?><tr><td class="adm-list-table-cell"><?= $escape($nodesById[$edge['from']]['title'] ?? $edge['from']) ?></td><td class="adm-list-table-cell"><?= $escape($edge['label']) ?></td><td class="adm-list-table-cell"><?= $escape($nodesById[$edge['to']]['title'] ?? $edge['to']) ?><?= $edge['broken'] ? ' (не найдено)' : '' ?></td><td class="adm-list-table-cell"><?= $escape($edge['type']) ?></td></tr><?php endforeach; ?><?php if ($edges === []): ?><tr><td colspan="4" class="adm-list-table-cell">Связей нет.</td></tr><?php endif; ?></tbody></table>
+<table class="adm-list-table"><thead><tr class="adm-list-table-header"><td class="adm-list-table-cell">Откуда</td><td class="adm-list-table-cell">Ответ / условие</td><td class="adm-list-table-cell">Куда</td><td class="adm-list-table-cell">Тип</td></tr></thead><tbody><?php foreach ($edges as $edge): ?><tr><td class="adm-list-table-cell"><?= $escape($nodesById[$edge['from']]['title'] ?? $edge['from']) ?></td><td class="adm-list-table-cell"><?= $escape($edge['label']) ?></td><td class="adm-list-table-cell"><?= $escape($nodesById[$edge['to']]['title'] ?? $edge['to']) ?><?= $edge['broken'] ? ' (не найдено)' : '' ?></td><td class="adm-list-table-cell"><?= $escape($edgeTypeLabels[$edge['type']] ?? $edge['type']) ?></td></tr><?php endforeach; ?><?php if ($edges === []): ?><tr><td colspan="4" class="adm-list-table-cell">Связей нет.</td></tr><?php endif; ?></tbody></table>
 <style>
-.kk-schema-issues{background:#fff;padding:14px 14px 14px 34px}.kk-schema-issue--error{color:#a11}.kk-schema-issue--warning{color:#8a5a00}.kk-quiz-schema__toolbar{display:flex;gap:10px;margin:15px 0}.kk-quiz-schema__canvas-wrap{position:relative;overflow:auto;background:#f4f6f8;border:1px solid #cdd2d7;min-height:420px;padding:25px}.kk-quiz-schema__canvas{position:relative;display:flex;align-items:flex-start;gap:70px;min-width:max-content}.kk-schema-column{width:250px;display:flex;flex-direction:column;gap:18px}.kk-schema-column__title{font-weight:bold;color:#68717b}.kk-quiz-schema-node{position:relative;z-index:2;background:#fff;border:2px solid #7d9ec0;border-radius:6px;padding:12px;box-sizing:border-box}.kk-quiz-schema-node--start{border-color:#87919c;background:#eef1f4}.kk-quiz-schema-node--result{border-color:#56a06b;background:#f2fbf4}.kk-quiz-schema-node.has-issue{border-color:#d64b4b}.kk-quiz-schema-node.is-inactive{opacity:.55}.kk-quiz-schema-node.is-unreachable{border-style:dashed}.kk-quiz-schema-node__type{font-size:11px;text-transform:uppercase;color:#68717b}.kk-quiz-schema-node__title{font-weight:bold;margin:5px 0}.kk-quiz-schema-node__code,.kk-quiz-schema-node__meta{font-size:12px;color:#68717b;margin-bottom:7px}.kk-quiz-schema__edges{position:absolute;inset:25px;width:calc(100% - 50px);height:calc(100% - 50px);overflow:visible;z-index:1;pointer-events:none}.kk-schema-edge{fill:none;stroke:#87919c;stroke-width:1.5}.kk-schema-edge.is-score{stroke:#b07800;stroke-dasharray:5 3}.kk-schema-edge-label{font-size:10px;fill:#505860}.adm-list-table{width:100%;margin-top:10px}
+.kk-schema-issues{background:#fff;padding:14px 14px 14px 34px}.kk-schema-issue--error{color:#a11}.kk-schema-issue--warning{color:#8a5a00}.kk-quiz-schema__toolbar{display:flex;gap:10px;margin:15px 0}.kk-quiz-schema__canvas-wrap{position:relative;overflow:auto;background:#f4f6f8;border:1px solid #cdd2d7;min-height:420px;padding:25px}.kk-quiz-schema__canvas{position:relative;display:flex;align-items:flex-start;gap:70px;min-width:max-content}.kk-schema-column{width:250px;display:flex;flex-direction:column;gap:18px}.kk-schema-column__title{font-weight:bold;color:#68717b}.kk-quiz-schema-node{position:relative;z-index:2;background:#fff;border:2px solid #7d9ec0;border-radius:6px;padding:12px;box-sizing:border-box}.kk-quiz-schema-node--start{border-color:#87919c;background:#eef1f4}.kk-quiz-schema-node--result{border-color:#56a06b;background:#f2fbf4}.kk-quiz-schema-node.is-score-only{border-color:#b78a20;border-style:dashed;background:#fffaf0}.kk-quiz-schema-node.has-issue{border-color:#d64b4b}.kk-quiz-schema-node.is-inactive{opacity:.55}.kk-quiz-schema-node.is-unreachable{border-style:dashed}.kk-quiz-schema-node__type{font-size:11px;text-transform:uppercase;color:#68717b}.kk-quiz-schema-node__title{font-weight:bold;margin:5px 0}.kk-quiz-schema-node__code,.kk-quiz-schema-node__meta{font-size:12px;color:#68717b;margin-bottom:7px}.kk-quiz-schema__edges{position:absolute;inset:25px;width:calc(100% - 50px);height:calc(100% - 50px);overflow:visible;z-index:1;pointer-events:none}.kk-schema-edge{fill:none;stroke:#87919c;stroke-width:1.5}.kk-schema-edge.is-score{stroke:#b07800;stroke-dasharray:5 3}.kk-schema-edge-label{font-size:10px;fill:#505860}.adm-list-table{width:100%;margin-top:10px}
 </style>
 <script>window.KKQuizSchemaData = <?= json_encode($schemaData, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;</script>
 <script>
