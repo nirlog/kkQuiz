@@ -1886,9 +1886,12 @@ final class Installer
     private static function getLeadStatusEnumValues(): array
     {
         return [
-            'new' => 'Новая',
+            'new' => ['VALUE' => 'Новая', 'DEF' => 'Y'],
             'in_progress' => 'В работе',
-            'done' => 'Обработана',
+            'contacted' => 'Связались',
+            'deal_created' => 'Сделка создана',
+            'closed' => 'Закрыта',
+            'rejected' => 'Отказ',
             'spam' => 'Спам / мусор',
         ];
     }

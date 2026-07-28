@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Bitrix\Main\Loader;
+use Kk\Quiz\Admin\LeadStatusHelper;
 use Kk\Quiz\Iblock\Installer;
 use Kk\Quiz\Service\LeadDeliveryLogService;
 use Kk\Quiz\Service\ModuleSettingsService;
@@ -84,6 +85,18 @@ if ($currentStatusId <= 0) {
         }
     }
 }
+$resolveStatusEnumId = static function (string $postedStatus) use ($statusEnums): int {
+    if (isset($statusEnums[(int)$postedStatus])) {
+        return (int)$postedStatus;
+    }
+    foreach ($statusEnums as $enumId => $enum) {
+        if ((string)($enum['xml_id'] ?? '') === $postedStatus) {
+            return (int)$enumId;
+        }
+    }
+
+    return 0;
+};
 
 $saveError = '';
 if (is_object($elementObject) && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['save'])) {
@@ -92,12 +105,13 @@ if (is_object($elementObject) && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' &
     } else {
         $postedStatus = trim((string)($_POST['KK_LEAD_STATUS'] ?? ''));
         $postedNote = trim((string)($_POST['KK_LEAD_MANAGER_NOTE'] ?? ''));
-        if ($statusEnums !== [] && !isset($statusEnums[(int)$postedStatus])) {
+        $statusEnumId = $statusEnums !== [] ? $resolveStatusEnumId($postedStatus) : 0;
+        if ($statusEnums !== [] && $statusEnumId <= 0) {
             $saveError = 'Выбран неизвестный статус обработки.';
         } else {
             try {
                 CIBlockElement::SetPropertyValuesEx($leadId, $leadsIblockId, [
-                    'KK_LEAD_STATUS' => $statusEnums !== [] ? (int)$postedStatus : $postedStatus,
+                    'KK_LEAD_STATUS' => $statusEnums !== [] ? $statusEnumId : $postedStatus,
                     'KK_LEAD_MANAGER_NOTE' => $postedNote,
                 ]);
                 LocalRedirect('kk_quiz_lead_detail.php?' . http_build_query([
@@ -143,6 +157,7 @@ if (is_object($elementObject)) {
     }
 }
 (new CAdminContextMenu($contextItems))->Show();
+echo LeadStatusHelper::renderCss();
 
 if (!is_object($elementObject)) {
     $message = $leadsIblockId <= 0
@@ -260,7 +275,9 @@ $retryButton = static function (string $label, string $disabledLabel, string $ac
     return '<button type="button" class="adm-btn adm-btn-save kk-lead-retry" data-action="' . $escape($action)
         . '" data-name="' . $escape($label) . '">Повторить ' . $escape($label) . '</button>';
 };
-$statusLabel = $statusEnums[$currentStatusId]['value'] ?? ($currentStatus !== '' ? $currentStatus : $currentStatusXml);
+$statusFallback = $statusEnums[$currentStatusId]['value'] ?? ($currentStatus !== '' ? $currentStatus : $currentStatusXml);
+$statusXmlId = LeadStatusHelper::normalizeXmlId($currentStatusXml, $currentStatus);
+$statusLabel = LeadStatusHelper::label($statusXmlId, $statusFallback);
 ?>
 <style>
 .kk-lead-detail{display:grid;gap:14px}.kk-lead-detail__header,.kk-lead-card{background:#fff;border:1px solid #cdd2d7;border-radius:6px;padding:14px;box-sizing:border-box}.kk-lead-detail__header h2,.kk-lead-card h3{margin:0 0 12px}.kk-lead-detail__header-meta{display:flex;gap:18px;flex-wrap:wrap}.kk-lead-detail__actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.kk-lead-detail__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.kk-lead-detail__rows{display:grid;grid-template-columns:170px minmax(0,1fr);gap:7px 10px}.kk-lead-detail__rows b{color:#555}.kk-lead-card--wide{min-width:0}.kk-lead-answers,.kk-lead-log-body{white-space:pre-wrap;overflow-wrap:anywhere;background:#f6f8fa;border:1px solid #e1e5ea;border-radius:4px;padding:10px}.kk-lead-answer{padding:7px 0;border-bottom:1px solid #e8ebef}.kk-lead-deliveries{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:10px}.kk-lead-delivery{background:#f6f8fa;border:1px solid #e1e5ea;border-radius:5px;padding:10px}.kk-lead-delivery h4{margin:0 0 7px}.kk-lead-delivery dl{margin:8px 0 0}.kk-lead-delivery dt{font-weight:bold;margin-top:5px}.kk-lead-delivery dd{margin:1px 0}.kk-lead-status--success{color:#287d3c;font-weight:bold}.kk-lead-status--error{color:#b42318;font-weight:bold}.kk-lead-status--disabled{color:#777;font-weight:bold}.kk-lead-status--empty,.kk-lead-empty{color:#777}.kk-lead-logs{width:100%;border-collapse:collapse}.kk-lead-logs th,.kk-lead-logs td{border:1px solid #d6dce5;padding:7px;vertical-align:top;text-align:left}.kk-lead-logs th{background:#eef2f7}.kk-lead-logs details{max-width:420px}.kk-lead-manage textarea{width:100%;min-height:110px;box-sizing:border-box}.kk-lead-manage select,.kk-lead-manage input[type=text]{max-width:100%;width:320px}
@@ -271,7 +288,7 @@ $statusLabel = $statusEnums[$currentStatusId]['value'] ?? ($currentStatus !== ''
         <h2>Заявка #<?= $leadId ?></h2>
         <div class="kk-lead-detail__header-meta">
             <span><b>Дата:</b> <?= $displayValue((string)($fields['DATE_CREATE'] ?? '')) ?></span>
-            <span><b>Статус:</b> <?= $displayValue($statusLabel) ?></span>
+            <span><b>Статус:</b> <?= LeadStatusHelper::renderBadge($statusXmlId, $statusLabel) ?></span>
             <span><b>Квиз:</b> <?= $displayValue($quizName !== '' ? $quizName : $quizCode) ?></span>
             <span><b>Результат:</b> <?= $displayValue($resultTitle !== '' ? $resultTitle : $resultCode) ?></span>
         </div>
@@ -309,6 +326,7 @@ $statusLabel = $statusEnums[$currentStatusId]['value'] ?? ($currentStatus !== ''
                 <p><label><b>Статус обработки</b><br>
                 <?php if ($statusEnums !== []): ?><select name="KK_LEAD_STATUS"><?php foreach ($statusEnums as $enumId => $enum): ?><option value="<?= $enumId ?>"<?= $currentStatusId === $enumId ? ' selected' : '' ?>><?= $escape($enum['value']) ?></option><?php endforeach; ?></select>
                 <?php else: ?><input type="text" name="KK_LEAD_STATUS" value="<?= $escape($currentStatus) ?>"><?php endif; ?></label></p>
+                <p class="kk-lead-empty">Меняйте статус по мере обработки заявки менеджером.</p>
                 <p><label><b>Комментарий менеджера</b><br><textarea name="KK_LEAD_MANAGER_NOTE"><?= $escape($property($properties, 'KK_LEAD_MANAGER_NOTE')) ?></textarea></label></p>
                 <button type="submit" name="save" value="Y" class="adm-btn adm-btn-save">Сохранить</button>
             </form>

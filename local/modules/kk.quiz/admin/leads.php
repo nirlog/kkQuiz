@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Bitrix\Main\Loader;
+use Kk\Quiz\Admin\LeadStatusHelper;
 use Kk\Quiz\Iblock\Installer;
 
 require_once($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_before.php');
@@ -107,6 +108,15 @@ $property = static function (array $properties, string $code, bool $xmlId = fals
     }
     return is_scalar($value) ? trim((string)$value) : '';
 };
+$statusXml = static function (array $properties) use ($property): string {
+    return LeadStatusHelper::normalizeXmlId(
+        $property($properties, 'KK_LEAD_STATUS', true),
+        $property($properties, 'KK_LEAD_STATUS')
+    );
+};
+$statusLabel = static function (array $properties) use ($property): string {
+    return $property($properties, 'KK_LEAD_STATUS') ?: $property($properties, 'KK_LEAD_STATUS', true);
+};
 $isDisabledIntegrationValue = static function (string $value): bool {
     $value = mb_strtoupper(trim($value));
 
@@ -150,10 +160,11 @@ if ($leadsIblockId > 0) {
         $clientEmail = $property($properties, 'KK_LEAD_CLIENT_EMAIL');
         $messenger = $property($properties, 'KK_LEAD_CLIENT_MESSENGER');
         $pageUrl = $property($properties, 'KK_LEAD_PAGE_URL');
-        $status = $property($properties, 'KK_LEAD_STATUS');
+        $statusXmlId = $statusXml($properties);
+        $statusFallback = $statusLabel($properties);
         $row = &$list->AddRow((string)$leadId, ['ID' => $leadId, 'DATE_CREATE' => $fields['DATE_CREATE']], $detailUrl);
         $row->AddViewField('ID', '<a href="' . $escape($detailUrl) . '">' . $leadId . '</a>');
-        $row->AddViewField('STATUS', $escape($status !== '' ? $status : $property($properties, 'KK_LEAD_STATUS', true)));
+        $row->AddViewField('STATUS', LeadStatusHelper::renderBadge($statusXmlId, $statusFallback));
         $row->AddViewField('CLIENT', '<a href="' . $escape($detailUrl) . '">' . $escape($clientName !== '' ? $clientName : 'Без имени') . '</a>');
         $contacts = array_filter([$clientPhone, $clientEmail, $messenger], static fn (string $item): bool => $item !== '');
         $row->AddViewField('CONTACTS', $contacts !== [] ? implode('<br>', array_map($escape, $contacts)) : '—');
@@ -201,6 +212,7 @@ $context = new CAdminContextMenu([
     ['TEXT' => 'Настройки', 'LINK' => $settingsUrl],
 ]);
 $context->Show();
+echo LeadStatusHelper::renderCss();
 
 if ($leadsIblockId <= 0) {
     CAdminMessage::ShowMessage('Инфоблок заявок KK Quiz не найден.');
@@ -225,9 +237,42 @@ $filter->Begin();
 <?php
 $filter->Buttons(['table_id' => $tableId, 'url' => $APPLICATION->GetCurPage(), 'form' => 'find_form']);
 $filter->End();
+
+$getStatusEnumIdByXmlId = static function (string $xmlId) use ($statusEnums): int {
+    foreach ($statusEnums as $enumId => $enum) {
+        if ((string)($enum['xml_id'] ?? '') === $xmlId) {
+            return (int)$enumId;
+        }
+    }
+
+    return 0;
+};
+$statusTabs = [
+    '' => 'Все',
+    'new' => 'Новые',
+    'in_progress' => 'В работе',
+    'contacted' => 'Связались',
+    'deal_created' => 'Сделка создана',
+    'closed' => 'Закрыта',
+    'rejected' => 'Отказ',
+];
 ?>
+<?php if ($statusEnums !== []): ?>
+<div class="kk-lead-status-tabs">
+    <?php foreach ($statusTabs as $xmlId => $label):
+        $enumId = $xmlId !== '' ? $getStatusEnumIdByXmlId($xmlId) : 0;
+        if ($xmlId !== '' && $enumId <= 0) { continue; }
+        $urlParameters = ['lang' => $lang];
+        if ($enumId > 0) { $urlParameters['find_status'] = $enumId; $urlParameters['set_filter'] = 'Y'; }
+        else { $urlParameters['del_filter'] = 'Y'; }
+        $isActive = $xmlId === '' ? $filterValue('find_status') === '' : $filterValue('find_status') === (string)$enumId;
+    ?><a href="<?= $escape('kk_quiz_leads.php?' . http_build_query($urlParameters)) ?>" class="<?= $isActive ? 'is-active' : '' ?>"><?= $escape($label) ?></a><?php endforeach; ?>
+</div>
+<?php endif; ?>
 <div style="margin:12px 0"><button type="button" class="adm-btn adm-btn-save" id="kk-quiz-export-leads">Экспорт CSV</button></div>
-<style>.kk-quiz-integration-disabled{color:#777}</style>
+<style>
+.kk-quiz-integration-disabled{color:#777}.kk-lead-status-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.kk-lead-status-tabs a{display:inline-flex;padding:5px 10px;border:1px solid #cdd2d7;border-radius:999px;background:#fff;text-decoration:none}.kk-lead-status-tabs a.is-active{background:#dbeeff;border-color:#8dbdea;font-weight:bold}
+</style>
 <?php $list->DisplayList(); ?>
 <script>
 document.getElementById('kk-quiz-export-leads')?.addEventListener('click', (event) => {
