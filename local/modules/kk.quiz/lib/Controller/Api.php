@@ -8,6 +8,7 @@ use Bitrix\Main\Engine\ActionFilter\Csrf;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Web\Json;
 use Kk\Quiz\Service\LeadService;
+use Kk\Quiz\Service\ModuleSettingsService;
 use Kk\Quiz\Service\QuizService;
 
 final class Api extends Controller
@@ -361,6 +362,10 @@ final class Api extends Controller
             ];
         }
 
+        if (!ModuleSettingsService::getBool('webhook_enabled')) {
+            return $this->disabledIntegrationResult('WEBHOOK_DISABLED', 'Интеграция Webhook отключена.');
+        }
+
         try {
             return (new LeadService())->retryWebhook($leadId);
         } catch (\Throwable) {
@@ -387,6 +392,10 @@ final class Api extends Controller
                 'success' => false,
                 'errors' => ['LEAD_NOT_FOUND'],
             ];
+        }
+
+        if (!ModuleSettingsService::getBool('bitrix24_enabled')) {
+            return $this->disabledIntegrationResult('BITRIX24_DISABLED', 'Интеграция Bitrix24 отключена.');
         }
 
         try {
@@ -459,6 +468,10 @@ final class Api extends Controller
                 'success' => false,
                 'errors' => ['LEAD_NOT_FOUND'],
             ];
+        }
+
+        if (!ModuleSettingsService::getBool('amocrm_enabled')) {
+            return $this->disabledIntegrationResult('AMOCRM_DISABLED', 'Интеграция amoCRM отключена.');
         }
 
         try {
@@ -771,6 +784,16 @@ final class Api extends Controller
         return is_array($payload) && is_scalar($payload['quiz_code'] ?? null)
             ? trim((string)$payload['quiz_code'])
             : '';
+    }
+
+    private function disabledIntegrationResult(string $error, string $message): array
+    {
+        return [
+            'success' => false,
+            'disabled' => true,
+            'error' => $error,
+            'message' => $message,
+        ];
     }
 
     private function getTrackingPayloadFromRequest(): array
