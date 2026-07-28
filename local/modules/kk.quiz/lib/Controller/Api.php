@@ -6,8 +6,12 @@ namespace Kk\Quiz\Controller;
 
 use Bitrix\Main\Engine\ActionFilter\Csrf;
 use Bitrix\Main\Engine\Controller;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Web\Json;
+use Kk\Quiz\Admin\LeadStatusHelper;
+use Kk\Quiz\Iblock\Installer;
 use Kk\Quiz\Service\LeadService;
+use Kk\Quiz\Service\ModuleSettingsService;
 use Kk\Quiz\Service\QuizService;
 
 final class Api extends Controller
@@ -28,6 +32,9 @@ final class Api extends Controller
                 'prefilters' => [new Csrf()],
             ],
             'exportLeads' => [
+                'prefilters' => [new Csrf()],
+            ],
+            'setLeadStatus' => [
                 'prefilters' => [new Csrf()],
             ],
             'cleanupQuizEvents' => [
@@ -361,6 +368,10 @@ final class Api extends Controller
             ];
         }
 
+        if (!ModuleSettingsService::getBool('webhook_enabled')) {
+            return $this->disabledIntegrationResult('WEBHOOK_DISABLED', 'Интеграция Webhook отключена.');
+        }
+
         try {
             return (new LeadService())->retryWebhook($leadId);
         } catch (\Throwable) {
@@ -387,6 +398,10 @@ final class Api extends Controller
                 'success' => false,
                 'errors' => ['LEAD_NOT_FOUND'],
             ];
+        }
+
+        if (!ModuleSettingsService::getBool('bitrix24_enabled')) {
+            return $this->disabledIntegrationResult('BITRIX24_DISABLED', 'Интеграция Bitrix24 отключена.');
         }
 
         try {
@@ -461,6 +476,10 @@ final class Api extends Controller
             ];
         }
 
+        if (!ModuleSettingsService::getBool('amocrm_enabled')) {
+            return $this->disabledIntegrationResult('AMOCRM_DISABLED', 'Интеграция amoCRM отключена.');
+        }
+
         try {
             return (new LeadService())->retryAmoCrm($leadId);
         } catch (\Throwable) {
@@ -469,6 +488,66 @@ final class Api extends Controller
                 'errors' => ['AMOCRM_RETRY_FAILED'],
             ];
         }
+    }
+
+    public function setLeadStatusAction(int $leadId = 0, string $status = ''): array
+    {
+        if (!$this->isAdminAllowed()) {
+            return ['success' => false, 'errors' => ['ACCESS_DENIED']];
+        }
+        if (!$this->getRequest()->isPost()) {
+            return ['success' => false, 'errors' => ['STATUS_UPDATE_FAILED']];
+        }
+
+        $leadId = $this->getLeadIdFromRequest($leadId);
+        $status = $this->getStatusFromRequest($status);
+        if ($leadId <= 0) {
+            return ['success' => false, 'errors' => ['LEAD_NOT_FOUND']];
+        }
+        if ($status === '' || !LeadStatusHelper::isKnownStatus($status)) {
+            return ['success' => false, 'errors' => ['INVALID_STATUS']];
+        }
+
+        $iblockId = $this->getLeadsIblockId();
+        if ($iblockId <= 0 || !$this->isLeadExists($iblockId, $leadId)) {
+            return ['success' => false, 'errors' => ['LEAD_NOT_FOUND']];
+        }
+
+        $property = \CIBlockProperty::GetList([], [
+            'IBLOCK_ID' => $iblockId,
+            'CODE' => 'KK_LEAD_STATUS',
+        ])->Fetch();
+        if (!is_array($property) || (int)($property['ID'] ?? 0) <= 0) {
+            return ['success' => false, 'errors' => ['STATUS_PROPERTY_NOT_FOUND']];
+        }
+
+        $enum = \CIBlockPropertyEnum::GetList([], [
+            'PROPERTY_ID' => (int)$property['ID'],
+            'XML_ID' => $status,
+        ])->Fetch();
+        $enumId = is_array($enum) ? (int)($enum['ID'] ?? 0) : 0;
+        if ($enumId <= 0) {
+            return ['success' => false, 'errors' => ['STATUS_ENUM_NOT_FOUND']];
+        }
+
+        try {
+            \CIBlockElement::SetPropertyValuesEx($leadId, $iblockId, ['KK_LEAD_STATUS' => $enumId]);
+        } catch (\Throwable) {
+            return ['success' => false, 'errors' => ['STATUS_UPDATE_FAILED']];
+        }
+        $updatedStatus = \CIBlockElement::GetProperty($iblockId, $leadId, [], [
+            'CODE' => 'KK_LEAD_STATUS',
+        ])->Fetch();
+        if (!is_array($updatedStatus) || (int)($updatedStatus['VALUE_ENUM_ID'] ?? 0) !== $enumId) {
+            return ['success' => false, 'errors' => ['STATUS_UPDATE_FAILED']];
+        }
+
+        return [
+            'success' => true,
+            'lead_id' => $leadId,
+            'status' => $status,
+            'status_label' => LeadStatusHelper::label($status),
+        ];
     }
 
     public function testAmoCrmAction(): array
@@ -593,6 +672,61 @@ final class Api extends Controller
         $payload = is_array($decoded['payload'] ?? null) ? $decoded['payload'] : $decoded;
 
         return (int)($payload['lead_id'] ?? $payload['leadId'] ?? 0);
+    }
+
+    private function getStatusFromRequest(string $status): string
+    {
+        $status = trim($status);
+        if ($status === '') {
+            foreach (['status', 'status_xml_id'] as $key) {
+                $value = $this->getRequest()->getPost($key);
+                if (is_scalar($value) && trim((string)$value) !== '') {
+                    $status = trim((string)$value);
+                    break;
+                }
+            }
+        }
+
+        if ($status === '') {
+            $input = method_exists($this->getRequest(), 'getInput')
+                ? (string)$this->getRequest()->getInput()
+                : (string)file_get_contents('php://input');
+            if (trim($input) !== '') {
+                try {
+                    $decoded = Json::decode($input);
+                } catch (\Throwable) {
+                    $decoded = null;
+                }
+                if (is_array($decoded)) {
+                    $payload = is_array($decoded['payload'] ?? null) ? $decoded['payload'] : $decoded;
+                    $value = $payload['status'] ?? $payload['status_xml_id'] ?? '';
+                    $status = is_scalar($value) ? trim((string)$value) : '';
+                }
+            }
+        }
+
+        return preg_match('/^[a-z0-9_]{2,50}$/', $status) === 1 ? $status : '';
+    }
+
+    private function getLeadsIblockId(): int
+    {
+        if (!Loader::includeModule('iblock')) {
+            return 0;
+        }
+        $iblock = \CIBlock::GetList([], [
+            'TYPE' => Installer::IBLOCK_TYPE_ID,
+            'CODE' => Installer::LEADS_IBLOCK_CODE,
+        ])->Fetch();
+
+        return is_array($iblock) ? (int)($iblock['ID'] ?? 0) : 0;
+    }
+
+    private function isLeadExists(int $iblockId, int $leadId): bool
+    {
+        return is_array(\CIBlockElement::GetList([], [
+            'ID' => $leadId,
+            'IBLOCK_ID' => $iblockId,
+        ], false, false, ['ID'])->Fetch());
     }
 
     private function getImportPayloadFromRequest(): array
@@ -771,6 +905,16 @@ final class Api extends Controller
         return is_array($payload) && is_scalar($payload['quiz_code'] ?? null)
             ? trim((string)$payload['quiz_code'])
             : '';
+    }
+
+    private function disabledIntegrationResult(string $error, string $message): array
+    {
+        return [
+            'success' => false,
+            'disabled' => true,
+            'error' => $error,
+            'message' => $message,
+        ];
     }
 
     private function getTrackingPayloadFromRequest(): array

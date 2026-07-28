@@ -429,7 +429,10 @@ if ($message !== null) {
     $renderSelect('default_lead_status', 'Статус заявки по умолчанию', [
         'new' => 'Новая',
         'in_progress' => 'В работе',
-        'done' => 'Обработана',
+        'contacted' => 'Связались',
+        'deal_created' => 'Сделка создана',
+        'closed' => 'Закрыта',
+        'rejected' => 'Отказ',
         'spam' => 'Спам / мусор',
     ]);
     $renderCheckbox('save_answers_data', 'Сохранять технические данные ответов');
