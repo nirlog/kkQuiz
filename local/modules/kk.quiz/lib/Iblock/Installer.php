@@ -13,6 +13,7 @@ use Kk\Quiz\Admin\ElementFormAssets;
 use Kk\Quiz\Admin\ElementListAssets;
 use Kk\Quiz\Admin\LeadFormAssets;
 use Kk\Quiz\Admin\LeadListAssets;
+use Kk\Quiz\Admin\MenuBuilder;
 use Kk\Quiz\Admin\SectionFormAssets;
 use Kk\Quiz\Analytics\LeadDeliveryLogTable;
 use Kk\Quiz\Analytics\QuizEventTable;
@@ -108,6 +109,13 @@ final class Installer
             'OnProlog',
             SectionFormAssets::class,
             'onProlog'
+        );
+
+        self::registerEventHandlerIfMissing(
+            'main',
+            'OnBuildGlobalMenu',
+            MenuBuilder::class,
+            'onBuildGlobalMenu'
         );
     }
 
@@ -241,6 +249,14 @@ final class Installer
             SectionFormAssets::class,
             'onProlog'
         );
+
+        EventManager::getInstance()->registerEventHandler(
+            'main',
+            'OnBuildGlobalMenu',
+            'kk.quiz',
+            MenuBuilder::class,
+            'onBuildGlobalMenu'
+        );
     }
 
     private static function unregisterEventHandlers(): void
@@ -292,6 +308,14 @@ final class Installer
             SectionFormAssets::class,
             'onProlog'
         );
+
+        EventManager::getInstance()->unRegisterEventHandler(
+            'main',
+            'OnBuildGlobalMenu',
+            'kk.quiz',
+            MenuBuilder::class,
+            'onBuildGlobalMenu'
+        );
     }
 
     private static function installAdminFiles(bool $throwOnError = true): void
@@ -315,6 +339,12 @@ final class Installer
         }
 
         $files = [
+            [
+                'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_leads.php',
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_leads.php',
+                'missing' => 'KK Quiz admin leads stub source not found.',
+                'write' => 'Cannot write /bitrix/admin/kk_quiz_leads.php.',
+            ],
             [
                 'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_schema.php',
                 'target' => $documentRoot . '/bitrix/admin/kk_quiz_schema.php',
@@ -395,6 +425,10 @@ final class Installer
         }
 
         $files = [
+            [
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_leads.php',
+                'marker' => 'kk.quiz/admin/leads.php',
+            ],
             [
                 'target' => $documentRoot . '/bitrix/admin/kk_quiz_schema.php',
                 'marker' => 'kk.quiz/admin/schema.php',
