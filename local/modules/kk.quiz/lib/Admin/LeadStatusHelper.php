@@ -34,6 +34,23 @@ final class LeadStatusHelper
         ];
     }
 
+    public static function workflowActions(): array
+    {
+        return [
+            'in_progress' => 'В работу',
+            'contacted' => 'Связались',
+            'deal_created' => 'Сделка создана',
+            'closed' => 'Закрыта',
+            'rejected' => 'Отказ',
+            'spam' => 'Спам',
+        ];
+    }
+
+    public static function isKnownStatus(string $xmlId): bool
+    {
+        return isset(self::labels()[$xmlId]);
+    }
+
     public static function normalizeXmlId(string $xmlId, string $value = ''): string
     {
         $xmlId = trim($xmlId);

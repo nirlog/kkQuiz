@@ -191,10 +191,21 @@ if ($leadsIblockId > 0) {
         $row->AddViewField('AMOCRM', $integrationStatus($properties, 'KK_LEAD_AMOCRM'));
         $note = $property($properties, 'KK_LEAD_MANAGER_NOTE');
         $row->AddViewField('MANAGER_NOTE', $note !== '' ? '<span title="' . $escape($note) . '">' . $escape($short($note)) . '</span>' : '—');
-        $row->AddActions([
+        $actions = [
             ['TEXT' => 'Открыть', 'ACTION' => $list->ActionRedirect($detailUrl), 'DEFAULT' => true],
-            ['TEXT' => 'Стандартная карточка', 'ACTION' => $list->ActionRedirect($editUrl)],
-        ]);
+        ];
+        foreach (LeadStatusHelper::workflowActions() as $statusCode => $statusTitle) {
+            if ($statusXmlId === $statusCode) {
+                continue;
+            }
+            $actions[] = [
+                'TEXT' => $statusTitle,
+                'ACTION' => 'window.kkQuizSetLeadStatus(' . $leadId . ', \'' . CUtil::JSEscape($statusCode)
+                    . '\', \'' . CUtil::JSEscape($statusTitle) . '\')',
+            ];
+        }
+        $actions[] = ['TEXT' => 'Стандартная карточка', 'ACTION' => $list->ActionRedirect($editUrl)];
+        $row->AddActions($actions);
     }
 }
 
@@ -275,6 +286,34 @@ $statusTabs = [
 </style>
 <?php $list->DisplayList(); ?>
 <script>
+window.kkQuizSetLeadStatus = function (leadId, status, statusTitle) {
+    if (!leadId || !status) {
+        return;
+    }
+    if (!confirm('Изменить статус заявки #' + leadId + ' на «' + statusTitle + '»?')) {
+        return;
+    }
+    const params = new URLSearchParams({action: 'kk:quiz.api.setLeadStatus'});
+    if (window.BX && typeof BX.bitrix_sessid === 'function') {
+        params.set('sessid', BX.bitrix_sessid());
+    }
+    fetch('/bitrix/services/main/ajax.php?' + params.toString(), {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({lead_id: leadId, status: status})
+    }).then(response => response.json()).then(response => {
+        const data = response && response.data ? response.data : response;
+        if (!data || data.success !== true) {
+            const errors = data && data.errors ? data.errors.join(', ') : (data && data.error ? data.error : 'STATUS_UPDATE_FAILED');
+            throw new Error(errors);
+        }
+        window.location.reload();
+    }).catch(error => {
+        alert('Не удалось изменить статус заявки: ' + (error && error.message ? error.message : 'STATUS_UPDATE_FAILED'));
+    });
+};
+
 document.getElementById('kk-quiz-export-leads')?.addEventListener('click', (event) => {
     const button = event.currentTarget;
     const original = button.textContent;
