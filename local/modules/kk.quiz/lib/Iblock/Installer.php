@@ -13,6 +13,7 @@ use Kk\Quiz\Admin\ElementFormAssets;
 use Kk\Quiz\Admin\ElementListAssets;
 use Kk\Quiz\Admin\LeadFormAssets;
 use Kk\Quiz\Admin\LeadListAssets;
+use Kk\Quiz\Admin\MenuBuilder;
 use Kk\Quiz\Admin\SectionFormAssets;
 use Kk\Quiz\Analytics\LeadDeliveryLogTable;
 use Kk\Quiz\Analytics\QuizEventTable;
@@ -108,6 +109,13 @@ final class Installer
             'OnProlog',
             SectionFormAssets::class,
             'onProlog'
+        );
+
+        self::registerEventHandlerIfMissing(
+            'main',
+            'OnBuildGlobalMenu',
+            MenuBuilder::class,
+            'onBuildGlobalMenu'
         );
     }
 
@@ -241,6 +249,14 @@ final class Installer
             SectionFormAssets::class,
             'onProlog'
         );
+
+        EventManager::getInstance()->registerEventHandler(
+            'main',
+            'OnBuildGlobalMenu',
+            'kk.quiz',
+            MenuBuilder::class,
+            'onBuildGlobalMenu'
+        );
     }
 
     private static function unregisterEventHandlers(): void
@@ -292,6 +308,14 @@ final class Installer
             SectionFormAssets::class,
             'onProlog'
         );
+
+        EventManager::getInstance()->unRegisterEventHandler(
+            'main',
+            'OnBuildGlobalMenu',
+            'kk.quiz',
+            MenuBuilder::class,
+            'onBuildGlobalMenu'
+        );
     }
 
     private static function installAdminFiles(bool $throwOnError = true): void
@@ -315,6 +339,54 @@ final class Installer
         }
 
         $files = [
+            [
+                'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_lead_detail.php',
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_lead_detail.php',
+                'missing' => 'KK Quiz admin lead detail stub source not found.',
+                'write' => 'Cannot write /bitrix/admin/kk_quiz_lead_detail.php.',
+            ],
+            [
+                'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_leads.php',
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_leads.php',
+                'missing' => 'KK Quiz admin leads stub source not found.',
+                'write' => 'Cannot write /bitrix/admin/kk_quiz_leads.php.',
+            ],
+            [
+                'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_schema.php',
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_schema.php',
+                'missing' => 'KK Quiz admin schema stub source not found.',
+                'write' => 'Cannot write /bitrix/admin/kk_quiz_schema.php.',
+            ],
+            [
+                'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_delete.php',
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_delete.php',
+                'missing' => 'KK Quiz admin delete stub source not found.',
+                'write' => 'Cannot write /bitrix/admin/kk_quiz_delete.php.',
+            ],
+            [
+                'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_import.php',
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_import.php',
+                'missing' => 'KK Quiz admin import stub source not found.',
+                'write' => 'Cannot write /bitrix/admin/kk_quiz_import.php.',
+            ],
+            [
+                'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_export.php',
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_export.php',
+                'missing' => 'KK Quiz admin export stub source not found.',
+                'write' => 'Cannot write /bitrix/admin/kk_quiz_export.php.',
+            ],
+            [
+                'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_quizzes.php',
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_quizzes.php',
+                'missing' => 'KK Quiz admin quizzes stub source not found.',
+                'write' => 'Cannot write /bitrix/admin/kk_quiz_quizzes.php.',
+            ],
+            [
+                'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_quiz_edit.php',
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_quiz_edit.php',
+                'missing' => 'KK Quiz admin settings stub source not found.',
+                'write' => 'Cannot write /bitrix/admin/kk_quiz_quiz_edit.php.',
+            ],
             [
                 'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_statistics.php',
                 'target' => $documentRoot . '/bitrix/admin/kk_quiz_statistics.php',
@@ -359,6 +431,38 @@ final class Installer
         }
 
         $files = [
+            [
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_lead_detail.php',
+                'marker' => 'kk.quiz/admin/lead_detail.php',
+            ],
+            [
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_leads.php',
+                'marker' => 'kk.quiz/admin/leads.php',
+            ],
+            [
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_schema.php',
+                'marker' => 'kk.quiz/admin/schema.php',
+            ],
+            [
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_delete.php',
+                'marker' => 'kk.quiz/admin/delete.php',
+            ],
+            [
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_import.php',
+                'marker' => 'kk.quiz/admin/import.php',
+            ],
+            [
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_export.php',
+                'marker' => 'kk.quiz/admin/export.php',
+            ],
+            [
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_quizzes.php',
+                'marker' => 'kk.quiz/admin/quizzes.php',
+            ],
+            [
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_quiz_edit.php',
+                'marker' => 'kk.quiz/admin/quiz_edit.php',
+            ],
             [
                 'target' => $documentRoot . '/bitrix/admin/kk_quiz_statistics.php',
                 'marker' => 'kk.quiz/admin/statistics.php',
@@ -1782,9 +1886,12 @@ final class Installer
     private static function getLeadStatusEnumValues(): array
     {
         return [
-            'new' => 'Новая',
+            'new' => ['VALUE' => 'Новая', 'DEF' => 'Y'],
             'in_progress' => 'В работе',
-            'done' => 'Обработана',
+            'contacted' => 'Связались',
+            'deal_created' => 'Сделка создана',
+            'closed' => 'Закрыта',
+            'rejected' => 'Отказ',
             'spam' => 'Спам / мусор',
         ];
     }
