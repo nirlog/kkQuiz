@@ -394,6 +394,8 @@ final class QuizRepository
         $summary = (string)$this->getElementPropertyValue($properties, 'KK_RESULT_SUMMARY');
         $whyText = (string)$this->getElementPropertyValue($properties, 'KK_RESULT_WHY_TEXT');
         $specsText = (string)$this->getElementPropertyValue($properties, 'KK_RESULT_SPECS_TEXT');
+        $badgeText = (string)$this->getElementPropertyValue($properties, 'KK_RESULT_BADGE');
+        $formSubtitle = (string)$this->getElementPropertyValue($properties, 'KK_RESULT_FORM_INTRO');
 
         return [
             'id' => (int)$element['ID'],
@@ -403,13 +405,19 @@ final class QuizRepository
             'admin_name' => $adminName,
             'preview_text' => (string)($element['PREVIEW_TEXT'] ?? ''),
             'summary' => $summary,
+            'badge_text' => $badgeText,
+            'reason_text' => $whyText,
+            'fit_text' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_FIT_TEXT'),
+            'build_text' => $specsText,
+            'budget_text' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_BUDGET_TEXT'),
             'why_text' => $whyText,
             'why_items' => $this->normalizeTextLines($whyText),
             'specs_text' => $specsText,
             'specs_items' => $this->normalizeTextLines($specsText),
             'note_text' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_NOTE_TEXT'),
             'form_title' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_FORM_TITLE'),
-            'form_intro' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_FORM_INTRO'),
+            'form_subtitle' => $formSubtitle,
+            'form_intro' => $formSubtitle,
             'form_button_text' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_FORM_BUTTON_TEXT'),
             'detail_text' => (string)($element['DETAIL_TEXT'] ?? ''),
             'picture_id' => $pictureId,
@@ -421,11 +429,16 @@ final class QuizRepository
             'cta_text' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_CTA_TEXT'),
             'cta_link' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_CTA_LINK'),
             'cta_target' => $this->normalizeCtaTarget($this->getElementPropertyEnumXmlId($properties, 'KK_RESULT_CTA_TARGET')),
+            'secondary_cta' => [
+                'text' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_SECONDARY_CTA_TEXT'),
+                'url' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_SECONDARY_CTA_LINK'),
+                'target' => $this->normalizeCtaTarget($this->getElementPropertyEnumXmlId($properties, 'KK_RESULT_SECONDARY_CTA_TARGET')),
+            ],
             'video' => $this->buildResultVideo($properties),
             'show_form' => $this->toBool($this->getElementPropertyEnumXmlId($properties, 'KK_RESULT_SHOW_FORM')),
             'catalog_section_id' => $this->toNullableInt($this->getElementPropertyValue($properties, 'KK_RESULT_CATALOG_SECTION')),
             'catalog_product_ids' => $this->normalizeIntList($this->getElementPropertyValues($properties, 'KK_RESULT_CATALOG_PRODUCTS')),
-            'badge' => (string)$this->getElementPropertyValue($properties, 'KK_RESULT_BADGE'),
+            'badge' => $badgeText,
         ];
     }
 
