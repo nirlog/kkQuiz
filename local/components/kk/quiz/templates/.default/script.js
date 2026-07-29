@@ -1435,6 +1435,28 @@
         return note;
     };
 
+    const renderResultHero = (result, enhancedResult, summaryText) => {
+        const hero = create('div', 'kk-quiz-result__hero');
+        appendTextBlock(hero, 'kk-quiz-result__badge kk-quiz__badge', result.badge_text || result.badge);
+
+        if (result.picture_src) {
+            const image = document.createElement('img');
+            image.className = 'kk-quiz__result-image';
+            image.src = String(result.picture_src);
+            image.alt = String(result.name || '');
+            hero.appendChild(image);
+        }
+
+        appendTextBlock(hero, 'kk-quiz-result__title kk-quiz__result-title', result.name);
+        appendTextBlock(hero, 'kk-quiz-result__summary ' + (enhancedResult ? 'kk-quiz__result-summary' : 'kk-quiz__result-text'), summaryText);
+        if (String(result.summary || '').trim() !== '' && String(result.preview_text || '').trim() !== '' && String(result.preview_text).trim() !== summaryText) {
+            appendTextBlock(hero, 'kk-quiz__result-text kk-quiz-result__legacy-text', result.preview_text);
+        }
+        appendTextBlock(hero, 'kk-quiz__result-text kk-quiz-result__legacy-text', result.detail_text);
+
+        return hero;
+    };
+
     const appendResultCtas = (card, primaryCta, secondaryCta, formCta) => {
         if (!primaryCta && !secondaryCta && !formCta) {
             return;
@@ -1564,26 +1586,7 @@
         const specsItems = getResultLines(result, 'specs_items', 'specs_text');
 
         const card = create('div', 'kk-quiz-result kk-quiz__result-card');
-        const hero = create('div', 'kk-quiz-result__hero');
-        appendTextBlock(hero, 'kk-quiz-result__badge kk-quiz__badge', result.badge_text || result.badge);
-
-        if (result.picture_src) {
-            const image = document.createElement('img');
-            image.className = 'kk-quiz__result-image';
-            image.src = String(result.picture_src);
-            image.alt = String(result.name || '');
-            hero.appendChild(image);
-        }
-        appendTextBlock(hero, 'kk-quiz__result-text kk-quiz-result__legacy-text', result.detail_text);
-        card.appendChild(hero);
-
-        appendTextBlock(hero, 'kk-quiz-result__title kk-quiz__result-title', result.name);
-        appendTextBlock(hero, 'kk-quiz-result__summary ' + (enhancedResult ? 'kk-quiz__result-summary' : 'kk-quiz__result-text'), summaryText);
-        if (String(result.summary || '').trim() !== '' && String(result.preview_text || '').trim() !== '' && String(result.preview_text).trim() !== summaryText) {
-            appendTextBlock(hero, 'kk-quiz__result-text kk-quiz-result__legacy-text', result.preview_text);
-        }
-        appendTextBlock(hero, 'kk-quiz__result-text kk-quiz-result__legacy-text', result.detail_text);
-        card.appendChild(hero);
+        card.appendChild(renderResultHero(result, enhancedResult, summaryText));
 
         const formHelp = enhancedResult && result.show_form === true
             ? renderResultFormHelp(nodes, quiz, state, result)
