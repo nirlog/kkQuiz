@@ -1574,6 +1574,8 @@
             image.alt = String(result.name || '');
             hero.appendChild(image);
         }
+        appendTextBlock(hero, 'kk-quiz__result-text kk-quiz-result__legacy-text', result.detail_text);
+        card.appendChild(hero);
 
         appendTextBlock(hero, 'kk-quiz-result__title kk-quiz__result-title', result.name);
         appendTextBlock(hero, 'kk-quiz-result__summary ' + (enhancedResult ? 'kk-quiz__result-summary' : 'kk-quiz__result-text'), summaryText);
