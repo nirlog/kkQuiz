@@ -40,7 +40,7 @@ $checkboxOptions = [
     'debug_enabled',
     'log_notification_errors',
 ];
-$numericOptions = ['rate_limit_ttl', 'rate_limit_max', 'bitrix24_assigned_by_id', 'telegram_message_thread_id', 'analytics_retention_days', 'webhook_timeout', 'amocrm_pipeline_id', 'amocrm_status_id', 'amocrm_responsible_user_id', 'amocrm_lead_price'];
+$numericOptions = ['rate_limit_ttl', 'rate_limit_max', 'lead_attention_minutes', 'bitrix24_assigned_by_id', 'telegram_message_thread_id', 'analytics_retention_days', 'webhook_timeout', 'amocrm_pipeline_id', 'amocrm_status_id', 'amocrm_responsible_user_id', 'amocrm_lead_price'];
 $secretOptions = ModuleSettingsService::SECRET_OPTIONS;
 $bitrix24FieldOptions = [
     'bitrix24_field_site_lead_id',
@@ -96,6 +96,10 @@ $sanitizeNumber = static function (string $name, mixed $value): string {
 
     if ($name === 'rate_limit_max') {
         return (string)min(100, max(1, $value));
+    }
+
+    if ($name === 'lead_attention_minutes') {
+        return (string)min(1440, max(5, $value));
     }
 
     if ($name === 'analytics_retention_days') {
@@ -435,6 +439,12 @@ if ($message !== null) {
         'rejected' => 'Отказ',
         'spam' => 'Спам / мусор',
     ]);
+    $renderInput(
+        'lead_attention_minutes',
+        'Заявка требует внимания через, минут',
+        'number',
+        'Новые заявки старше этого времени будут отмечены в списке как требующие внимания.'
+    );
     $renderCheckbox('save_answers_data', 'Сохранять технические данные ответов');
     $renderCheckbox('rate_limit_enabled', 'Включить rate limit');
     $renderInput('rate_limit_ttl', 'Окно rate limit, секунд', 'number');
