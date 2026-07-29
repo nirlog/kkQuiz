@@ -1020,6 +1020,44 @@
 }
 
 /* Enhanced result consultation blocks */
+.kk-quiz-result__hero {
+    display: grid;
+    gap: 10px;
+}
+
+.kk-quiz-result__badge {
+    display: inline-flex;
+    width: fit-content;
+}
+
+.kk-quiz-result__sections {
+    display: grid;
+    gap: 12px;
+}
+
+.kk-quiz-result-section__text,
+.kk-quiz-result__legacy-text,
+.kk-quiz__products-subtitle {
+    color: var(--kk-quiz-muted);
+    line-height: 1.6;
+    white-space: pre-line;
+}
+
+.kk-quiz-result__budget {
+    border-color: color-mix(in srgb, var(--kk-quiz-accent) 34%, var(--kk-quiz-border));
+    background: color-mix(in srgb, var(--kk-quiz-accent) 8%, var(--kk-quiz-surface));
+}
+
+.kk-quiz__products-subtitle {
+    margin: -4px 0 16px;
+}
+
+.kk-quiz-result__cta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
 .kk-quiz__result-summary {
     max-width: 760px;
     color: var(--kk-quiz-text);

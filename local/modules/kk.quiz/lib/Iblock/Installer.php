@@ -1288,26 +1288,31 @@ final class Installer
             ['CODE' => 'KK_DEFAULT_RESULT', 'NAME' => 'Финальный результат по умолчанию', 'SORT' => 260, 'PROPERTY_TYPE' => 'E', 'LINK_IBLOCK_ID' => $iblockId],
             ['CODE' => 'KK_ALLOW_CUSTOM_ANSWER', 'NAME' => 'Разрешить ввести свой вариант', 'SORT' => 270, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
             ['CODE' => 'KK_ANSWERS', 'NAME' => 'Ответы квиза', 'SORT' => 210, 'PROPERTY_TYPE' => 'S', 'USER_TYPE' => QuizAnswersProperty::USER_TYPE, 'ROW_COUNT' => 10],
-            ['CODE' => 'KK_RESULT_MIN_SCORE', 'NAME' => 'Минимальный балл результата', 'SORT' => 310, 'PROPERTY_TYPE' => 'N'],
-            ['CODE' => 'KK_RESULT_MAX_SCORE', 'NAME' => 'Максимальный балл результата', 'SORT' => 320, 'PROPERTY_TYPE' => 'N'],
-            ['CODE' => 'KK_RESULT_PRIORITY', 'NAME' => 'Приоритет результата', 'SORT' => 300, 'PROPERTY_TYPE' => 'N'],
-            ['CODE' => 'KK_RESULT_SUMMARY', 'NAME' => 'Краткий вывод результата', 'SORT' => 332, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 4],
-            ['CODE' => 'KK_RESULT_WHY_TEXT', 'NAME' => 'Почему подходит', 'SORT' => 334, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
-            ['CODE' => 'KK_RESULT_SPECS_TEXT', 'NAME' => 'Ориентир по комплектующим', 'SORT' => 336, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 6],
-            ['CODE' => 'KK_RESULT_NOTE_TEXT', 'NAME' => 'Что важно учесть', 'SORT' => 338, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 4],
-            ['CODE' => 'KK_RESULT_CTA_TEXT', 'NAME' => 'Текст CTA', 'SORT' => 340, 'PROPERTY_TYPE' => 'S'],
-            ['CODE' => 'KK_RESULT_CTA_LINK', 'NAME' => 'Ссылка CTA', 'SORT' => 350, 'PROPERTY_TYPE' => 'S'],
-            ['CODE' => 'KK_RESULT_CTA_TARGET', 'NAME' => 'Открытие CTA-ссылки', 'SORT' => 351, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getResultCtaTargetValues()],
-            ['CODE' => 'KK_RESULT_VIDEO_URL', 'NAME' => 'Видео результата — URL', 'SORT' => 352, 'PROPERTY_TYPE' => 'S'],
-            ['CODE' => 'KK_RESULT_VIDEO_TITLE', 'NAME' => 'Видео результата — заголовок', 'SORT' => 354, 'PROPERTY_TYPE' => 'S'],
-            ['CODE' => 'KK_RESULT_VIDEO_POSITION', 'NAME' => 'Позиция видео результата', 'SORT' => 356, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getResultVideoPositionValues()],
-            ['CODE' => 'KK_RESULT_SHOW_FORM', 'NAME' => 'Показывать форму', 'SORT' => 360, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
-            ['CODE' => 'KK_RESULT_FORM_TITLE', 'NAME' => 'Заголовок блока формы результата', 'SORT' => 361, 'PROPERTY_TYPE' => 'S'],
-            ['CODE' => 'KK_RESULT_FORM_INTRO', 'NAME' => 'Текст перед формой результата', 'SORT' => 362, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 4],
-            ['CODE' => 'KK_RESULT_FORM_BUTTON_TEXT', 'NAME' => 'Текст кнопки открытия формы', 'SORT' => 364, 'PROPERTY_TYPE' => 'S'],
-            ['CODE' => 'KK_RESULT_CATALOG_SECTION', 'NAME' => 'Раздел рекомендаций', 'SORT' => 380, 'PROPERTY_TYPE' => 'G'],
-            ['CODE' => 'KK_RESULT_CATALOG_PRODUCTS', 'NAME' => 'Рекомендуемые элементы', 'SORT' => 390, 'PROPERTY_TYPE' => 'E', 'MULTIPLE' => 'Y'],
-            ['CODE' => 'KK_RESULT_BADGE', 'NAME' => 'Бейдж результата', 'SORT' => 330, 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_RESULT_MIN_SCORE', 'NAME' => 'Минимальный балл результата', 'SORT' => 810, 'PROPERTY_TYPE' => 'N'],
+            ['CODE' => 'KK_RESULT_MAX_SCORE', 'NAME' => 'Максимальный балл результата', 'SORT' => 820, 'PROPERTY_TYPE' => 'N'],
+            ['CODE' => 'KK_RESULT_PRIORITY', 'NAME' => 'Приоритет результата', 'SORT' => 800, 'PROPERTY_TYPE' => 'N'],
+            ['CODE' => 'KK_RESULT_BADGE', 'NAME' => 'Бейдж результата', 'SORT' => 110, 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_RESULT_SUMMARY', 'NAME' => 'Краткое пояснение результата', 'SORT' => 120, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 4],
+            ['CODE' => 'KK_RESULT_WHY_TEXT', 'NAME' => 'Почему мы рекомендуем этот вариант', 'SORT' => 130, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
+            ['CODE' => 'KK_RESULT_FIT_TEXT', 'NAME' => 'Кому подойдёт', 'SORT' => 140, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
+            ['CODE' => 'KK_RESULT_SPECS_TEXT', 'NAME' => 'Что будет внутри', 'SORT' => 150, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 5],
+            ['CODE' => 'KK_RESULT_NOTE_TEXT', 'NAME' => 'Что важно учесть', 'SORT' => 155, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 4],
+            ['CODE' => 'KK_RESULT_BUDGET_TEXT', 'NAME' => 'Ориентир по бюджету', 'SORT' => 160, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 3],
+            ['CODE' => 'KK_RESULT_VIDEO_URL', 'NAME' => 'Видео результата — URL', 'SORT' => 200, 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_RESULT_VIDEO_TITLE', 'NAME' => 'Видео результата — заголовок', 'SORT' => 201, 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_RESULT_VIDEO_POSITION', 'NAME' => 'Позиция видео результата', 'SORT' => 202, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getResultVideoPositionValues()],
+            ['CODE' => 'KK_RESULT_CTA_TEXT', 'NAME' => 'Текст CTA', 'SORT' => 220, 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_RESULT_CTA_LINK', 'NAME' => 'Ссылка CTA', 'SORT' => 221, 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_RESULT_CTA_TARGET', 'NAME' => 'Открытие CTA-ссылки', 'SORT' => 222, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getResultCtaTargetValues()],
+            ['CODE' => 'KK_RESULT_SECONDARY_CTA_TEXT', 'NAME' => 'Текст второй кнопки результата', 'SORT' => 230, 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_RESULT_SECONDARY_CTA_LINK', 'NAME' => 'Ссылка второй кнопки результата', 'SORT' => 231, 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_RESULT_SECONDARY_CTA_TARGET', 'NAME' => 'Открывать вторую кнопку', 'SORT' => 232, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getResultCtaTargetValues()],
+            ['CODE' => 'KK_RESULT_SHOW_FORM', 'NAME' => 'Показывать форму', 'SORT' => 240, 'PROPERTY_TYPE' => 'L', 'VALUES' => self::getYesNoValues()],
+            ['CODE' => 'KK_RESULT_FORM_TITLE', 'NAME' => 'Заголовок формы для этого результата', 'SORT' => 241, 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_RESULT_FORM_INTRO', 'NAME' => 'Подзаголовок формы для этого результата', 'SORT' => 242, 'PROPERTY_TYPE' => 'S', 'ROW_COUNT' => 3],
+            ['CODE' => 'KK_RESULT_FORM_BUTTON_TEXT', 'NAME' => 'Текст кнопки открытия формы', 'SORT' => 243, 'PROPERTY_TYPE' => 'S'],
+            ['CODE' => 'KK_RESULT_CATALOG_SECTION', 'NAME' => 'Раздел рекомендаций', 'SORT' => 260, 'PROPERTY_TYPE' => 'G'],
+            ['CODE' => 'KK_RESULT_CATALOG_PRODUCTS', 'NAME' => 'Рекомендуемые элементы', 'SORT' => 261, 'PROPERTY_TYPE' => 'E', 'MULTIPLE' => 'Y'],
         ];
 
         $hints = self::getQuizPropertyHints();
@@ -1477,6 +1482,10 @@ final class Installer
 
         if (isset($property['NAME'])) {
             $fields['NAME'] = $property['NAME'];
+        }
+
+        if (isset($property['ROW_COUNT'])) {
+            $fields['ROW_COUNT'] = max(1, (int)$property['ROW_COUNT']);
         }
 
         foreach (['SHOW_IN_LIST', 'FILTRABLE', 'LIST_COLUMN_LABEL', 'LIST_FILTER_LABEL', 'HINT'] as $fieldName) {
@@ -1833,11 +1842,16 @@ final class Installer
             'KK_RESULT_BADGE' => 'Короткий бейдж над результатом, например «Оптимальный выбор».',
             'KK_RESULT_SUMMARY' => 'Краткий вывод результата. Показывается в верхней части финального экрана.',
             'KK_RESULT_WHY_TEXT' => 'Текст блока «Почему подходит».',
+            'KK_RESULT_FIT_TEXT' => 'Описание задач и пользователей, которым подойдёт результат.',
             'KK_RESULT_SPECS_TEXT' => 'Текст блока с ориентиром по комплектующим.',
             'KK_RESULT_NOTE_TEXT' => 'Важное примечание или рекомендация для клиента.',
+            'KK_RESULT_BUDGET_TEXT' => 'Ориентир по бюджету и пояснение, от чего зависит точная стоимость.',
             'KK_RESULT_CTA_TEXT' => 'Текст основной кнопки результата.',
             'KK_RESULT_CTA_LINK' => 'Ссылка основной кнопки результата. Можно указать раздел каталога или другую страницу.',
             'KK_RESULT_CTA_TARGET' => 'Выберите, как открывать ссылку основной CTA-кнопки результата: в текущей вкладке или в новой.',
+            'KK_RESULT_SECONDARY_CTA_TEXT' => 'Текст дополнительной CTA-кнопки результата.',
+            'KK_RESULT_SECONDARY_CTA_LINK' => 'Безопасная ссылка дополнительной CTA-кнопки результата.',
+            'KK_RESULT_SECONDARY_CTA_TARGET' => 'Выберите, как открывать дополнительную CTA-кнопку.',
             'KK_RESULT_VIDEO_URL' => 'Ссылка на видео, которое будет показано в результате.',
             'KK_RESULT_VIDEO_TITLE' => 'Заголовок видео в результате.',
             'KK_RESULT_VIDEO_POSITION' => 'Где показывать видео относительно текста, формы и рекомендаций.',
