@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Bitrix\Main\Loader;
+use Kk\Quiz\Admin\LeadAttentionHelper;
 use Kk\Quiz\Admin\LeadStatusHelper;
 use Kk\Quiz\Iblock\Installer;
 
@@ -27,7 +28,7 @@ $leadsIblockId = is_array($iblock) ? (int)$iblock['ID'] : 0;
 $tableId = 'kk_quiz_leads_list';
 $list = new CAdminList($tableId);
 $filterFields = [
-    'find_id', 'find_date_from', 'find_date_to', 'find_quiz_code', 'find_result', 'find_status',
+    'find_id', 'find_date_from', 'find_date_to', 'find_quiz_code', 'find_result', 'find_status', 'find_attention',
     'find_client_name', 'find_client_phone', 'find_client_email', 'find_webhook_status',
     'find_bitrix24_status', 'find_amocrm_status',
 ];
@@ -45,6 +46,17 @@ if ($leadsIblockId > 0) {
     }
 }
 
+$getStatusEnumIdByXmlId = static function (string $xmlId) use ($statusEnums): int {
+    foreach ($statusEnums as $enumId => $enum) {
+        if ((string)($enum['xml_id'] ?? '') === $xmlId) {
+            return (int)$enumId;
+        }
+    }
+
+    return 0;
+};
+$newStatusEnumId = $getStatusEnumIdByXmlId('new');
+
 $queryFilter = ['IBLOCK_ID' => $leadsIblockId];
 if (($id = (int)$filterValue('find_id')) > 0) {
     $queryFilter['ID'] = $id;
@@ -61,7 +73,15 @@ if (($value = $filterValue('find_quiz_code')) !== '') {
 if (($value = $filterValue('find_result')) !== '') {
     $queryFilter[] = ['LOGIC' => 'OR', ['%PROPERTY_KK_LEAD_RESULT_TITLE' => $value], ['%PROPERTY_KK_LEAD_RESULT_CODE' => $value]];
 }
-if (($value = $filterValue('find_status')) !== '') {
+if ($filterValue('find_attention') === 'Y') {
+    if ($newStatusEnumId > 0) {
+        $queryFilter['PROPERTY_KK_LEAD_STATUS'] = $newStatusEnumId;
+        $thresholdTimestamp = time() - (LeadAttentionHelper::attentionThresholdMinutes() * 60);
+        $queryFilter['<=DATE_CREATE'] = ConvertTimeStamp($thresholdTimestamp, 'FULL');
+    } else {
+        $queryFilter['ID'] = 0;
+    }
+} elseif (($value = $filterValue('find_status')) !== '') {
     $queryFilter['PROPERTY_KK_LEAD_STATUS'] = $value;
 }
 foreach ([
@@ -80,6 +100,7 @@ foreach ([
 $list->AddHeaders([
     ['id' => 'ID', 'content' => 'ID', 'default' => true],
     ['id' => 'DATE_CREATE', 'content' => 'Дата', 'default' => true],
+    ['id' => 'AGE', 'content' => 'Возраст', 'default' => true],
     ['id' => 'STATUS', 'content' => 'Статус', 'default' => true],
     ['id' => 'CLIENT', 'content' => 'Клиент', 'default' => true],
     ['id' => 'CONTACTS', 'content' => 'Контакты', 'default' => true],
@@ -162,9 +183,17 @@ if ($leadsIblockId > 0) {
         $pageUrl = $property($properties, 'KK_LEAD_PAGE_URL');
         $statusXmlId = $statusXml($properties);
         $statusFallback = $statusLabel($properties);
+        $dateCreate = $fields['DATE_CREATE'] ?? '';
+        $requiresAttention = LeadAttentionHelper::requiresAttention($statusXmlId, $dateCreate);
+        $ageLabel = LeadAttentionHelper::ageLabel($dateCreate);
         $row = &$list->AddRow((string)$leadId, ['ID' => $leadId, 'DATE_CREATE' => $fields['DATE_CREATE']], $detailUrl);
         $row->AddViewField('ID', '<a href="' . $escape($detailUrl) . '">' . $leadId . '</a>');
-        $row->AddViewField('STATUS', LeadStatusHelper::renderBadge($statusXmlId, $statusFallback));
+        $row->AddViewField('AGE', LeadAttentionHelper::renderAge($ageLabel, $requiresAttention));
+        $statusHtml = LeadStatusHelper::renderBadge($statusXmlId, $statusFallback);
+        if ($requiresAttention) {
+            $statusHtml .= '<br>' . LeadAttentionHelper::renderAttentionBadge();
+        }
+        $row->AddViewField('STATUS', $statusHtml);
         $row->AddViewField('CLIENT', '<a href="' . $escape($detailUrl) . '">' . $escape($clientName !== '' ? $clientName : 'Без имени') . '</a>');
         $contacts = array_filter([$clientPhone, $clientEmail, $messenger], static fn (string $item): bool => $item !== '');
         $row->AddViewField('CONTACTS', $contacts !== [] ? implode('<br>', array_map($escape, $contacts)) : '—');
@@ -214,16 +243,19 @@ require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_a
 
 $quizzesUrl = 'kk_quiz_quizzes.php?' . http_build_query(['lang' => $lang]);
 $statisticsUrl = 'kk_quiz_statistics.php?' . http_build_query(['lang' => $lang]);
+$leadAnalyticsUrl = 'kk_quiz_lead_analytics.php?' . http_build_query(['lang' => $lang]);
 $standardListUrl = 'iblock_element_admin.php?' . http_build_query(['IBLOCK_ID' => $leadsIblockId, 'type' => Installer::IBLOCK_TYPE_ID, 'lang' => $lang]);
 $settingsUrl = 'settings.php?' . http_build_query(['mid' => 'kk.quiz', 'lang' => $lang]);
 $context = new CAdminContextMenu([
     ['TEXT' => 'Квизы', 'LINK' => $quizzesUrl, 'ICON' => 'btn_list'],
     ['TEXT' => 'Статистика', 'LINK' => $statisticsUrl],
+    ['TEXT' => 'Аналитика заявок', 'LINK' => $leadAnalyticsUrl],
     ['TEXT' => 'Стандартный список заявок', 'LINK' => $standardListUrl],
     ['TEXT' => 'Настройки', 'LINK' => $settingsUrl],
 ]);
 $context->Show();
 echo LeadStatusHelper::renderCss();
+echo LeadAttentionHelper::renderCss();
 
 if ($leadsIblockId <= 0) {
     CAdminMessage::ShowMessage('Инфоблок заявок KK Quiz не найден.');
@@ -231,7 +263,7 @@ if ($leadsIblockId <= 0) {
     return;
 }
 
-$filter = new CAdminFilter($tableId . '_filter', ['Дата создания', 'Код квиза', 'Результат', 'Статус обработки', 'Имя клиента', 'Телефон', 'Email', 'Webhook статус', 'Bitrix24 статус', 'amoCRM статус']);
+$filter = new CAdminFilter($tableId . '_filter', ['Дата создания', 'Код квиза', 'Результат', 'Статус обработки', 'Требуют внимания', 'Имя клиента', 'Телефон', 'Email', 'Webhook статус', 'Bitrix24 статус', 'amoCRM статус']);
 $filter->Begin();
 ?>
 <tr><td>ID заявки:</td><td><input type="text" name="find_id" value="<?= $escape($filterValue('find_id')) ?>"></td></tr>
@@ -239,6 +271,7 @@ $filter->Begin();
 <tr><td>Код квиза:</td><td><input type="text" name="find_quiz_code" value="<?= $escape($filterValue('find_quiz_code')) ?>"></td></tr>
 <tr><td>Результат:</td><td><input type="text" name="find_result" value="<?= $escape($filterValue('find_result')) ?>"></td></tr>
 <tr><td>Статус обработки:</td><td><?php if ($statusEnums !== []): ?><select name="find_status"><option value="">Все</option><?php foreach ($statusEnums as $enumId => $enum): ?><option value="<?= $enumId ?>"<?= $filterValue('find_status') === (string)$enumId ? ' selected' : '' ?>><?= $escape($enum['value']) ?></option><?php endforeach; ?></select><?php else: ?><input type="text" name="find_status" value="<?= $escape($filterValue('find_status')) ?>"><?php endif; ?></td></tr>
+<tr><td>Требуют внимания:</td><td><input type="checkbox" name="find_attention" value="Y"<?= $filterValue('find_attention') === 'Y' ? ' checked' : '' ?>></td></tr>
 <tr><td>Имя клиента:</td><td><input type="text" name="find_client_name" value="<?= $escape($filterValue('find_client_name')) ?>"></td></tr>
 <tr><td>Телефон:</td><td><input type="text" name="find_client_phone" value="<?= $escape($filterValue('find_client_phone')) ?>"></td></tr>
 <tr><td>Email:</td><td><input type="text" name="find_client_email" value="<?= $escape($filterValue('find_client_email')) ?>"></td></tr>
@@ -249,15 +282,6 @@ $filter->Begin();
 $filter->Buttons(['table_id' => $tableId, 'url' => $APPLICATION->GetCurPage(), 'form' => 'find_form']);
 $filter->End();
 
-$getStatusEnumIdByXmlId = static function (string $xmlId) use ($statusEnums): int {
-    foreach ($statusEnums as $enumId => $enum) {
-        if ((string)($enum['xml_id'] ?? '') === $xmlId) {
-            return (int)$enumId;
-        }
-    }
-
-    return 0;
-};
 $statusTabs = [
     '' => 'Все',
     'new' => 'Новые',
@@ -273,11 +297,24 @@ $statusTabs = [
     <?php foreach ($statusTabs as $xmlId => $label):
         $enumId = $xmlId !== '' ? $getStatusEnumIdByXmlId($xmlId) : 0;
         if ($xmlId !== '' && $enumId <= 0) { continue; }
-        $urlParameters = ['lang' => $lang];
+        $urlParameters = ['lang' => $lang, 'find_attention' => ''];
         if ($enumId > 0) { $urlParameters['find_status'] = $enumId; $urlParameters['set_filter'] = 'Y'; }
         else { $urlParameters['del_filter'] = 'Y'; }
-        $isActive = $xmlId === '' ? $filterValue('find_status') === '' : $filterValue('find_status') === (string)$enumId;
+        $isActive = $filterValue('find_attention') !== 'Y'
+            && ($xmlId === '' ? $filterValue('find_status') === '' : $filterValue('find_status') === (string)$enumId);
     ?><a href="<?= $escape('kk_quiz_leads.php?' . http_build_query($urlParameters)) ?>" class="<?= $isActive ? 'is-active' : '' ?>"><?= $escape($label) ?></a><?php endforeach; ?>
+</div>
+<?php endif; ?>
+<?php if ($newStatusEnumId > 0):
+    $attentionUrl = 'kk_quiz_leads.php?' . http_build_query([
+        'find_attention' => 'Y',
+        'set_filter' => 'Y',
+        'lang' => $lang,
+    ]);
+    $isAttentionActive = $filterValue('find_attention') === 'Y';
+?>
+<div class="kk-lead-attention-filter">
+    <a href="<?= $escape($attentionUrl) ?>" class="<?= $isAttentionActive ? 'is-active' : '' ?>">Требуют внимания &gt; <?= LeadAttentionHelper::attentionThresholdMinutes() ?> мин</a>
 </div>
 <?php endif; ?>
 <div style="margin:12px 0"><button type="button" class="adm-btn adm-btn-save" id="kk-quiz-export-leads">Экспорт CSV</button></div>
