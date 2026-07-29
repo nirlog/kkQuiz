@@ -27,6 +27,11 @@ return [
             'title' => 'Заявки квизов',
         ],
         [
+            'text' => 'Аналитика заявок',
+            'url' => 'kk_quiz_lead_analytics.php?lang=' . (defined('LANGUAGE_ID') ? LANGUAGE_ID : 'ru'),
+            'title' => 'Аналитика заявок KK Quiz',
+        ],
+        [
             'text' => 'Статистика',
             'url' => 'kk_quiz_statistics.php?lang=' . (defined('LANGUAGE_ID') ? LANGUAGE_ID : 'ru'),
             'title' => 'Статистика квизов',

@@ -394,6 +394,12 @@ final class Installer
                 'write' => 'Cannot write /bitrix/admin/kk_quiz_statistics.php.',
             ],
             [
+                'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_lead_analytics.php',
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_lead_analytics.php',
+                'missing' => 'KK Quiz admin lead analytics stub source not found.',
+                'write' => 'Cannot write /bitrix/admin/kk_quiz_lead_analytics.php.',
+            ],
+            [
                 'source' => dirname(__DIR__, 2) . '/install/admin/kk_quiz_help.php',
                 'target' => $documentRoot . '/bitrix/admin/kk_quiz_help.php',
                 'missing' => 'KK Quiz admin help stub source not found.',
@@ -466,6 +472,10 @@ final class Installer
             [
                 'target' => $documentRoot . '/bitrix/admin/kk_quiz_statistics.php',
                 'marker' => 'kk.quiz/admin/statistics.php',
+            ],
+            [
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_lead_analytics.php',
+                'marker' => 'kk.quiz/admin/lead_analytics.php',
             ],
             [
                 'target' => $documentRoot . '/bitrix/admin/kk_quiz_help.php',

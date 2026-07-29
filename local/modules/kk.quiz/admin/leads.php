@@ -243,11 +243,13 @@ require($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_a
 
 $quizzesUrl = 'kk_quiz_quizzes.php?' . http_build_query(['lang' => $lang]);
 $statisticsUrl = 'kk_quiz_statistics.php?' . http_build_query(['lang' => $lang]);
+$leadAnalyticsUrl = 'kk_quiz_lead_analytics.php?' . http_build_query(['lang' => $lang]);
 $standardListUrl = 'iblock_element_admin.php?' . http_build_query(['IBLOCK_ID' => $leadsIblockId, 'type' => Installer::IBLOCK_TYPE_ID, 'lang' => $lang]);
 $settingsUrl = 'settings.php?' . http_build_query(['mid' => 'kk.quiz', 'lang' => $lang]);
 $context = new CAdminContextMenu([
     ['TEXT' => 'Квизы', 'LINK' => $quizzesUrl, 'ICON' => 'btn_list'],
     ['TEXT' => 'Статистика', 'LINK' => $statisticsUrl],
+    ['TEXT' => 'Аналитика заявок', 'LINK' => $leadAnalyticsUrl],
     ['TEXT' => 'Стандартный список заявок', 'LINK' => $standardListUrl],
     ['TEXT' => 'Настройки', 'LINK' => $settingsUrl],
 ]);
