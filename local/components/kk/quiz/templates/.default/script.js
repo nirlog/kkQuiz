@@ -651,14 +651,20 @@
                 clearPersistedQuizState(root, quiz);
                 return false;
             }
+            const resultId = toId(saved.result_id);
+            const resultCode = String(saved.result_code || '');
+            if (resultId === null && resultCode === '') {
+                clearPersistedQuizState(root, quiz);
+                return false;
+            }
             state.answers = saved.answers && typeof saved.answers === 'object' && !Array.isArray(saved.answers) ? saved.answers : {};
             state.scores = saved.scores && typeof saved.scores === 'object' && !Array.isArray(saved.scores) ? saved.scores : {};
             state.stepIndex = Math.max(0, Number(saved.step_index || 0));
             state.currentQuestionId = toId(saved.current_question_id);
-            state.currentResultId = toId(saved.result_id);
-            state.currentResultCode = String(saved.result_code || '');
+            state.currentResultId = resultId;
+            state.currentResultCode = resultCode;
 
-            return state.currentResultId !== null || state.currentResultCode !== '';
+            return true;
         } catch (error) {
             clearPersistedQuizState(root, quiz);
             return false;
@@ -1561,6 +1567,32 @@
             if (formCta) actions.appendChild(formCta);
             card.appendChild(actions);
         }
+        if (primaryCta || secondaryCta || formCta) {
+            const actions = create('div', 'kk-quiz-result__cta kk-quiz__result-actions');
+            if (primaryCta) actions.appendChild(primaryCta);
+            if (secondaryCta) actions.appendChild(secondaryCta);
+            if (formCta) actions.appendChild(formCta);
+            card.appendChild(actions);
+        }
+
+        const sections = create('div', 'kk-quiz-result__sections');
+        const reasonText = String(result.reason_text || '').trim();
+        const reasonSection = reasonText !== ''
+            ? renderResultTextSection('Почему мы рекомендуем этот вариант', reasonText, 'kk-quiz__result-why')
+            : renderResultSection('Почему подходит', whyItems, 'kk-quiz__result-why');
+        if (reasonSection) sections.appendChild(reasonSection);
+
+        const fitSection = renderResultTextSection('Кому подойдёт', result.fit_text, 'kk-quiz-result__fit');
+        if (fitSection) sections.appendChild(fitSection);
+
+        const buildText = String(result.build_text || '').trim();
+        const specsSection = buildText !== ''
+            ? renderResultTextSection('Что будет внутри', buildText, 'kk-quiz__result-specs')
+            : renderResultSection('Ориентир по комплектующим', specsItems, 'kk-quiz__result-specs');
+        if (specsSection) sections.appendChild(specsSection);
+
+        const budgetSection = renderResultTextSection('Ориентир по бюджету', result.budget_text, 'kk-quiz-result__budget');
+        if (budgetSection) sections.appendChild(budgetSection);
 
         const sections = create('div', 'kk-quiz-result__sections');
         const reasonText = String(result.reason_text || '').trim();
