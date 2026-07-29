@@ -197,6 +197,9 @@
         state.tracking.formShowSent = false;
         state.tracking.leadSuccessSent = false;
         state.tracking.resultShowCodes = {};
+        state.currentQuestionId = null;
+        state.currentResultId = null;
+        state.currentResultCode = '';
     };
 
     const trackQuizEvent = (root, eventType, data = {}) => {
@@ -400,7 +403,9 @@
             lead_id: params.lead_id || '',
             cta_text: params.cta_text || '',
             cta_link: params.cta_link || '',
+            cta_url: params.cta_link || '',
             cta_target: params.cta_target || '',
+            cta_type: params.cta_type || '',
             product_id: params.product_id || '',
             product_name: params.product_name || '',
             product_url: params.product_url || ''
@@ -441,6 +446,10 @@
             return 'kk_quiz_result_cta_click';
         }
 
+        if (eventType === 'result_secondary_cta_click') {
+            return 'kk_quiz_result_secondary_cta_click';
+        }
+
         if (eventType === 'product_click') {
             return 'kk_quiz_recommendation_click';
         }
@@ -472,6 +481,10 @@
             return 'kk_quiz_result_cta_click';
         }
 
+        if (eventType === 'result_secondary_cta_click') {
+            return 'kk_quiz_result_secondary_cta_click';
+        }
+
         if (eventType === 'product_click') {
             return 'kk_quiz_recommendation_click';
         }
@@ -490,7 +503,9 @@
             lead_id: params.lead_id || '',
             cta_text: params.cta_text || '',
             cta_link: params.cta_link || '',
+            cta_url: params.cta_link || '',
             cta_target: params.cta_target || '',
+            cta_type: params.cta_type || '',
             product_id: params.product_id || '',
             product_name: params.product_name || '',
             product_url: params.product_url || ''
@@ -561,6 +576,9 @@
         answers: {},
         scores: {},
         fields: {},
+        currentQuestionId: null,
+        currentResultId: null,
+        currentResultCode: '',
         analytics: {
             firstAnswerSent: false,
             resultReachedSent: false
@@ -574,6 +592,84 @@
             resultShowCodes: {}
         }
     });
+
+    const STATE_MAX_AGE = 2 * 60 * 60 * 1000;
+
+    const getStateStorageKey = (root, quiz) => {
+        const quizCode = getQuizCode(root, quiz);
+        if (quizCode === '') {
+            return '';
+        }
+        const roots = Array.from(document.querySelectorAll('[data-kk-quiz]'));
+        const rootIndex = Math.max(0, roots.indexOf(root));
+        const instanceKey = String(root.id || root.getAttribute('data-kk-quiz-instance') || (window.location.pathname + ':' + rootIndex));
+
+        return 'kk_quiz_state_' + encodeURIComponent(quizCode) + '_' + encodeURIComponent(instanceKey);
+    };
+
+    const persistQuizState = (root, quiz, state) => {
+        const key = getStateStorageKey(root, quiz);
+        if (key === '') {
+            return;
+        }
+        try {
+            window.sessionStorage.setItem(key, JSON.stringify({
+                quiz_code: getQuizCode(root, quiz),
+                result_id: state.currentResultId || null,
+                result_code: state.currentResultCode || '',
+                current_question_id: state.currentQuestionId || null,
+                answers: state.answers && typeof state.answers === 'object' ? state.answers : {},
+                scores: state.scores && typeof state.scores === 'object' ? state.scores : {},
+                step_index: Number(state.stepIndex || 0),
+                timestamp: Date.now()
+            }));
+        } catch (error) {
+            // Недоступный sessionStorage не должен ломать квиз.
+        }
+    };
+
+    const clearPersistedQuizState = (root, quiz) => {
+        const key = getStateStorageKey(root, quiz);
+        if (key === '') {
+            return;
+        }
+        try {
+            window.sessionStorage.removeItem(key);
+        } catch (error) {
+            // Недоступный sessionStorage не должен ломать квиз.
+        }
+    };
+
+    const restoreQuizState = (root, quiz, state) => {
+        const key = getStateStorageKey(root, quiz);
+        if (key === '') {
+            return false;
+        }
+        try {
+            const saved = JSON.parse(window.sessionStorage.getItem(key) || 'null');
+            if (!saved || saved.quiz_code !== getQuizCode(root, quiz) || Date.now() - Number(saved.timestamp || 0) > STATE_MAX_AGE) {
+                clearPersistedQuizState(root, quiz);
+                return false;
+            }
+            const resultId = toId(saved.result_id);
+            const resultCode = String(saved.result_code || '');
+            if (resultId === null && resultCode === '') {
+                clearPersistedQuizState(root, quiz);
+                return false;
+            }
+            state.answers = saved.answers && typeof saved.answers === 'object' && !Array.isArray(saved.answers) ? saved.answers : {};
+            state.scores = saved.scores && typeof saved.scores === 'object' && !Array.isArray(saved.scores) ? saved.scores : {};
+            state.stepIndex = Math.max(0, Number(saved.step_index || 0));
+            state.currentQuestionId = toId(saved.current_question_id);
+            state.currentResultId = resultId;
+            state.currentResultCode = resultCode;
+
+            return true;
+        } catch (error) {
+            clearPersistedQuizState(root, quiz);
+            return false;
+        }
+    };
 
     const appendTextBlock = (container, className, text) => {
         if (text === undefined || text === null || String(text) === '') {
@@ -604,11 +700,26 @@
         return progress;
     };
 
+    const setPanelActive = (node, active) => {
+        if (!node) {
+            return;
+        }
+        node.hidden = !active;
+        if (active) {
+            node.removeAttribute('aria-hidden');
+        } else {
+            node.setAttribute('aria-hidden', 'true');
+        }
+        if ('inert' in node) {
+            node.inert = !active;
+        }
+    };
+
     const hideAll = (nodes) => {
-        nodes.start.hidden = true;
-        nodes.question.hidden = true;
-        nodes.form.hidden = true;
-        nodes.result.hidden = true;
+        setPanelActive(nodes.start, false);
+        setPanelActive(nodes.question, false);
+        setPanelActive(nodes.form, false);
+        setPanelActive(nodes.result, false);
     };
 
     const getQuizCode = (root, quiz) => String(root.getAttribute('data-kk-quiz-code') || quiz.code || '').trim();
@@ -849,10 +960,10 @@
         return wrapper;
     };
 
-    const showFinalForm = (nodes, quiz, state, currentResult) => {
+    const showFinalForm = (nodes, quiz, state, currentResult, options = {}) => {
         hideAll(nodes);
         clear(nodes.form);
-        nodes.form.hidden = false;
+        setPanelActive(nodes.form, true);
 
         if (!state.tracking.formShowSent) {
             state.tracking.formShowSent = true;
@@ -863,13 +974,15 @@
             });
         }
 
-        const formButtonText = String(quiz.form_button_text || '').trim() || 'Получить подборку';
-        const formTitle = String(quiz.form_title || '').trim() || 'Получить подборку';
-        const formSubtitle = String(quiz.form_subtitle || '').trim();
+        const formButtonText = String(currentResult && currentResult.form_button_text || quiz.form_button_text || '').trim() || 'Получить подборку';
+        const formTitle = String(currentResult && currentResult.form_title || quiz.form_title || '').trim() || 'Получить подборку';
+        const formSubtitle = String(currentResult && (currentResult.form_subtitle || currentResult.form_intro) || quiz.form_subtitle || '').trim();
         const successText = String(quiz.success_text || '').trim() || 'Спасибо! Заявка отправлена. Мы скоро свяжемся с вами.';
-        nodes.form.appendChild(create('h3', 'kk-quiz__form-title', formTitle));
-        if (formSubtitle !== '') {
-            nodes.form.appendChild(create('div', 'kk-quiz__form-subtitle', formSubtitle));
+        if (options.hideHeader !== true) {
+            nodes.form.appendChild(create('h3', 'kk-quiz__form-title', formTitle));
+            if (formSubtitle !== '') {
+                nodes.form.appendChild(create('div', 'kk-quiz__form-subtitle', formSubtitle));
+            }
         }
 
         const fields = toArray(quiz.form_fields).filter((field) => Object.prototype.hasOwnProperty.call(FIELD_LABELS, field));
@@ -956,7 +1069,7 @@
 
         const message = create('div', 'kk-quiz__success');
         message.setAttribute('aria-live', 'polite');
-        message.hidden = true;
+        setPanelActive(message, false);
 
         form.addEventListener('submit', (event) => {
             event.preventDefault();
@@ -965,7 +1078,7 @@
                 return;
             }
 
-            message.hidden = true;
+            setPanelActive(message, false);
             message.textContent = '';
 
             const agreementInput = form.querySelector('input[name="agreement"]');
@@ -973,7 +1086,7 @@
             if (!agreementAccepted) {
                 message.className = 'kk-quiz__error';
                 message.textContent = 'Необходимо согласие с политикой обработки персональных данных.';
-                message.hidden = false;
+                setPanelActive(message, true);
                 if (agreementInput) {
                     agreementInput.setAttribute('aria-invalid', 'true');
                     const agreementWrap = agreementInput.closest('.kk-quiz__agreement');
@@ -995,6 +1108,17 @@
             submit.disabled = true;
             submit.textContent = submitLoadingText;
             submit.classList.add('kk-quiz__button--loading');
+            message.className = 'kk-quiz__submit-status';
+            message.textContent = submitLoadingText;
+            setPanelActive(message, true);
+            const loadingTimers = [
+                window.setTimeout(() => {
+                    message.textContent = 'Отправляем заявку, это может занять несколько секунд…';
+                }, 4000),
+                window.setTimeout(() => {
+                    message.textContent = 'Заявка всё ещё отправляется. Пожалуйста, не закрывайте страницу.';
+                }, 10000)
+            ];
 
             const formData = new FormData(form);
             const payloadFields = {};
@@ -1028,10 +1152,11 @@
                 .then((data) => {
                     const result = normalizeAjaxResponse(data);
                     if (result && result.success === true) {
-                        form.hidden = true;
+                        setPanelActive(form, false);
                         message.className = 'kk-quiz__success';
                         message.textContent = successText;
-                        message.hidden = false;
+                        setPanelActive(message, true);
+                        clearPersistedQuizState(nodes.root, quiz);
                         const analyticsParams = {
                             quiz_code: quiz.code || '',
                             step_index: state.stepIndex,
@@ -1060,14 +1185,15 @@
                         list.appendChild(item);
                     });
                     message.appendChild(list);
-                    message.hidden = false;
+                    setPanelActive(message, true);
                 })
                 .catch(() => {
                     message.className = 'kk-quiz__error';
                     message.textContent = 'Не удалось отправить заявку. Попробуйте позже.';
-                    message.hidden = false;
+                    setPanelActive(message, true);
                 })
                 .finally(() => {
+                    loadingTimers.forEach((timer) => window.clearTimeout(timer));
                     if (!form.hidden) {
                         submit.disabled = false;
                         submit.textContent = submitDefaultText;
@@ -1086,8 +1212,9 @@
             return null;
         }
 
-        const wrapper = create('div', 'kk-quiz__products');
+        const wrapper = create('div', 'kk-quiz__products kk-quiz-result__products');
         wrapper.appendChild(create('h3', 'kk-quiz__products-title', 'Подходящие варианты'));
+        wrapper.appendChild(create('div', 'kk-quiz__products-subtitle', 'Можно посмотреть готовые сборки или отправить результат специалисту для точного подбора.'));
 
         const grid = create('div', 'kk-quiz__products-grid');
 
@@ -1139,6 +1266,23 @@
             : 'after_text';
     };
 
+    const normalizeSafeLink = (value) => {
+        const url = String(value || '').trim();
+        if (url === '' || /[\u0000-\u001f\u007f]/.test(url)) {
+            return '';
+        }
+        if ((url.startsWith('/') && !url.startsWith('//')) || url.startsWith('#') || url.startsWith('?')) {
+            return url;
+        }
+
+        try {
+            const parsed = new URL(url);
+            return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : '';
+        } catch (error) {
+            return '';
+        }
+    };
+
     const renderResultVideo = (video) => {
         if (!video || typeof video !== 'object') {
             return null;
@@ -1151,7 +1295,7 @@
             return null;
         }
 
-        const wrapper = create('div', 'kk-quiz-result-video');
+        const wrapper = create('div', 'kk-quiz-result-video kk-quiz-result__video');
         const title = String(video.title || '').trim();
         if (title !== '') {
             wrapper.appendChild(create('div', 'kk-quiz-result-video__title', title));
@@ -1184,7 +1328,11 @@
         }
 
         const link = create('a', 'kk-quiz-result-video__link', title || 'Открыть видео');
-        link.href = url;
+        const safeUrl = normalizeSafeLink(url);
+        if (safeUrl === '') {
+            return null;
+        }
+        link.href = safeUrl;
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
         wrapper.appendChild(link);
@@ -1204,9 +1352,57 @@
     };
 
     const hasEnhancedResultContent = (result) => {
-        return ['summary', 'why_text', 'specs_text', 'note_text', 'form_title', 'form_intro', 'form_button_text'].some((key) => String(result[key] || '').trim() !== '')
+        return ['summary', 'reason_text', 'fit_text', 'build_text', 'budget_text', 'why_text', 'specs_text', 'note_text', 'form_title', 'form_subtitle', 'form_intro', 'form_button_text'].some((key) => String(result[key] || '').trim() !== '')
             || getResultLines(result, 'why_items', 'why_text').length > 0
             || getResultLines(result, 'specs_items', 'specs_text').length > 0;
+    };
+
+    const renderResultTextSection = (title, text, extraClassName) => {
+        const value = String(text || '').trim();
+        if (value === '') {
+            return null;
+        }
+
+        const section = create('section', 'kk-quiz-result-section kk-quiz__result-section' + (extraClassName ? ' ' + extraClassName : ''));
+        section.appendChild(create('h4', 'kk-quiz-result-section__title kk-quiz__result-section-title', title));
+        section.appendChild(create('div', 'kk-quiz-result-section__text', value));
+
+        return section;
+    };
+
+    const createResultCta = (nodes, quiz, state, result, cta, type) => {
+        const safeUrl = normalizeSafeLink(cta && cta.url);
+        if (safeUrl === '') {
+            return null;
+        }
+
+        const secondary = type === 'secondary';
+        const text = String(cta.text || '').trim() || (secondary ? 'Подробнее' : 'Смотреть подходящие варианты');
+        const target = String(cta.target || 'same_tab') === 'new_tab' ? 'new_tab' : 'same_tab';
+        const link = create(
+            'a',
+            'kk-quiz__button kk-quiz__button--link ' + (secondary ? 'kk-quiz__button--secondary kk-quiz-result__cta-secondary' : 'kk-quiz__result-catalog-link kk-quiz-result__cta-primary'),
+            text
+        );
+        link.href = safeUrl;
+        if (target === 'new_tab') {
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+        }
+        link.addEventListener('click', () => {
+            persistQuizState(nodes.root, quiz, state);
+            sendAnalyticsEvent(quiz, secondary ? 'result_secondary_cta_click' : 'result_cta_click', {
+                quiz_code: quiz.code || '',
+                result_id: result.id || '',
+                result_code: result.code || '',
+                cta_text: text,
+                cta_link: safeUrl,
+                cta_target: target,
+                cta_type: type
+            });
+        });
+
+        return link;
     };
 
     const renderResultSection = (title, items, extraClassName) => {
@@ -1214,8 +1410,8 @@
             return null;
         }
 
-        const section = create('section', 'kk-quiz__result-section' + (extraClassName ? ' ' + extraClassName : ''));
-        section.appendChild(create('h4', 'kk-quiz__result-section-title', title));
+        const section = create('section', 'kk-quiz-result-section kk-quiz__result-section' + (extraClassName ? ' ' + extraClassName : ''));
+        section.appendChild(create('h4', 'kk-quiz-result-section__title kk-quiz__result-section-title', title));
 
         const list = create('ul', 'kk-quiz__result-list');
         items.forEach((item) => {
@@ -1232,15 +1428,54 @@
             return null;
         }
 
-        const note = create('section', 'kk-quiz__result-section kk-quiz__result-note');
-        note.appendChild(create('h4', 'kk-quiz__result-section-title', 'Что важно учесть'));
-        note.appendChild(create('div', 'kk-quiz__result-note-text', noteText));
+        const note = create('section', 'kk-quiz-result-section kk-quiz__result-section kk-quiz__result-note');
+        note.appendChild(create('h4', 'kk-quiz-result-section__title kk-quiz__result-section-title', 'Что важно учесть'));
+        note.appendChild(create('div', 'kk-quiz-result-section__text kk-quiz__result-note-text', noteText));
 
         return note;
     };
 
+    const appendResultCtas = (card, primaryCta, secondaryCta, formCta) => {
+        if (!primaryCta && !secondaryCta && !formCta) {
+            return;
+        }
+
+        const actions = create('div', 'kk-quiz-result__cta kk-quiz__result-actions');
+        if (primaryCta) actions.appendChild(primaryCta);
+        if (secondaryCta) actions.appendChild(secondaryCta);
+        if (formCta) actions.appendChild(formCta);
+        card.appendChild(actions);
+    };
+
+    const renderResultSections = (result, whyItems, specsItems) => {
+        const sections = create('div', 'kk-quiz-result__sections');
+        const reasonText = String(result.reason_text || '').trim();
+        const reasonSection = reasonText !== ''
+            ? renderResultTextSection('Почему мы рекомендуем этот вариант', reasonText, 'kk-quiz__result-why')
+            : renderResultSection('Почему подходит', whyItems, 'kk-quiz__result-why');
+        if (reasonSection) sections.appendChild(reasonSection);
+
+        const fitSection = renderResultTextSection('Кому подойдёт', result.fit_text, 'kk-quiz-result__fit');
+        if (fitSection) sections.appendChild(fitSection);
+
+        const buildText = String(result.build_text || '').trim();
+        const specsSection = buildText !== ''
+            ? renderResultTextSection('Что будет внутри', buildText, 'kk-quiz__result-specs')
+            : renderResultSection('Ориентир по комплектующим', specsItems, 'kk-quiz__result-specs');
+        if (specsSection) sections.appendChild(specsSection);
+
+        const budgetSection = renderResultTextSection('Ориентир по бюджету', result.budget_text, 'kk-quiz-result__budget');
+        if (budgetSection) sections.appendChild(budgetSection);
+
+        const noteSection = renderResultNote(result.note_text);
+        if (noteSection) sections.appendChild(noteSection);
+
+        return sections.childNodes.length > 0 ? sections : null;
+    };
+
     const renderResultFormHelp = (nodes, quiz, state, result) => {
         const help = create('div', 'kk-quiz__result-help');
+        setPanelActive(help, false);
         help.appendChild(create(
             'h3',
             'kk-quiz__result-help-title',
@@ -1249,34 +1484,43 @@
         help.appendChild(create(
             'div',
             'kk-quiz__result-help-text',
-            String(result.form_intro || '').trim() || 'Отправьте результат специалисту — он проверит наличие и предложит 2–3 подходящих варианта.'
+            String(result.form_subtitle || result.form_intro || '').trim() || 'Отправьте результат специалисту — он проверит наличие и предложит 2–3 подходящих варианта.'
         ));
 
-        const toggle = create(
-            'button',
-            'kk-quiz__button kk-quiz__button--secondary kk-quiz__result-form-toggle',
-            String(result.form_button_text || '').trim() || 'Отправить результат специалисту'
-        );
-        toggle.type = 'button';
+        const formWrap = create('div', 'kk-quiz-result__form kk-quiz__result-form');
+        setPanelActive(formWrap, false);
 
-        const formWrap = create('div', 'kk-quiz__result-form');
-        formWrap.hidden = true;
-
-        toggle.addEventListener('click', () => {
-            toggle.hidden = true;
-            formWrap.hidden = false;
-
+        const open = () => {
+            setPanelActive(help, true);
             const originalForm = nodes.form;
             nodes.form = formWrap;
-            showFinalForm(nodes, quiz, state, result);
-            nodes.result.hidden = false;
+            showFinalForm(nodes, quiz, state, result, {hideHeader: true});
+            setPanelActive(nodes.result, true);
             nodes.form = originalForm;
-        });
+            const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+            window.requestAnimationFrame(() => formWrap.scrollIntoView({behavior, block: 'start'}));
+        };
 
-        help.appendChild(toggle);
         help.appendChild(formWrap);
 
-        return help;
+        return {node: help, open};
+    };
+
+    const createRestartButton = (nodes, quiz, state) => {
+        const button = create('button', 'kk-quiz__restart', 'Начать заново');
+        button.type = 'button';
+        button.addEventListener('click', () => {
+            clearPersistedQuizState(nodes.root, quiz);
+            resetRunState(state);
+            clear(nodes.question);
+            clear(nodes.form);
+            clear(nodes.result);
+            hideAll(nodes);
+            setPanelActive(nodes.start, true);
+            window.requestAnimationFrame(() => scrollToCurrentStep(nodes));
+        });
+
+        return button;
     };
 
     const showResult = (nodes, quiz, state, resultId) => {
@@ -1308,71 +1552,62 @@
 
         hideAll(nodes);
         clear(nodes.result);
-        nodes.result.hidden = false;
+        setPanelActive(nodes.result, true);
+        state.currentQuestionId = null;
+        state.currentResultId = toId(result.id);
+        state.currentResultCode = String(result.code || '');
+        persistQuizState(nodes.root, quiz, state);
 
         const enhancedResult = hasEnhancedResultContent(result);
         const summaryText = String(result.summary || '').trim() || String(result.preview_text || '').trim();
         const whyItems = getResultLines(result, 'why_items', 'why_text');
         const specsItems = getResultLines(result, 'specs_items', 'specs_text');
 
-        const card = create('div', 'kk-quiz__result-card');
-        appendTextBlock(card, 'kk-quiz__badge', result.badge);
+        const card = create('div', 'kk-quiz-result kk-quiz__result-card');
+        const hero = create('div', 'kk-quiz-result__hero');
+        appendTextBlock(hero, 'kk-quiz-result__badge kk-quiz__badge', result.badge_text || result.badge);
 
         if (result.picture_src) {
             const image = document.createElement('img');
             image.className = 'kk-quiz__result-image';
             image.src = String(result.picture_src);
             image.alt = String(result.name || '');
-            card.appendChild(image);
+            hero.appendChild(image);
         }
 
-        appendTextBlock(card, 'kk-quiz__result-title', result.name);
-        appendTextBlock(card, enhancedResult ? 'kk-quiz__result-summary' : 'kk-quiz__result-text', summaryText);
-
-        const whySection = renderResultSection('Почему подходит', whyItems, 'kk-quiz__result-why');
-        if (whySection) {
-            card.appendChild(whySection);
+        appendTextBlock(hero, 'kk-quiz-result__title kk-quiz__result-title', result.name);
+        appendTextBlock(hero, 'kk-quiz-result__summary ' + (enhancedResult ? 'kk-quiz__result-summary' : 'kk-quiz__result-text'), summaryText);
+        if (String(result.summary || '').trim() !== '' && String(result.preview_text || '').trim() !== '' && String(result.preview_text).trim() !== summaryText) {
+            appendTextBlock(hero, 'kk-quiz__result-text kk-quiz-result__legacy-text', result.preview_text);
         }
+        appendTextBlock(hero, 'kk-quiz__result-text kk-quiz-result__legacy-text', result.detail_text);
+        card.appendChild(hero);
 
-        const specsSection = renderResultSection('Ориентир по комплектующим', specsItems, 'kk-quiz__result-specs');
-        if (specsSection) {
-            card.appendChild(specsSection);
+        const formHelp = enhancedResult && result.show_form === true
+            ? renderResultFormHelp(nodes, quiz, state, result)
+            : null;
+        const primaryCta = createResultCta(nodes, quiz, state, result, {text: result.cta_text, url: result.cta_link, target: result.cta_target}, 'primary');
+        const secondaryCta = createResultCta(nodes, quiz, state, result, result.secondary_cta || {}, 'secondary');
+        const formCta = formHelp ? create(
+            'button',
+            'kk-quiz__button kk-quiz__button--secondary kk-quiz-result__form-cta',
+            String(result.form_button_text || quiz.form_button_text || '').trim() || 'Получить точный подбор'
+        ) : null;
+        if (formCta) {
+            formCta.type = 'button';
+            formCta.addEventListener('click', () => {
+                formCta.disabled = true;
+                formHelp.open();
+            });
         }
-
-        const noteSection = renderResultNote(result.note_text);
-        if (noteSection) {
-            card.appendChild(noteSection);
-        }
+        appendResultCtas(card, primaryCta, secondaryCta, formCta);
+        const sections = renderResultSections(result, whyItems, specsItems);
+        if (sections) card.appendChild(sections);
 
         const videoBlock = renderResultVideo(result.video);
         const videoPosition = normalizeResultVideoPosition(result.video ? result.video.position : '');
         if (videoBlock && videoPosition === 'after_text') {
             card.appendChild(videoBlock);
-        }
-
-        if (result.cta_text && result.cta_link) {
-            const actions = create('div', 'kk-quiz__result-actions');
-            const link = create('a', 'kk-quiz__button kk-quiz__button--link kk-quiz__result-catalog-link', result.cta_text);
-            link.href = String(result.cta_link);
-            const ctaTarget = String(result.cta_target || 'same_tab');
-            if (ctaTarget === 'new_tab') {
-                link.target = '_blank';
-                link.rel = 'noopener noreferrer';
-            }
-
-            link.addEventListener('click', () => {
-                sendAnalyticsEvent(quiz, 'result_cta_click', {
-                    quiz_code: quiz.code || '',
-                    result_id: result.id || '',
-                    result_code: result.code || '',
-                    cta_text: result.cta_text || '',
-                    cta_link: result.cta_link || '',
-                    cta_target: ctaTarget
-                });
-            });
-
-            actions.appendChild(link);
-            card.appendChild(actions);
         }
 
         nodes.result.appendChild(card);
@@ -1392,14 +1627,14 @@
             }
 
             if (enhancedResult) {
-                nodes.result.appendChild(renderResultFormHelp(nodes, quiz, state, result));
+                if (formHelp) nodes.result.appendChild(formHelp.node);
             } else {
-                const formWrap = create('div', 'kk-quiz__result-form');
+                const formWrap = create('div', 'kk-quiz-result__form kk-quiz__result-form');
                 nodes.result.appendChild(formWrap);
                 const originalForm = nodes.form;
                 nodes.form = formWrap;
                 showFinalForm(nodes, quiz, state, result);
-                nodes.result.hidden = false;
+                setPanelActive(nodes.result, true);
                 nodes.form = originalForm;
             }
 
@@ -1409,6 +1644,7 @@
         } else if (videoBlock && (videoPosition === 'before_form' || videoPosition === 'after_form')) {
             nodes.result.appendChild(videoBlock);
         }
+        nodes.result.appendChild(createRestartButton(nodes, quiz, state));
     };
 
     const addAnswerScores = (scores, answers) => {
@@ -1490,6 +1726,7 @@
     const goNext = (nodes, quiz, state, question, answer) => {
         const selectedAnswers = Array.isArray(answer) ? answer : (answer ? [answer] : []);
         addAnswerScores(state.scores, selectedAnswers);
+        persistQuizState(nodes.root, quiz, state);
 
         sendQuizView(nodes.root);
         sendQuizOpen(nodes.root);
@@ -1570,7 +1807,8 @@
         const image = document.createElement('img');
         image.className = 'kk-quiz__answer-image';
         image.src = String(answer.image_src);
-        image.alt = String(answer.text || '');
+        image.alt = '';
+        image.setAttribute('aria-hidden', 'true');
         button.appendChild(image);
     };
 
@@ -1595,7 +1833,11 @@
 
         hideAll(nodes);
         clear(nodes.question);
-        nodes.question.hidden = false;
+        setPanelActive(nodes.question, true);
+        state.currentQuestionId = toId(question.id);
+        state.currentResultId = null;
+        state.currentResultCode = '';
+        persistQuizState(nodes.root, quiz, state);
 
         const type = getQuestionType(question);
         const template = getDisplayTemplate(question);
@@ -1928,6 +2170,8 @@
         const state = buildState();
         root.__kkQuizData = quiz;
         root.__kkQuizState = state;
+        hideAll(nodes);
+        setPanelActive(nodes.start, true);
 
         if (!isPopupRoot(root)) {
             observeQuizView(root);
@@ -1946,6 +2190,18 @@
                 }
                 showFinalForm(nodes, quiz, state, null);
             });
+        }
+
+        if (restoreQuizState(root, quiz, state)) {
+            const restoredResult = findById(quiz.results, state.currentResultId)
+                || toArray(quiz.results).find((result) => String(result.code || '') === state.currentResultCode)
+                || null;
+            if (restoredResult) {
+                showResult(nodes, quiz, state, restoredResult.id);
+            } else {
+                clearPersistedQuizState(root, quiz);
+                resetRunState(state);
+            }
         }
     };
 
