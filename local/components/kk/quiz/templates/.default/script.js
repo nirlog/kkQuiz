@@ -1475,6 +1475,7 @@
 
     const renderResultFormHelp = (nodes, quiz, state, result) => {
         const help = create('div', 'kk-quiz__result-help');
+        setPanelActive(help, false);
         help.appendChild(create(
             'h3',
             'kk-quiz__result-help-title',
@@ -1490,6 +1491,7 @@
         setPanelActive(formWrap, false);
 
         const open = () => {
+            setPanelActive(help, true);
             const originalForm = nodes.form;
             nodes.form = formWrap;
             showFinalForm(nodes, quiz, state, result, {hideHeader: true});
