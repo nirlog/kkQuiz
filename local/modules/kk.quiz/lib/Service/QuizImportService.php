@@ -193,6 +193,7 @@ final class QuizImportService
     private function createResult(int $iblockId, int $sectionId, string $code, array $result): int
     {
         $video = is_array($result['video'] ?? null) ? $result['video'] : [];
+        $secondaryCta = is_array($result['secondary_cta'] ?? null) ? $result['secondary_cta'] : [];
         $propertyValues = [
             'KK_ENTITY_TYPE' => $this->getPropertyEnumId($iblockId, 'KK_ENTITY_TYPE', 'RESULT'),
             'KK_PUBLIC_TITLE' => (string)($result['public_title'] ?? ''),
@@ -200,12 +201,21 @@ final class QuizImportService
             'KK_RESULT_MAX_SCORE' => $this->toNullableInt($result['max_score'] ?? null),
             'KK_RESULT_PRIORITY' => (int)($result['priority'] ?? 100),
             'KK_RESULT_SUMMARY' => (string)($result['summary'] ?? ''),
-            'KK_RESULT_WHY_TEXT' => (string)($result['why_text'] ?? ''),
-            'KK_RESULT_SPECS_TEXT' => (string)($result['specs_text'] ?? ''),
+            'KK_RESULT_WHY_TEXT' => (string)($result['reason_text'] ?? $result['why_text'] ?? ''),
+            'KK_RESULT_FIT_TEXT' => (string)($result['fit_text'] ?? ''),
+            'KK_RESULT_SPECS_TEXT' => (string)($result['build_text'] ?? $result['specs_text'] ?? ''),
             'KK_RESULT_NOTE_TEXT' => (string)($result['note_text'] ?? ''),
+            'KK_RESULT_BUDGET_TEXT' => (string)($result['budget_text'] ?? ''),
             'KK_RESULT_CTA_TEXT' => (string)($result['cta_text'] ?? ''),
             'KK_RESULT_CTA_LINK' => (string)($result['cta_link'] ?? ''),
             'KK_RESULT_CTA_TARGET' => $this->getPropertyEnumId($iblockId, 'KK_RESULT_CTA_TARGET', $this->normalizeCtaTarget($result['cta_target'] ?? null)),
+            'KK_RESULT_SECONDARY_CTA_TEXT' => (string)($secondaryCta['text'] ?? $result['secondary_cta_text'] ?? ''),
+            'KK_RESULT_SECONDARY_CTA_LINK' => (string)($secondaryCta['url'] ?? $result['secondary_cta_link'] ?? ''),
+            'KK_RESULT_SECONDARY_CTA_TARGET' => $this->getPropertyEnumId(
+                $iblockId,
+                'KK_RESULT_SECONDARY_CTA_TARGET',
+                $this->normalizeCtaTarget($secondaryCta['target'] ?? $result['secondary_cta_target'] ?? null)
+            ),
             'KK_RESULT_VIDEO_URL' => (string)($result['video_url'] ?? $video['url'] ?? ''),
             'KK_RESULT_VIDEO_TITLE' => (string)($result['video_title'] ?? $video['title'] ?? ''),
             'KK_RESULT_VIDEO_POSITION' => $this->getPropertyEnumId(
@@ -214,12 +224,12 @@ final class QuizImportService
                 (string)($result['video_position'] ?? $video['position'] ?? '')
             ),
             'KK_RESULT_FORM_TITLE' => (string)($result['form_title'] ?? ''),
-            'KK_RESULT_FORM_INTRO' => (string)($result['form_intro'] ?? ''),
+            'KK_RESULT_FORM_INTRO' => (string)($result['form_subtitle'] ?? $result['form_intro'] ?? ''),
             'KK_RESULT_FORM_BUTTON_TEXT' => (string)($result['form_button_text'] ?? ''),
             'KK_RESULT_SHOW_FORM' => $this->getPropertyEnumId($iblockId, 'KK_RESULT_SHOW_FORM', $this->toBool($result['show_form'] ?? true) ? 'Y' : 'N'),
             'KK_RESULT_CATALOG_SECTION' => $this->toNullableInt($result['catalog_section_id'] ?? null),
             'KK_RESULT_CATALOG_PRODUCTS' => $this->normalizeIntList($result['catalog_product_ids'] ?? []),
-            'KK_RESULT_BADGE' => (string)($result['badge'] ?? ''),
+            'KK_RESULT_BADGE' => (string)($result['badge_text'] ?? $result['badge'] ?? ''),
         ];
 
         return $this->addElement($iblockId, $sectionId, $code, $result, $propertyValues, 'RESULT_CREATE_FAILED');
@@ -287,9 +297,7 @@ final class QuizImportService
             $resultId = $this->resolveResultId((string)($answer['result_code'] ?? ''), $resultCodeToNewId, 'ответа "' . $answerText . '"');
             $scoreResultId = $this->resolveResultId((string)($answer['score_result_code'] ?? ''), $resultCodeToNewId, 'score-ответа "' . $answerText . '"');
 
-            if ($this->toNullableInt($answer['image_id'] ?? null) !== null || trim((string)($answer['image_src'] ?? '')) !== '') {
-                $this->warnings[] = 'Изображение ответа "' . $answerText . '" не импортировано как файл.';
-            }
+            $image = $this->importAnswerImage($answer, $answerText);
 
             $answers[] = [
                 'active' => $this->toBool($answer['active'] ?? true) ? 'Y' : 'N',
@@ -297,8 +305,8 @@ final class QuizImportService
                 'text' => $answerText,
                 'code' => (string)($answer['code'] ?? ''),
                 'description' => (string)($answer['description'] ?? ''),
-                'image_id' => null,
-                'image_src' => '',
+                'image_id' => $image['image_id'],
+                'image_src' => $image['image_src'],
                 'next_question_id' => $nextQuestionId,
                 'result_id' => $resultId,
                 'score_result_id' => $scoreResultId,
@@ -311,6 +319,82 @@ final class QuizImportService
             'KK_DEFAULT_RESULT' => $defaultResultId,
             'KK_ANSWERS' => json_encode($answers, JSON_UNESCAPED_UNICODE),
         ]);
+    }
+
+    private function importAnswerImage(array $answer, string $answerText): array
+    {
+        $emptyImage = ['image_id' => null, 'image_src' => ''];
+        $source = trim((string)($answer['image_src'] ?? ''));
+        $sourceImageId = $this->toNullableInt($answer['image_id'] ?? null);
+        if ($source === '' && $sourceImageId === null) {
+            return $emptyImage;
+        }
+
+        if ($source === '' && $sourceImageId !== null && class_exists('CFile')) {
+            $source = trim((string)\CFile::GetPath($sourceImageId));
+        }
+
+        $warning = function () use ($answerText): void {
+            $this->warnings[] = 'Изображение ответа "' . $answerText . '" не найдено и не импортировано.';
+        };
+        if (
+            $source === ''
+            || !str_starts_with($source, '/upload/')
+            || str_contains($source, '../')
+            || str_contains($source, '..\\')
+            || preg_match('/[\x00-\x1F\x7F]/', $source) === 1
+            || !class_exists('CFile')
+        ) {
+            $warning();
+            return $emptyImage;
+        }
+
+        $extension = strtolower((string)pathinfo($source, PATHINFO_EXTENSION));
+        if (!in_array($extension, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
+            $warning();
+            return $emptyImage;
+        }
+
+        $documentRoot = rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/\\');
+        $uploadRoot = $documentRoot !== '' ? realpath($documentRoot . '/upload') : false;
+        $sourcePath = $documentRoot !== '' ? realpath($documentRoot . $source) : false;
+        if (
+            $uploadRoot === false
+            || $sourcePath === false
+            || !is_file($sourcePath)
+            || !str_starts_with($sourcePath, $uploadRoot . DIRECTORY_SEPARATOR)
+        ) {
+            $warning();
+            return $emptyImage;
+        }
+
+        $fileSize = filesize($sourcePath);
+        if ($fileSize === false || $fileSize <= 0 || $fileSize > 10 * 1024 * 1024) {
+            $warning();
+            return $emptyImage;
+        }
+
+        $imageInfo = @getimagesize($sourcePath);
+        $mimeType = is_array($imageInfo) ? strtolower((string)($imageInfo['mime'] ?? '')) : '';
+        if (!in_array($mimeType, ['image/jpeg', 'image/png', 'image/webp', 'image/gif'], true)) {
+            $warning();
+            return $emptyImage;
+        }
+
+        $fileArray = \CFile::MakeFileArray($sourcePath);
+        if (!is_array($fileArray) || $fileArray === []) {
+            $warning();
+            return $emptyImage;
+        }
+        $fileArray['type'] = $mimeType;
+        $newFileId = (int)\CFile::SaveFile($fileArray, 'kk.quiz/answers');
+        $newPath = $newFileId > 0 ? trim((string)\CFile::GetPath($newFileId)) : '';
+        if ($newFileId <= 0 || $newPath === '') {
+            $warning();
+            return $emptyImage;
+        }
+
+        return ['image_id' => $newFileId, 'image_src' => $newPath];
     }
 
     private function updateStartQuestion(int $sectionId, string $startQuestionCode, array $questionCodeToNewId): void

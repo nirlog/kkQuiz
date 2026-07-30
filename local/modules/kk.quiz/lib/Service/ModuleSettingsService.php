@@ -72,6 +72,7 @@ final class ModuleSettingsService
             'analytics_retention_days' => '365',
 
             'default_lead_status' => 'new',
+            'lead_attention_minutes' => '30',
             'save_answers_data' => 'Y',
 
             'rate_limit_enabled' => 'Y',
