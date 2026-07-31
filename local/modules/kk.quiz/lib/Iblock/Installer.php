@@ -340,6 +340,12 @@ final class Installer
 
         $files = [
             [
+                'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_element_edit.php',
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_element_edit.php',
+                'missing' => 'KK Quiz admin element edit stub source not found.',
+                'write' => 'Cannot write /bitrix/admin/kk_quiz_element_edit.php.',
+            ],
+            [
                 'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_lead_detail.php',
                 'target' => $documentRoot . '/bitrix/admin/kk_quiz_lead_detail.php',
                 'missing' => 'KK Quiz admin lead detail stub source not found.',
@@ -437,6 +443,10 @@ final class Installer
         }
 
         $files = [
+            [
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_element_edit.php',
+                'marker' => 'kk.quiz/admin/element_edit.php',
+            ],
             [
                 'target' => $documentRoot . '/bitrix/admin/kk_quiz_lead_detail.php',
                 'marker' => 'kk.quiz/admin/lead_detail.php',

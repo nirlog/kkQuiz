@@ -39,13 +39,15 @@ if (!is_array($section)) {
 }
 
 $quizCode = (string)$section['CODE'];
-$elementEditUrl = static fn (int $id): string => 'iblock_element_edit.php?' . http_build_query([
-    'IBLOCK_ID' => $iblockId,
-    'type' => Installer::IBLOCK_TYPE_ID,
+$elementEditUrl = static fn (int $id): string => 'kk_quiz_element_edit.php?' . http_build_query([
     'ID' => $id,
-    'find_section_section' => $sectionId,
     'SECTION_ID' => $sectionId,
+    'back' => 'schema',
     'lang' => $lang,
+]);
+$technicalEditUrl = static fn (int $id): string => 'iblock_element_edit.php?' . http_build_query([
+    'IBLOCK_ID' => $iblockId, 'type' => Installer::IBLOCK_TYPE_ID, 'ID' => $id,
+    'find_section_section' => $sectionId, 'SECTION_ID' => $sectionId, 'lang' => $lang,
 ]);
 $propertyValue = static function (array $properties, string $code): mixed {
     return $properties[$code]['VALUE'] ?? null;
@@ -133,6 +135,7 @@ while ($element = $elements->GetNextElement()) {
         'sort' => (int)($fields['SORT'] ?? 0),
         'properties' => $properties,
         'edit_url' => $elementEditUrl($id),
+        'technical_edit_url' => $technicalEditUrl($id),
     ];
     if ($type === 'QUESTION') {
         $decoded = $decodeAnswers($propertyValue($properties, 'KK_ANSWERS'));
@@ -642,6 +645,7 @@ const renderDetails = nodeId => {
     const actions = [];
     const safeHref = String(node.edit_url || '');
     if (safeHref) actions.push(`<a class="adm-btn adm-btn-save" href="${escapeHtml(safeHref)}">Редактировать ${node.type === 'question' ? 'вопрос' : 'результат'}</a>`);
+    if (node.technical_edit_url) actions.push(`<a class="adm-btn" href="${escapeHtml(node.technical_edit_url)}">Техническое редактирование</a>`);
     if (node.type === 'start') actions.push(`<a class="adm-btn adm-btn-save" href="${escapeHtml(data.settings_url || '')}">Настройки квиза</a>`);
     else if (data.content_url) actions.push(`<a class="adm-btn" href="${escapeHtml(data.content_url)}">Открыть вопросы и результаты</a>`);
     if (actions.length) html += section('Действия', `<div class="kk-quiz-schema-detail__actions">${actions.join('')}</div>`);
