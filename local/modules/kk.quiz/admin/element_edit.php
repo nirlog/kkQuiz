@@ -120,44 +120,110 @@ $normalizePostedPropertyValue = static function (string $code, mixed $value) use
     return is_string($value) ? trim($value) : $value;
 };
 $urlValid = static fn (string $url): bool => $url === '' || str_starts_with($url, '/') || preg_match('~^https?://[^\s]+$~i', $url) === 1;
-$rawAnswers = $getPropertyScalarValue($properties, 'KK_ANSWERS');
-$answerRows = $rawAnswers === '' ? [] : json_decode($rawAnswers, true);
-if (!is_array($answerRows)) {
-    $answerRows = [];
-}
-$answerRows = $answerRows['rows'] ?? $answerRows;
-$answerKey = static function (array $answer, string $key, mixed $default = ''): mixed {
-    return $answer[$key] ?? $answer[strtoupper($key)] ?? $default;
-};
-$normalizedAnswers = [];
-foreach ($answerRows as $answer) {
-    if (!is_array($answer)) {
-        continue;
+$decodeAnswersValue = static function (mixed $value): array {
+    $invalid = false;
+    if (is_string($value)) {
+        $value = trim($value);
+        if ($value === '') return ['answers' => [], 'invalid' => false];
+        $decoded = json_decode($value, true);
+        if (!is_array($decoded)) return ['answers' => [], 'invalid' => true];
+        $value = $decoded;
     }
-    $normalizedAnswers[] = [
-        'active' => in_array($answerKey($answer, 'active', false), [true, 1, '1', 'Y'], true),
-        'sort' => (int)$answerKey($answer, 'sort', 500),
-        'text' => (string)$answerKey($answer, 'text'),
-        'code' => (string)$answerKey($answer, 'code'),
-        'description' => (string)$answerKey($answer, 'description'),
-        'image_id' => (int)$answerKey($answer, 'image_id', 0),
-        'image_src' => (string)$answerKey($answer, 'image_src'),
-        'next_question_id' => (int)$answerKey($answer, 'next_question_id', 0),
-        'result_id' => (int)$answerKey($answer, 'result_id', 0),
-        'score_result_id' => (int)$answerKey($answer, 'score_result_id', 0),
-        'score_value' => (int)$answerKey($answer, 'score_value', 0),
-    ];
-}
-$answerRows = $normalizedAnswers;
+    if (!is_array($value)) return ['answers' => [], 'invalid' => $value !== null && $value !== ''];
+    $rows = $value['rows'] ?? $value;
+    if (!is_array($rows)) return ['answers' => [], 'invalid' => true];
+    if (isset($rows['text']) || isset($rows['TEXT'])) $rows = [$rows];
+    $expandedRows = [];
+    foreach ($rows as $row) {
+        if (is_string($row)) {
+            $decoded = json_decode(trim($row), true);
+            if (!is_array($decoded)) { $invalid = true; continue; }
+            $row = $decoded['rows'] ?? $decoded;
+        }
+        if (!is_array($row)) { $invalid = true; continue; }
+        if (isset($row['text']) || isset($row['TEXT'])) $expandedRows[] = $row;
+        else foreach ($row as $nestedRow) {
+            if (is_array($nestedRow)) $expandedRows[] = $nestedRow; else $invalid = true;
+        }
+    }
+    $answers = [];
+    foreach ($expandedRows as $row) {
+        $read = static fn (string $key, mixed $default = ''): mixed => $row[$key] ?? $row[strtoupper($key)] ?? $default;
+        $imageId = (int)$read('image_id', 0);
+        $imageSrc = (string)$read('image_src');
+        if ($imageId > 0 && $imageSrc === '') $imageSrc = (string)CFile::GetPath($imageId);
+        $answers[] = [
+            'active' => in_array($read('active', false), [true, 1, '1', 'Y'], true),
+            'sort' => (int)$read('sort', 500), 'text' => (string)$read('text'),
+            'code' => (string)$read('code'), 'description' => (string)$read('description'),
+            'image_id' => $imageId, 'image_src' => $imageSrc,
+            'next_question_id' => (int)$read('next_question_id', 0),
+            'result_id' => (int)$read('result_id', 0),
+            'score_result_id' => (int)$read('score_result_id', 0),
+            'score_value' => (int)$read('score_value', 0),
+        ];
+    }
+    return ['answers' => $answers, 'invalid' => $invalid];
+};
+$rawAnswers = $getPropertyRawValue($properties, 'KK_ANSWERS');
+$decodedAnswers = $decodeAnswersValue($rawAnswers);
+$answerRows = $decodedAnswers['answers'];
+$answersSourceNotEmpty = !(is_null($rawAnswers) || $rawAnswers === '' || $rawAnswers === []);
+$answersDecodeInvalid = $type === 'QUESTION' && ($decodedAnswers['invalid'] || ($answersSourceNotEmpty && $answerRows === []));
 $questionCodes = ['KK_QUESTION_TYPE', 'KK_DISPLAY_TEMPLATE', 'KK_IMAGE_RATIO', 'KK_IMAGE_FIT', 'KK_IS_REQUIRED', 'KK_PLACEHOLDER', 'KK_ALLOW_CUSTOM_ANSWER', 'KK_DEFAULT_NEXT_QUESTION', 'KK_DEFAULT_RESULT'];
 $resultCodes = ['KK_RESULT_BADGE', 'KK_RESULT_SUMMARY', 'KK_RESULT_WHY_TEXT', 'KK_RESULT_FIT_TEXT', 'KK_RESULT_SPECS_TEXT', 'KK_RESULT_BUDGET_TEXT', 'KK_RESULT_NOTE_TEXT', 'KK_RESULT_CTA_TEXT', 'KK_RESULT_CTA_LINK', 'KK_RESULT_CTA_TARGET', 'KK_RESULT_SECONDARY_CTA_TEXT', 'KK_RESULT_SECONDARY_CTA_LINK', 'KK_RESULT_SECONDARY_CTA_TARGET', 'KK_RESULT_FORM_TITLE', 'KK_RESULT_FORM_INTRO', 'KK_RESULT_FORM_BUTTON_TEXT', 'KK_RESULT_SHOW_FORM', 'KK_RESULT_VIDEO_URL', 'KK_RESULT_VIDEO_TITLE', 'KK_RESULT_VIDEO_POSITION', 'KK_RESULT_CATALOG_SECTION', 'KK_RESULT_CATALOG_PRODUCTS', 'KK_RESULT_MIN_SCORE', 'KK_RESULT_MAX_SCORE', 'KK_RESULT_PRIORITY'];
+$quizSection = CIBlockSection::GetList([], ['ID'=>$sectionId, 'IBLOCK_ID'=>$iblockId], false, ['ID','UF_KK_CATALOG_IBLOCK_IDS','UF_KK_CATALOG_IBLOCK_ID'])->Fetch();
+$catalogIblockIds = [];
+$catalogEnumIds = array_values(array_filter(array_map('intval', (array)($quizSection['UF_KK_CATALOG_IBLOCK_IDS'] ?? []))));
+if ($catalogEnumIds !== []) {
+    $userField = CUserTypeEntity::GetList([], ['ENTITY_ID'=>'IBLOCK_'.$iblockId.'_SECTION', 'FIELD_NAME'=>'UF_KK_CATALOG_IBLOCK_IDS'])->Fetch();
+    if (is_array($userField)) {
+        $enumResult = CUserFieldEnum::GetList([], ['USER_FIELD_ID'=>(int)$userField['ID']]);
+        while ($catalogEnum = $enumResult->Fetch()) {
+            if (in_array((int)$catalogEnum['ID'], $catalogEnumIds, true)) $catalogIblockIds[] = (int)$catalogEnum['XML_ID'];
+        }
+    }
+}
+$legacyCatalogIblockId = (int)($quizSection['UF_KK_CATALOG_IBLOCK_ID'] ?? 0);
+if ($catalogIblockIds === [] && $legacyCatalogIblockId > 0) $catalogIblockIds[] = $legacyCatalogIblockId;
+$catalogIblockIds = array_values(array_unique(array_filter($catalogIblockIds)));
+$catalogSections = [];
+$catalogIblockNames = [];
+foreach ($catalogIblockIds as $catalogIblockId) {
+    $catalogIblock = CIBlock::GetByID($catalogIblockId)->Fetch();
+    if (!is_array($catalogIblock)) continue;
+    $catalogIblockNames[$catalogIblockId] = (string)$catalogIblock['NAME'];
+    $sectionResult = CIBlockSection::GetList(['LEFT_MARGIN'=>'ASC'], ['IBLOCK_ID'=>$catalogIblockId], false, ['ID','NAME','DEPTH_LEVEL']);
+    while ($catalogSection = $sectionResult->Fetch()) {
+        $catalogSections[$catalogIblockId][(int)$catalogSection['ID']] = str_repeat('· ', max(0, (int)$catalogSection['DEPTH_LEVEL'] - 1)) . (string)$catalogSection['NAME'] . ' [ID '.(int)$catalogSection['ID'].']';
+    }
+}
+$currentCatalogSectionId = (int)$getPropertyScalarValue($properties, 'KK_RESULT_CATALOG_SECTION');
+$currentProductIds = array_values(array_unique(array_map('intval', $getPropertyMultipleValues($properties, 'KK_RESULT_CATALOG_PRODUCTS'))));
+$catalogProducts = [];
+$catalogValuesInvalid = false;
+if ($type === 'RESULT' && $currentProductIds !== []) {
+    $productResult = CIBlockElement::GetList(['ID'=>'ASC'], ['ID'=>$currentProductIds], false, false, ['ID','IBLOCK_ID','NAME','ACTIVE']);
+    while ($product = $productResult->Fetch()) {
+        if (!in_array((int)$product['IBLOCK_ID'], $catalogIblockIds, true)) { $catalogValuesInvalid = true; continue; }
+        $catalogProducts[(int)$product['ID']] = $product;
+    }
+    if (count($catalogProducts) !== count($currentProductIds)) $catalogValuesInvalid = true;
+}
+if ($type === 'RESULT' && $currentCatalogSectionId > 0) {
+    $catalogSectionValid = false;
+    foreach ($catalogSections as $sectionOptions) if (isset($sectionOptions[$currentCatalogSectionId])) $catalogSectionValid = true;
+    if (!$catalogSectionValid) $catalogValuesInvalid = true;
+}
+$catalogUnavailable = $type === 'RESULT' && $catalogIblockIds === [];
+$saveDisabled = $enumLoadFailed || $answersDecodeInvalid || $catalogUnavailable || $catalogValuesInvalid;
 $isSave = $_SERVER['REQUEST_METHOD'] === 'POST' && check_bitrix_sessid() && (isset($_POST['save']) || isset($_POST['apply']));
 if ($isSave && $valid) {
     if (($_POST['kk_quiz_custom_editor_loaded'] ?? '') !== 'Y') {
         $errors[] = 'Форма загружена некорректно. Сохранение отменено, чтобы не затереть данные.';
     }
-    if ($enumLoadFailed) {
-        $errors[] = 'Не удалось загрузить варианты свойств инфоблока. Сохранение отключено, чтобы не затереть данные.';
+    if ($saveDisabled) {
+        $errors[] = 'Часть данных формы не загрузилась. Сохранение отключено, чтобы не затереть данные.';
     }
     $name = trim((string)($_POST['NAME'] ?? ''));
     $code = trim((string)($_POST['CODE'] ?? ''));
@@ -174,7 +240,7 @@ if ($isSave && $valid) {
     if (array_key_exists('KK_PUBLIC_TITLE', $_POST)) {
         $props['KK_PUBLIC_TITLE'] = trim((string)$_POST['KK_PUBLIC_TITLE']);
     }
-    foreach ($type === 'QUESTION' ? $questionCodes : $resultCodes as $codeName) {
+    foreach ($type === 'QUESTION' ? $questionCodes : array_diff($resultCodes, ['KK_RESULT_CATALOG_PRODUCTS']) as $codeName) {
         if (!array_key_exists($codeName, $_POST)) {
             continue;
         }
@@ -185,8 +251,9 @@ if ($isSave && $valid) {
         }
         $props[$codeName] = $normalized;
     }
-    if ($type === 'QUESTION' && array_key_exists('answers', $_POST)) {
+    if ($type === 'QUESTION' && array_key_exists('answers', $_POST) && !$answersDecodeInvalid) {
         $rows = [];
+        if ((array)$_POST['answers'] === []) $errors[] = 'Нельзя сохранить вопрос без ответов через кастомную форму.';
         foreach ((array)$_POST['answers'] as $key => $row) {
             if (!is_array($row)) continue;
             $imageId = (int)($row['image_id'] ?? 0);
@@ -206,6 +273,21 @@ if ($isSave && $valid) {
         }
         $props['KK_ANSWERS'] = json_encode($rows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
+    if ($type === 'RESULT' && array_key_exists('catalog_products_loaded', $_POST) && !$catalogUnavailable && !$catalogValuesInvalid) {
+        $updatedProductIds = $currentProductIds;
+        $removeIds = array_map('intval', (array)($_POST['remove_catalog_products'] ?? []));
+        $updatedProductIds = array_values(array_diff($updatedProductIds, $removeIds));
+        $addRaw = trim((string)($_POST['add_catalog_product_ids'] ?? ''));
+        $addIds = $addRaw === '' ? [] : array_values(array_unique(array_filter(array_map('intval', preg_split('/\s*,\s*/', $addRaw, -1, PREG_SPLIT_NO_EMPTY)))));
+        if ($addIds !== []) {
+            $validAddIds = [];
+            $checkResult = CIBlockElement::GetList([], ['ID'=>$addIds, 'IBLOCK_ID'=>$catalogIblockIds], false, false, ['ID']);
+            while ($checkProduct = $checkResult->Fetch()) $validAddIds[] = (int)$checkProduct['ID'];
+            if (count($validAddIds) !== count($addIds)) $errors[] = 'Один или несколько товаров не найдены в подключённых каталогах.';
+            else $updatedProductIds = array_values(array_unique(array_merge($updatedProductIds, $validAddIds)));
+        }
+        $props['KK_RESULT_CATALOG_PRODUCTS'] = $updatedProductIds;
+    }
     if ($errors === []) {
         $updater = new CIBlockElement();
         if ($updater->Update($id, ['NAME'=>$name, 'CODE'=>$code, 'SORT'=>(int)$sort, 'ACTIVE'=>isset($_POST['ACTIVE'])?'Y':'N', 'PREVIEW_TEXT'=>(string)($_POST['PREVIEW_TEXT']??$fields['PREVIEW_TEXT']??''), 'DETAIL_TEXT'=>(string)($_POST['DETAIL_TEXT']??$fields['DETAIL_TEXT']??'')])) {
@@ -224,6 +306,9 @@ require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/prolog_admin_a
 if (!$valid) { CAdminMessage::ShowMessage('Элемент не найден в указанном квизе или имеет некорректный тип.'); echo '<a class="adm-btn" href="'.htmlspecialcharsbx($returnUrl).'">Вернуться</a>'; require $_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/epilog_admin.php'; return; }
 if (($_GET['saved'] ?? '') === 'Y') CAdminMessage::ShowMessage(['MESSAGE'=>'Изменения сохранены.','TYPE'=>'OK']);
 if ($enumLoadFailed) CAdminMessage::ShowMessage('Не удалось загрузить варианты свойств инфоблока. Сохранение отключено, чтобы не затереть данные.');
+if ($answersDecodeInvalid) CAdminMessage::ShowMessage('Не удалось прочитать ответы вопроса. Сохранение отключено, чтобы не затереть данные.');
+if ($catalogUnavailable) CAdminMessage::ShowMessage('Каталог не подключён в настройках квиза.');
+if ($catalogValuesInvalid) CAdminMessage::ShowMessage('Не удалось корректно загрузить каталоговые рекомендации. Сохранение отключено, чтобы не затереть данные.');
 foreach ($errors as $error) CAdminMessage::ShowMessage($error);
 $technical = 'iblock_element_edit.php?' . http_build_query(['IBLOCK_ID'=>$iblockId,'type'=>Installer::IBLOCK_TYPE_ID,'ID'=>$id,'SECTION_ID'=>$sectionId,'find_section_section'=>$sectionId,'lang'=>$lang]);
 $items = ['questions'=>[], 'results'=>[]];
@@ -261,11 +346,14 @@ $tab=new CAdminTabControl('kkQuizElementTabs',$tabs); ?>
 <tr><td>Краткий текст</td><td><textarea name="PREVIEW_TEXT" rows="4" cols="70"><?=$esc($val('PREVIEW_TEXT'))?></textarea></td></tr>
 <tr><td>Детальный текст</td><td><textarea name="DETAIL_TEXT" rows="7" cols="70"><?=$esc($val('DETAIL_TEXT'))?></textarea></td></tr>
 <?php if($type==='QUESTION'): $tab->BeginNextTab(); ?>
-<tr><td colspan="2"><table class="adm-list-table" id="answers"><thead><tr><th>Вкл.</th><th>Сорт.</th><th>Текст / код / описание</th><th>Картинка</th><th>Следующий вопрос</th><th>Результат</th><th>Scoring</th><th></th></tr></thead><tbody><?php foreach($answerRows as $i=>$a): ?><tr><td><input type="checkbox" name="answers[<?=$i?>][active]" <?=!empty($a['active'])?'checked':''?>></td><td><input size="4" name="answers[<?=$i?>][sort]" value="<?=$esc($a['sort']??500)?>"></td><td><input name="answers[<?=$i?>][text]" placeholder="Текст" value="<?=$esc($a['text']??'')?>"><br><input name="answers[<?=$i?>][code]" placeholder="Код" value="<?=$esc($a['code']??'')?>"><br><textarea name="answers[<?=$i?>][description]" placeholder="Описание"><?=$esc($a['description']??'')?></textarea></td><td><?php if($a['image_id']??0):?><img src="<?=$esc(CFile::GetPath((int)$a['image_id']))?>" style="max-width:90px;max-height:70px"><br><?php endif?><input type="hidden" name="answers[<?=$i?>][image_id]" value="<?=(int)($a['image_id']??0)?>"><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" name="answer_images[<?=$i?>]"><label><input type="checkbox" name="answers[<?=$i?>][delete_image]"> удалить</label></td><td><?=$select("answers[$i][next_question_id]",$a['next_question_id']??0,$items['questions'])?><?php if((int)($a['next_question_id']??0)===$id):?><br><small>Возможен цикл</small><?php endif?></td><td><?=$select("answers[$i][result_id]",$a['result_id']??0,$items['results'])?></td><td><?=$select("answers[$i][score_result_id]",$a['score_result_id']??0,$items['results'])?><br><input type="number" name="answers[<?=$i?>][score_value]" value="<?=$esc($a['score_value']??0)?>"></td><td><button type="button" onclick="this.closest('tr').remove()">Удалить</button></td></tr><?php endforeach?></tbody></table><button type="button" class="adm-btn" id="add-answer">Добавить ответ</button></td></tr>
+<tr><td colspan="2"><table class="adm-list-table" id="answers"><thead><tr><th>Вкл.</th><th>Сорт.</th><th>Текст / код / описание</th><th>Картинка</th><th>Следующий вопрос</th><th>Результат</th><th>Scoring</th><th></th></tr></thead><tbody><?php foreach($answerRows as $i=>$a): ?><tr><td><input type="checkbox" name="answers[<?=$i?>][active]" <?=!empty($a['active'])?'checked':''?>></td><td><input size="4" name="answers[<?=$i?>][sort]" value="<?=$esc($a['sort']??500)?>"></td><td><input name="answers[<?=$i?>][text]" placeholder="Текст" value="<?=$esc($a['text']??'')?>"><br><input name="answers[<?=$i?>][code]" placeholder="Код" value="<?=$esc($a['code']??'')?>"><br><textarea name="answers[<?=$i?>][description]" placeholder="Описание"><?=$esc($a['description']??'')?></textarea></td><td><?php if($a['image_id']??0):?><img src="<?=$esc(CFile::GetPath((int)$a['image_id']))?>" style="max-width:90px;max-height:70px"><br><?php endif?><input type="hidden" name="answers[<?=$i?>][image_id]" value="<?=(int)($a['image_id']??0)?>"><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" name="answer_images[<?=$i?>]"><label><input type="checkbox" name="answers[<?=$i?>][delete_image]"> удалить</label></td><td><?=$select("answers[$i][next_question_id]",$a['next_question_id']??0,$items['questions'])?><?php if((int)($a['next_question_id']??0)===$id):?><br><small>Возможен цикл</small><?php endif?></td><td><?=$select("answers[$i][result_id]",$a['result_id']??0,$items['results'])?></td><td><?=$select("answers[$i][score_result_id]",$a['score_result_id']??0,$items['results'])?><br><input type="number" name="answers[<?=$i?>][score_value]" value="<?=$esc($a['score_value']??0)?>"></td><td><button type="button" onclick="this.closest('tr').remove()">Удалить</button></td></tr><?php endforeach?></tbody></table><button type="button" class="adm-btn" id="add-answer">Добавить ответ</button><template id="answer-row-template"><tr><td><input type="checkbox" name="answers[__INDEX__][active]" checked></td><td><input size="4" name="answers[__INDEX__][sort]" value="500"></td><td><input name="answers[__INDEX__][text]" placeholder="Текст"><br><input name="answers[__INDEX__][code]" placeholder="Код"><br><textarea name="answers[__INDEX__][description]" placeholder="Описание"></textarea></td><td><input type="hidden" name="answers[__INDEX__][image_id]" value="0"><input type="file" name="answer_images[__INDEX__]" accept="image/jpeg,image/png,image/webp,image/gif"></td><td><?=$select('answers[__INDEX__][next_question_id]',0,$items['questions'])?></td><td><?=$select('answers[__INDEX__][result_id]',0,$items['results'])?></td><td><?=$select('answers[__INDEX__][score_result_id]',0,$items['results'])?><br><input type="number" name="answers[__INDEX__][score_value]" value="0"></td><td><button type="button" onclick="this.closest('tr').remove()">Удалить</button></td></tr></template></td></tr>
 <?php $tab->BeginNextTab(); ?><tr><td>Следующий вопрос по умолчанию</td><td><?=$select('KK_DEFAULT_NEXT_QUESTION',$val('KK_DEFAULT_NEXT_QUESTION'),$items['questions'])?></td></tr><tr><td>Результат по умолчанию</td><td><?=$select('KK_DEFAULT_RESULT',$val('KK_DEFAULT_RESULT'),$items['results'])?></td></tr>
 <?php $tab->BeginNextTab(); foreach(['KK_QUESTION_TYPE'=>'Тип вопроса','KK_DISPLAY_TEMPLATE'=>'Шаблон отображения','KK_IMAGE_RATIO'=>'Соотношение картинки','KK_IMAGE_FIT'=>'Режим картинки','KK_IS_REQUIRED'=>'Обязательный вопрос','KK_ALLOW_CUSTOM_ANSWER'=>'Свой вариант'] as $k=>$label): ?><tr><td><?=$label?></td><td><?=$select($k,$getCurrentEnumXmlId($k),$enumSelectOptions($enumOptions[$k] ?? []),false)?></td></tr><?php endforeach?><tr><td>Placeholder</td><td><input name="KK_PLACEHOLDER" value="<?=$esc($val('KK_PLACEHOLDER'))?>"></td></tr>
-<?php else: $labels=['KK_RESULT_BADGE'=>'Бейдж результата','KK_RESULT_SUMMARY'=>'Краткое описание','KK_RESULT_WHY_TEXT'=>'Почему мы рекомендуем этот вариант','KK_RESULT_FIT_TEXT'=>'Кому подойдёт','KK_RESULT_SPECS_TEXT'=>'Что будет внутри','KK_RESULT_BUDGET_TEXT'=>'Ориентир по бюджету','KK_RESULT_NOTE_TEXT'=>'Что важно учесть']; $tab->BeginNextTab(); foreach($labels as $k=>$label):?><tr><td><?=$label?><?php if($k==='KK_RESULT_SPECS_TEXT'):?><br><small>Например: видеокарта RTX 4060 Ti; процессор Core i5 / Ryzen 5; память 32 ГБ; SSD NVMe 1–2 ТБ.</small><?php endif?></td><td><textarea rows="5" cols="70" name="<?=$k?>"><?=$esc($val($k))?></textarea></td></tr><?php endforeach; $tab->BeginNextTab(); foreach(['KK_RESULT_CTA_TEXT'=>'Текст основной кнопки','KK_RESULT_CTA_LINK'=>'Ссылка основной кнопки','KK_RESULT_SECONDARY_CTA_TEXT'=>'Текст второй кнопки','KK_RESULT_SECONDARY_CTA_LINK'=>'Ссылка второй кнопки','KK_RESULT_FORM_TITLE'=>'Заголовок формы','KK_RESULT_FORM_BUTTON_TEXT'=>'Текст кнопки формы'] as$k=>$label):?><tr><td><?=$label?></td><td><input size="60" name="<?=$k?>" value="<?=$esc($val($k))?>"></td></tr><?php endforeach?><tr><td>Текст перед формой</td><td><textarea rows="4" cols="70" name="KK_RESULT_FORM_INTRO"><?=$esc($val('KK_RESULT_FORM_INTRO'))?></textarea></td></tr><?php foreach(['KK_RESULT_CTA_TARGET','KK_RESULT_SECONDARY_CTA_TARGET','KK_RESULT_SHOW_FORM'] as$k):?><tr><td><?=$esc($properties[$k]['NAME']??$k)?></td><td><?=$select($k,$getCurrentEnumXmlId($k),$enumSelectOptions($enumOptions[$k] ?? []),false)?></td></tr><?php endforeach; $tab->BeginNextTab(); foreach(['KK_RESULT_VIDEO_URL','KK_RESULT_VIDEO_TITLE','KK_RESULT_CATALOG_SECTION','KK_RESULT_CATALOG_PRODUCTS'] as$k):?><tr><td><?=$esc($properties[$k]['NAME']??$k)?></td><td><input size="60" name="<?=$k?>" value="<?=$esc(is_array($val($k))?implode(',',$val($k)):$val($k))?>"></td></tr><?php endforeach?><tr><td>Позиция видео</td><td><?=$select('KK_RESULT_VIDEO_POSITION',$getCurrentEnumXmlId('KK_RESULT_VIDEO_POSITION'),$enumSelectOptions($enumOptions['KK_RESULT_VIDEO_POSITION'] ?? []),false)?></td></tr><?php $tab->BeginNextTab(); foreach(['KK_RESULT_MIN_SCORE','KK_RESULT_MAX_SCORE','KK_RESULT_PRIORITY'] as$k):?><tr><td><?=$esc($properties[$k]['NAME']??$k)?></td><td><input type="number" name="<?=$k?>" value="<?=$esc($val($k))?>"></td></tr><?php endforeach; endif; $tab->BeginNextTab(); ?>
+<?php else: $labels=['KK_RESULT_BADGE'=>'Бейдж результата','KK_RESULT_SUMMARY'=>'Краткое описание','KK_RESULT_WHY_TEXT'=>'Почему мы рекомендуем этот вариант','KK_RESULT_FIT_TEXT'=>'Кому подойдёт','KK_RESULT_SPECS_TEXT'=>'Что будет внутри','KK_RESULT_BUDGET_TEXT'=>'Ориентир по бюджету','KK_RESULT_NOTE_TEXT'=>'Что важно учесть']; $tab->BeginNextTab(); foreach($labels as $k=>$label):?><tr><td><?=$label?><?php if($k==='KK_RESULT_SPECS_TEXT'):?><br><small>Например: видеокарта RTX 4060 Ti; процессор Core i5 / Ryzen 5; память 32 ГБ; SSD NVMe 1–2 ТБ.</small><?php endif?></td><td><textarea rows="5" cols="70" name="<?=$k?>"><?=$esc($val($k))?></textarea></td></tr><?php endforeach; $tab->BeginNextTab(); foreach(['KK_RESULT_CTA_TEXT'=>'Текст основной кнопки','KK_RESULT_CTA_LINK'=>'Ссылка основной кнопки','KK_RESULT_SECONDARY_CTA_TEXT'=>'Текст второй кнопки','KK_RESULT_SECONDARY_CTA_LINK'=>'Ссылка второй кнопки','KK_RESULT_FORM_TITLE'=>'Заголовок формы','KK_RESULT_FORM_BUTTON_TEXT'=>'Текст кнопки формы'] as$k=>$label):?><tr><td><?=$label?></td><td><input size="60" name="<?=$k?>" value="<?=$esc($val($k))?>"></td></tr><?php endforeach?><tr><td>Текст перед формой</td><td><textarea rows="4" cols="70" name="KK_RESULT_FORM_INTRO"><?=$esc($val('KK_RESULT_FORM_INTRO'))?></textarea></td></tr><?php foreach(['KK_RESULT_CTA_TARGET','KK_RESULT_SECONDARY_CTA_TARGET','KK_RESULT_SHOW_FORM'] as$k):?><tr><td><?=$esc($properties[$k]['NAME']??$k)?></td><td><?=$select($k,$getCurrentEnumXmlId($k),$enumSelectOptions($enumOptions[$k] ?? []),false)?></td></tr><?php endforeach; $tab->BeginNextTab(); foreach(['KK_RESULT_VIDEO_URL','KK_RESULT_VIDEO_TITLE'] as$k):?><tr><td><?=$esc($properties[$k]['NAME']??$k)?></td><td><input size="60" name="<?=$k?>" value="<?=$esc($val($k))?>"></td></tr><?php endforeach?>
+<tr><td>Раздел рекомендаций</td><td><select name="KK_RESULT_CATALOG_SECTION" <?=$catalogUnavailable?'disabled':''?>><option value="">— не выбрано —</option><?php foreach($catalogSections as $catalogIblockId=>$sectionOptions):?><optgroup label="<?=$esc($catalogIblockNames[$catalogIblockId]??('Инфоблок '.$catalogIblockId))?>"><?php foreach($sectionOptions as $sectionOptionId=>$sectionLabel):?><option value="<?=$sectionOptionId?>" <?=$sectionOptionId===$currentCatalogSectionId?'selected':''?>><?=$esc($sectionLabel)?></option><?php endforeach?></optgroup><?php endforeach?></select><?php if($catalogUnavailable):?> <code><?=$currentCatalogSectionId?></code><?php endif?></td></tr>
+<tr><td>Рекомендованные товары</td><td><input type="hidden" name="catalog_products_loaded" value="Y"><table class="adm-list-table"><thead><tr><th>ID</th><th>Название</th><th>Активность</th><th>Действия</th></tr></thead><tbody><?php if($catalogProducts===[]):?><tr><td colspan="4">Товары не выбраны.</td></tr><?php endif; foreach($catalogProducts as $productId=>$product): $productEditUrl='iblock_element_edit.php?'.http_build_query(['IBLOCK_ID'=>(int)$product['IBLOCK_ID'],'type'=>'catalog','ID'=>$productId,'lang'=>$lang]);?><tr><td><?=$productId?></td><td><?=$esc($product['NAME'])?></td><td><?=$product['ACTIVE']==='Y'?'Да':'Нет'?></td><td><a href="<?=$esc($productEditUrl)?>">Техническое редактирование</a> <label><input type="checkbox" name="remove_catalog_products[]" value="<?=$productId?>" <?=$catalogUnavailable?'disabled':''?>> Удалить из рекомендаций</label></td></tr><?php endforeach?></tbody></table><p><label>Добавить товары по ID, через запятую:<br><input size="60" name="add_catalog_product_ids" <?=$catalogUnavailable?'disabled':''?>></label></p></td></tr>
+<tr><td>Позиция видео</td><td><?=$select('KK_RESULT_VIDEO_POSITION',$getCurrentEnumXmlId('KK_RESULT_VIDEO_POSITION'),$enumSelectOptions($enumOptions['KK_RESULT_VIDEO_POSITION'] ?? []),false)?></td></tr><?php $tab->BeginNextTab(); foreach(['KK_RESULT_MIN_SCORE','KK_RESULT_MAX_SCORE','KK_RESULT_PRIORITY'] as$k):?><tr><td><?=$esc($properties[$k]['NAME']??$k)?></td><td><input type="number" name="<?=$k?>" value="<?=$esc($val($k))?>"></td></tr><?php endforeach; endif; $tab->BeginNextTab(); ?>
 <tr><td>Символьный код</td><td><input name="CODE" value="<?=$esc($val('CODE'))?>"></td></tr><tr><td>Сортировка</td><td><input type="number" min="0" name="SORT" value="<?=$esc($val('SORT'))?>"></td></tr><tr><td>Тип сущности</td><td><strong><?=$esc($type)?></strong></td></tr><tr><td>ID</td><td><?=$id?></td></tr>
-<?php $tab->Buttons(); ?><input type="submit" name="save" class="adm-btn-save" value="Сохранить" <?=$enumLoadFailed?'disabled':''?>> <input type="submit" name="apply" value="Применить" <?=$enumLoadFailed?'disabled':''?>> <input type="submit" name="cancel" value="Отмена"> <a class="adm-btn" href="<?=$esc($schemaUrl)?>">Вернуться к схеме</a> <a class="adm-btn" href="<?=$esc($technical)?>">Техническое редактирование в Bitrix</a><?php $tab->End(); ?></form>
-<script>document.getElementById('add-answer')?.addEventListener('click',()=>{const b=document.querySelector('#answers tbody'),i=Date.now(),sample=b.querySelector('tr');if(sample){const row=sample.cloneNode(true);row.querySelectorAll('input,textarea,select').forEach(el=>{el.name=el.name.replace(/answers\[[^\]]+\]/,`answers[${i}]`);if(el.type==='checkbox')el.checked=el.name.endsWith('[active]');else if(el.type!=='hidden'&&el.type!=='number')el.value='';else if(el.type==='hidden')el.value='0'});row.querySelector('img')?.remove();b.appendChild(row);return}b.insertAdjacentHTML('beforeend',`<tr><td><input type="checkbox" name="answers[${i}][active]" checked></td><td><input size="4" name="answers[${i}][sort]" value="500"></td><td><input name="answers[${i}][text]" placeholder="Текст"><br><input name="answers[${i}][code]" placeholder="Код"><br><textarea name="answers[${i}][description]" placeholder="Описание"></textarea></td><td><input type="file" name="answer_images[${i}]" accept="image/jpeg,image/png,image/webp,image/gif"></td><td></td><td></td><td><input type="number" name="answers[${i}][score_value]" value="0"></td><td><button type="button" onclick="this.closest('tr').remove()">Удалить</button></td></tr>`)});</script>
+<?php $tab->Buttons(); ?><input type="submit" name="save" class="adm-btn-save" value="Сохранить" <?=$saveDisabled?'disabled':''?>> <input type="submit" name="apply" value="Применить" <?=$saveDisabled?'disabled':''?>> <input type="submit" name="cancel" value="Отмена"> <a class="adm-btn" href="<?=$esc($schemaUrl)?>">Вернуться к схеме</a> <a class="adm-btn" href="<?=$esc($technical)?>">Техническое редактирование в Bitrix</a><?php $tab->End(); ?></form>
+<script>document.getElementById('add-answer')?.addEventListener('click',()=>{const index=Date.now(),template=document.getElementById('answer-row-template'),html=template.innerHTML.replaceAll('__INDEX__',String(index));document.querySelector('#answers tbody').insertAdjacentHTML('beforeend',html)});</script>
 <?php require $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/include/epilog_admin.php';
