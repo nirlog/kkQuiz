@@ -340,6 +340,12 @@ final class Installer
 
         $files = [
             [
+                'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_element_edit.php',
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_element_edit.php',
+                'missing' => 'KK Quiz admin element edit stub source not found.',
+                'write' => 'Cannot write /bitrix/admin/kk_quiz_element_edit.php.',
+            ],
+            [
                 'source' => dirname(__DIR__, 2) . '/admin/kk_quiz_lead_detail.php',
                 'target' => $documentRoot . '/bitrix/admin/kk_quiz_lead_detail.php',
                 'missing' => 'KK Quiz admin lead detail stub source not found.',
@@ -437,6 +443,10 @@ final class Installer
         }
 
         $files = [
+            [
+                'target' => $documentRoot . '/bitrix/admin/kk_quiz_element_edit.php',
+                'marker' => 'kk.quiz/admin/element_edit.php',
+            ],
             [
                 'target' => $documentRoot . '/bitrix/admin/kk_quiz_lead_detail.php',
                 'marker' => 'kk.quiz/admin/lead_detail.php',
@@ -1084,7 +1094,6 @@ final class Installer
 
         $label = ['ru' => (string)$field['EDIT_FORM_LABEL']];
 
-        $userTypeEntity = new \CUserTypeEntity();
         $updateFields = [
             'EDIT_FORM_LABEL' => $label,
             'LIST_COLUMN_LABEL' => $label,
@@ -1096,6 +1105,33 @@ final class Installer
         if (isset($field['SORT'])) {
             $updateFields['SORT'] = (int)$field['SORT'];
         }
+
+        $currentFields = \CUserTypeEntity::GetByID($fieldId);
+        if (is_array($currentFields)) {
+            $hasChanges = false;
+            foreach ($updateFields as $fieldName => $desiredValue) {
+                $currentValue = $currentFields[$fieldName] ?? null;
+                if (is_array($desiredValue)) {
+                    foreach ($desiredValue as $languageId => $languageValue) {
+                        $currentLanguageValue = is_array($currentValue)
+                            ? ($currentValue[$languageId] ?? '')
+                            : $currentValue;
+                        if ((string)$currentLanguageValue !== (string)$languageValue) {
+                            $hasChanges = true;
+                            break 2;
+                        }
+                    }
+                } elseif ((string)$currentValue !== (string)$desiredValue) {
+                    $hasChanges = true;
+                    break;
+                }
+            }
+            if (!$hasChanges) {
+                return;
+            }
+        }
+
+        $userTypeEntity = new \CUserTypeEntity();
         $userTypeEntity->Update($fieldId, $updateFields);
     }
 
