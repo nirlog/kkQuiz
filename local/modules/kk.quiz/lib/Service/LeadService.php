@@ -9,6 +9,7 @@ use Bitrix\Main\Context;
 use Bitrix\Main\Web\Json;
 use Kk\Quiz\Iblock\Installer;
 use Kk\Quiz\Repository\LeadRepository;
+use Kk\Quiz\Security\QuizRunTokenService;
 
 final class LeadService
 {
@@ -70,8 +71,17 @@ final class LeadService
         if ($quiz === null) {
             $errors[] = 'Квиз не найден или неактивен';
         }
+        if ($quiz !== null && !$this->validateRunToken($quizCode, $payload)) {
+            $errors[] = 'Некорректный токен прохождения квиза';
+        }
         if ($quiz !== null && ($quiz['privacy']['required'] ?? false) === true && !$this->isAgreementAccepted($payload['agreement_accepted'] ?? null)) {
             $errors[] = 'Необходимо согласие с политикой обработки персональных данных.';
+        }
+
+        $rawAnswers = $payload['answers'] ?? [];
+        $hasValidQuizAnswers = $quiz !== null ? $this->hasValidQuizAnswers($quiz, $rawAnswers) : false;
+        if ($quiz !== null && !$hasValidQuizAnswers) {
+            $errors[] = 'Не получены ответы квиза';
         }
 
         $fields = is_array($payload['fields'] ?? null) ? $payload['fields'] : [];
@@ -94,6 +104,13 @@ final class LeadService
 
         $result = null;
         $hasRequestedResult = ((int)($payload['result_id'] ?? 0) > 0) || (string)($payload['result_code'] ?? '') !== '';
+        $hasQuizResults = $quiz !== null && !empty($quiz['results']);
+        if ($quiz !== null && $hasQuizResults && !$hasRequestedResult) {
+            $errors[] = 'Не указан результат квиза';
+        }
+        if ($quiz !== null && $this->isSuspiciousUserAgent() && (!$hasValidQuizAnswers || ($hasQuizResults && !$hasRequestedResult))) {
+            $errors[] = 'Заявка отклонена';
+        }
         if ($quiz !== null && $hasRequestedResult) {
             $result = $this->findResult(
                 $quiz,
@@ -115,6 +132,7 @@ final class LeadService
 
         $lead = $this->buildLead($payload, $quiz, $result, $cleanFields);
         $leadId = $this->leadRepository->add($lead);
+        (new QuizRunTokenService())->markUsed((string)($payload['run_token'] ?? ''));
         $lead['id'] = $leadId;
         $lead['created_at'] = date('c');
         $lead['name'] = 'Заявка квиза #' . $leadId;
@@ -734,6 +752,59 @@ final class LeadService
 
 
 
+    private function validateRunToken(string $quizCode, array $payload): bool
+    {
+        $token = is_scalar($payload['run_token'] ?? null) ? trim((string)$payload['run_token']) : '';
+        $runId = is_scalar($payload['run_id'] ?? null) ? trim((string)$payload['run_id']) : '';
+
+        return (new QuizRunTokenService())->validate($token, $quizCode, $runId);
+    }
+
+    private function hasValidQuizAnswers(array $quiz, mixed $answers): bool
+    {
+        $questions = (array)($quiz['questions'] ?? []);
+        if ($questions === []) {
+            return true;
+        }
+
+        if (!is_array($answers) || $answers === []) {
+            return false;
+        }
+
+        $questionMap = [];
+        foreach ($questions as $question) {
+            if (!is_array($question)) {
+                continue;
+            }
+
+            $questionId = (int)($question['id'] ?? 0);
+            if ($questionId > 0) {
+                $questionMap[$questionId] = $question;
+            }
+        }
+
+        if ($questionMap === []) {
+            return true;
+        }
+
+        foreach ($answers as $questionId => $answerValue) {
+            $question = $questionMap[(int)$questionId] ?? null;
+            if (!is_array($question)) {
+                continue;
+            }
+
+            $normalizedValue = $this->isInputQuestion($question)
+                ? $this->normalizeInputAnswerValue($answerValue)
+                : $this->normalizeAnswerValue($question, $answerValue);
+
+            if ($normalizedValue !== null && $normalizedValue !== [] && $normalizedValue !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function normalizeAnswersData(array $quiz, mixed $answers): array
     {
         if (!is_array($answers)) {
@@ -1207,6 +1278,22 @@ final class LeadService
         }
 
         return null;
+    }
+
+    private function isSuspiciousUserAgent(): bool
+    {
+        $userAgent = strtolower($this->cleanString(Context::getCurrent()->getRequest()->getUserAgent()));
+        if ($userAgent === '') {
+            return false;
+        }
+
+        foreach (['curl', 'wget', 'python-requests', 'httpie', 'postman', 'libwww-perl', 'go-http-client'] as $pattern) {
+            if (str_contains($userAgent, $pattern)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function cleanFields(array $fields): array

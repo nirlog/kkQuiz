@@ -74,6 +74,7 @@ final class ModuleSettingsService
             'default_lead_status' => 'new',
             'lead_attention_minutes' => '30',
             'save_answers_data' => 'Y',
+            'delivery_log_payload_enabled' => 'N',
 
             'rate_limit_enabled' => 'Y',
             'rate_limit_ttl' => '60',

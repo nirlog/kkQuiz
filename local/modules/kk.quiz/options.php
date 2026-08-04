@@ -34,6 +34,7 @@ $checkboxOptions = [
     'amocrm_enabled',
     'amocrm_long_lived_token',
     'save_answers_data',
+    'delivery_log_payload_enabled',
     'rate_limit_enabled',
     'honeypot_enabled',
     'default_require_agreement',
@@ -247,10 +248,11 @@ $e = static function (mixed $value): string {
     return htmlspecialcharsbx((string)$value);
 };
 
-$renderCheckbox = static function (string $name, string $label) use (&$values, $e): void {
+$renderCheckbox = static function (string $name, string $label, string $hint = '') use (&$values, $e): void {
     $checked = ($values[$name] ?? '') === 'Y' ? ' checked' : '';
     echo '<tr><td width="40%"><label for="' . $e($name) . '">' . $e($label) . '</label></td><td width="60%">';
     echo '<input type="checkbox" id="' . $e($name) . '" name="' . $e($name) . '" value="Y"' . $checked . '>';
+    if ($hint !== '') { echo '<br><small>' . $e($hint) . '</small>'; }
     echo '</td></tr>';
 };
 
@@ -446,6 +448,7 @@ if ($message !== null) {
         'Новые заявки старше этого времени будут отмечены в списке как требующие внимания.'
     );
     $renderCheckbox('save_answers_data', 'Сохранять технические данные ответов');
+    $renderCheckbox('delivery_log_payload_enabled', 'Логировать тела запросов интеграций для отладки', 'Может содержать персональные данные клиентов.');
     $renderCheckbox('rate_limit_enabled', 'Включить rate limit');
     $renderInput('rate_limit_ttl', 'Окно rate limit, секунд', 'number');
     $renderInput('rate_limit_max', 'Максимум отправок за окно', 'number');

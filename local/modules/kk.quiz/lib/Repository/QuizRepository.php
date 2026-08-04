@@ -734,7 +734,7 @@ final class QuizRepository
 
         $answers = [];
         foreach ($value as $answer) {
-            if (!is_array($answer) || (string)($answer['active'] ?? 'N') !== 'Y') {
+            if (!is_array($answer) || !$this->isAnswerActive($answer['active'] ?? 'N')) {
                 continue;
             }
 
@@ -757,6 +757,21 @@ final class QuizRepository
         usort($answers, static fn (array $left, array $right): int => ($left['sort'] <=> $right['sort']));
 
         return $answers;
+    }
+
+    private function isAnswerActive(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_int($value)) {
+            return $value === 1;
+        }
+
+        $value = strtoupper(trim((string)$value));
+
+        return in_array($value, ['Y', 'YES', '1', 'TRUE'], true);
     }
 
     private function normalizeUserFieldEnumList(mixed $value): array

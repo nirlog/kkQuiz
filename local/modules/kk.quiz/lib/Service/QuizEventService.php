@@ -57,6 +57,14 @@ final class QuizEventService
             ];
         }
 
+        $quiz = (new QuizService())->getPublicQuiz($quizCode);
+        if (!is_array($quiz)) {
+            return [
+                'success' => false,
+                'errors' => ['QUIZ_NOT_FOUND'],
+            ];
+        }
+
         if (!$this->checkRateLimit($quizCode)) {
             return [
                 'success' => false,
@@ -69,6 +77,14 @@ final class QuizEventService
             return [
                 'success' => false,
                 'errors' => ['INVALID_RUN_ID'],
+            ];
+        }
+
+        $runToken = $this->normalizeString($payload['run_token'] ?? '', 100);
+        if ($runToken !== '' && !(new \Kk\Quiz\Security\QuizRunTokenService())->validate($runToken, $quizCode, $runId)) {
+            return [
+                'success' => false,
+                'errors' => ['INVALID_RUN_TOKEN'],
             ];
         }
 
