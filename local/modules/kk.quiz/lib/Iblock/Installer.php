@@ -1094,7 +1094,6 @@ final class Installer
 
         $label = ['ru' => (string)$field['EDIT_FORM_LABEL']];
 
-        $userTypeEntity = new \CUserTypeEntity();
         $updateFields = [
             'EDIT_FORM_LABEL' => $label,
             'LIST_COLUMN_LABEL' => $label,
@@ -1106,6 +1105,33 @@ final class Installer
         if (isset($field['SORT'])) {
             $updateFields['SORT'] = (int)$field['SORT'];
         }
+
+        $currentFields = \CUserTypeEntity::GetByID($fieldId);
+        if (is_array($currentFields)) {
+            $hasChanges = false;
+            foreach ($updateFields as $fieldName => $desiredValue) {
+                $currentValue = $currentFields[$fieldName] ?? null;
+                if (is_array($desiredValue)) {
+                    foreach ($desiredValue as $languageId => $languageValue) {
+                        $currentLanguageValue = is_array($currentValue)
+                            ? ($currentValue[$languageId] ?? '')
+                            : $currentValue;
+                        if ((string)$currentLanguageValue !== (string)$languageValue) {
+                            $hasChanges = true;
+                            break 2;
+                        }
+                    }
+                } elseif ((string)$currentValue !== (string)$desiredValue) {
+                    $hasChanges = true;
+                    break;
+                }
+            }
+            if (!$hasChanges) {
+                return;
+            }
+        }
+
+        $userTypeEntity = new \CUserTypeEntity();
         $userTypeEntity->Update($fieldId, $updateFields);
     }
 
