@@ -336,7 +336,7 @@ if ($isSave && $valid) {
                     if ($savedImageId > 0) $imageId = $savedImageId; else $errors[] = 'Не удалось сохранить картинку ответа.';
                 }
             }
-            $rows[] = ['active'=>isset($row['active']), 'sort'=>max(0,(int)($row['sort']??0)), 'text'=>trim((string)($row['text']??'')), 'code'=>trim((string)($row['code']??'')), 'description'=>trim((string)($row['description']??'')), 'image_id'=>$imageId?:null, 'image_src'=>$imageId?(string)CFile::GetPath($imageId):'', 'next_question_id'=>max(0,(int)($row['next_question_id']??0)), 'result_id'=>max(0,(int)($row['result_id']??0)), 'score_result_id'=>max(0,(int)($row['score_result_id']??0)), 'score_value'=>(int)($row['score_value']??0)];
+            $rows[] = ['active'=>isset($row['active']) ? 'Y' : 'N', 'sort'=>max(0,(int)($row['sort']??0)), 'text'=>trim((string)($row['text']??'')), 'code'=>trim((string)($row['code']??'')), 'description'=>trim((string)($row['description']??'')), 'image_id'=>$imageId?:null, 'image_src'=>$imageId?(string)CFile::GetPath($imageId):'', 'next_question_id'=>max(0,(int)($row['next_question_id']??0)), 'result_id'=>max(0,(int)($row['result_id']??0)), 'score_result_id'=>max(0,(int)($row['score_result_id']??0)), 'score_value'=>(int)($row['score_value']??0)];
         }
         $props['KK_ANSWERS'] = json_encode($rows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
