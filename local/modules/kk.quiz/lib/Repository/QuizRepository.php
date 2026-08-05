@@ -29,6 +29,33 @@ final class QuizRepository
         return $this->buildQuiz($iblockId, $section);
     }
 
+    public function quizExistsByCode(string $code): bool
+    {
+        $code = trim($code);
+        if ($code === '' || !Loader::includeModule('iblock')) {
+            return false;
+        }
+
+        $iblockId = $this->getQuizIblockId();
+        if ($iblockId === null) {
+            return false;
+        }
+
+        $section = \CIBlockSection::GetList(
+            [],
+            [
+                'IBLOCK_ID' => $iblockId,
+                'ACTIVE' => 'Y',
+                '=CODE' => $code,
+            ],
+            false,
+            ['ID'],
+            ['nTopCount' => 1]
+        )->Fetch();
+
+        return is_array($section) && (int)($section['ID'] ?? 0) > 0;
+    }
+
     public function getQuizById(int $sectionId): ?array
     {
         if ($sectionId <= 0 || !Loader::includeModule('iblock')) {

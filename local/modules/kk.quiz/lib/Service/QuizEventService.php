@@ -57,8 +57,7 @@ final class QuizEventService
             ];
         }
 
-        $quiz = (new QuizService())->getPublicQuiz($quizCode);
-        if (!is_array($quiz)) {
+        if (!(new QuizService())->quizExists($quizCode)) {
             return [
                 'success' => false,
                 'errors' => ['QUIZ_NOT_FOUND'],
@@ -81,7 +80,8 @@ final class QuizEventService
         }
 
         $runToken = $this->normalizeString($payload['run_token'] ?? '', 100);
-        if ($runToken !== '' && !(new \Kk\Quiz\Security\QuizRunTokenService())->validate($runToken, $quizCode, $runId)) {
+        $requiresRunToken = $eventType !== self::EVENT_QUIZ_VIEW;
+        if (($requiresRunToken || $runToken !== '') && ($runToken === '' || !(new \Kk\Quiz\Security\QuizRunTokenService())->validate($runToken, $quizCode, $runId))) {
             return [
                 'success' => false,
                 'errors' => ['INVALID_RUN_TOKEN'],

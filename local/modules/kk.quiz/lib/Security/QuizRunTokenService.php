@@ -12,6 +12,7 @@ final class QuizRunTokenService
     private const TTL = 7200;
     private const CACHE_DIR = '/kk.quiz/run_tokens';
     private const COOKIE = 'kk_quiz_visitor_id';
+    private const COOKIE_TTL = 31536000;
 
     public function issue(string $quizCode, string $runId = ''): array
     {
@@ -35,6 +36,7 @@ final class QuizRunTokenService
         if (!empty($data['used'])) return false;
         if ((string)($data['quiz_code'] ?? '') !== $this->cleanCode($quizCode)) return false;
         if ($runId !== '' && (string)($data['run_id'] ?? '') !== $this->cleanRunId($runId)) return false;
+        if ((string)($data['visitor'] ?? '') !== $this->getVisitorId()) return false;
         return true;
     }
 
@@ -73,7 +75,30 @@ final class QuizRunTokenService
     private function getVisitorId(): string
     {
         $request = Context::getCurrent()->getRequest();
-        return substr(hash('sha256', (string)$request->getCookie(self::COOKIE) . '|' . (string)$request->getRemoteAddress()), 0, 32);
+        $visitorId = $this->cleanVisitorId((string)$request->getCookie(self::COOKIE));
+        if ($visitorId === '') {
+            $visitorId = $this->newToken(16);
+            $this->setVisitorCookie($visitorId);
+        }
+
+        return $visitorId;
+    }
+
+    private function setVisitorCookie(string $visitorId): void
+    {
+        if (headers_sent()) {
+            return;
+        }
+
+        $secure = Context::getCurrent()->getRequest()->isHttps();
+        setcookie(self::COOKIE, $visitorId, [
+            'expires' => time() + self::COOKIE_TTL,
+            'path' => '/',
+            'secure' => $secure,
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+        $_COOKIE[self::COOKIE] = $visitorId;
     }
 
     private function newToken(int $bytes): string { return bin2hex(random_bytes($bytes)); }
@@ -81,4 +106,5 @@ final class QuizRunTokenService
     private function cleanCode(string $value): string { return preg_replace('/[^a-zA-Z0-9_-]/', '', $value) ?? ''; }
     private function cleanRunId(string $value): string { return preg_match('/^[a-zA-Z0-9_-]{8,64}$/', $value) === 1 ? $value : ''; }
     private function cleanToken(string $value): string { return preg_match('/^[a-f0-9]{64}$/i', $value) === 1 ? strtolower($value) : ''; }
+    private function cleanVisitorId(string $value): string { return preg_match('/^[a-f0-9]{32,64}$/i', $value) === 1 ? strtolower($value) : ''; }
 }
