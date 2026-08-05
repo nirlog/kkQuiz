@@ -695,7 +695,6 @@
                 scores: state.scores && typeof state.scores === 'object' ? state.scores : {},
                 step_index: Number(state.stepIndex || 0),
                 run_id: state.runId || '',
-                run_token: state.runToken || '',
                 timestamp: Date.now()
             }));
         } catch (error) {
@@ -736,7 +735,6 @@
             state.scores = saved.scores && typeof saved.scores === 'object' && !Array.isArray(saved.scores) ? saved.scores : {};
             state.stepIndex = Math.max(0, Number(saved.step_index || 0));
             state.runId = String(saved.run_id || state.runId || '');
-            state.runToken = String(saved.run_token || state.runToken || '');
             state.currentQuestionId = toId(saved.current_question_id);
             state.currentResultId = resultId;
             state.currentResultCode = resultCode;
@@ -2272,8 +2270,8 @@
         }
 
         const state = buildState();
-        state.runId = String(quiz.run_id || '') || createRunId();
-        state.runToken = String(quiz.run_token || '');
+        state.runId = createRunId();
+        state.runToken = '';
         root.__kkQuizData = quiz;
         root.__kkQuizState = state;
         hideAll(nodes);
