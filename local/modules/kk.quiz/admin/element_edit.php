@@ -119,7 +119,7 @@ $normalizePostedPropertyValue = static function (string $code, mixed $value) use
     }
     return is_string($value) ? trim($value) : $value;
 };
-$urlValid = static fn (string $url): bool => $url === '' || str_starts_with($url, '/') || preg_match('~^https?://[^\s]+$~i', $url) === 1;
+$urlValid = static fn (string $url): bool => $url === '' || (preg_match('/[\x00-\x1F\x7F]/', $url) !== 1 && ((str_starts_with($url, '/') && !str_starts_with($url, '//')) || preg_match('~^https?://[^\s]+$~i', $url) === 1));
 $decodeAnswersValue = static function (mixed $value): array {
     $invalid = false;
     if (is_string($value)) {
@@ -329,9 +329,14 @@ if ($isSave && $valid) {
             if (($file['error'][$key] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
                 $upload = ['name'=>$file['name'][$key], 'type'=>$file['type'][$key], 'tmp_name'=>$file['tmp_name'][$key], 'error'=>$file['error'][$key], 'size'=>$file['size'][$key]];
                 $extension = strtolower(pathinfo((string)$upload['name'], PATHINFO_EXTENSION));
-                if ($upload['size'] > 10 * 1024 * 1024 || !in_array($extension, ['jpg','jpeg','png','webp','gif'], true)) {
-                    $errors[] = 'Картинка ответа должна быть JPG, PNG, WEBP или GIF размером до 10 МБ.';
+                $allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+                $imageInfo = is_uploaded_file((string)$upload['tmp_name']) ? @getimagesize((string)$upload['tmp_name']) : false;
+                $mimeType = is_array($imageInfo) ? (string)($imageInfo['mime'] ?? '') : '';
+                $checkImageError = ($mimeType !== 'image/webp' && class_exists('CFile') && method_exists('CFile', 'CheckImageFile')) ? (string)CFile::CheckImageFile($upload, 10 * 1024 * 1024, 0, 0) : '';
+                if ($upload['size'] > 10 * 1024 * 1024 || !in_array($extension, ['jpg','jpeg','png','webp','gif'], true) || $imageInfo === false || !in_array($mimeType, $allowedMimeTypes, true) || $checkImageError !== '') {
+                    $errors[] = 'Картинка ответа должна быть настоящим JPG, PNG, WEBP или GIF размером до 10 МБ.';
                 } else {
+                    $upload['type'] = $mimeType;
                     $savedImageId = (int)CFile::SaveFile($upload, 'kk.quiz/answers');
                     if ($savedImageId > 0) $imageId = $savedImageId; else $errors[] = 'Не удалось сохранить картинку ответа.';
                 }

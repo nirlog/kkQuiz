@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kk\Quiz\Service;
 
 use Kk\Quiz\Repository\QuizRepository;
+use Kk\Quiz\Security\QuizRunTokenService;
 
 final class QuizService
 {
@@ -30,9 +31,14 @@ final class QuizService
         $results = $quiz['results'];
         $results = $this->attachProductsToResults($quiz, $results);
 
+        $run = (new QuizRunTokenService())->issue((string)$quiz['code']);
+
         return [
             'id' => $quiz['id'],
             'code' => $quiz['code'],
+            'run_id' => $run['run_id'],
+            'run_token' => $run['run_token'],
+            'run_token_expires_in' => $run['expires_in'],
             'name' => $quiz['name'],
             'title' => $quiz['title'],
             'subtitle' => $quiz['subtitle'],

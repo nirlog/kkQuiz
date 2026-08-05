@@ -6,6 +6,7 @@ namespace Kk\Quiz\Service;
 
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
+use Kk\Quiz\Security\OutboundUrlValidator;
 
 final class LeadWebhookService
 {
@@ -30,7 +31,8 @@ final class LeadWebhookService
             ];
         }
 
-        $url = $this->normalizeUrl(ModuleSettingsService::get('webhook_url'));
+        $validator = new OutboundUrlValidator();
+        $url = $validator->normalizePublicHttpUrl(ModuleSettingsService::get('webhook_url'), true);
         if ($url === '') {
             return [
                 'success' => false,
@@ -75,7 +77,7 @@ final class LeadWebhookService
                 'status_label' => 'HTTP_' . $status,
                 'response' => $this->limit($response),
                 'error' => $success ? '' : 'HTTP_' . $status,
-                'request_url' => $url,
+                'request_url' => $validator->maskUrl($url),
                 'request_body' => $jsonBody,
                 'duration_ms' => $this->getDurationMs($startedAt),
             ];
@@ -87,21 +89,11 @@ final class LeadWebhookService
                 'status_label' => 'ERROR',
                 'response' => '',
                 'error' => $this->limit($exception->getMessage() !== '' ? $exception->getMessage() : 'WEBHOOK_SEND_FAILED'),
-                'request_url' => $url,
+                'request_url' => $validator->maskUrl($url),
                 'request_body' => $jsonBody,
                 'duration_ms' => $this->getDurationMs($startedAt),
             ];
         }
-    }
-
-    private function normalizeUrl(mixed $value): string
-    {
-        $value = is_scalar($value) ? trim((string)$value) : '';
-        if ($value === '' || preg_match('#^https?://#i', $value) !== 1) {
-            return '';
-        }
-
-        return $value;
     }
 
     private function getTimeout(): int

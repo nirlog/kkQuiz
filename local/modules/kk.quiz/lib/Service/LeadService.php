@@ -9,6 +9,7 @@ use Bitrix\Main\Context;
 use Bitrix\Main\Web\Json;
 use Kk\Quiz\Iblock\Installer;
 use Kk\Quiz\Repository\LeadRepository;
+use Kk\Quiz\Security\QuizRunTokenService;
 
 final class LeadService
 {
@@ -70,6 +71,9 @@ final class LeadService
         if ($quiz === null) {
             $errors[] = 'Квиз не найден или неактивен';
         }
+        if ($quiz !== null && !$this->validateRunToken($quizCode, $payload)) {
+            $errors[] = 'Некорректный токен прохождения квиза';
+        }
         if ($quiz !== null && ($quiz['privacy']['required'] ?? false) === true && !$this->isAgreementAccepted($payload['agreement_accepted'] ?? null)) {
             $errors[] = 'Необходимо согласие с политикой обработки персональных данных.';
         }
@@ -128,6 +132,7 @@ final class LeadService
 
         $lead = $this->buildLead($payload, $quiz, $result, $cleanFields);
         $leadId = $this->leadRepository->add($lead);
+        (new QuizRunTokenService())->markUsed((string)($payload['run_token'] ?? ''));
         $lead['id'] = $leadId;
         $lead['created_at'] = date('c');
         $lead['name'] = 'Заявка квиза #' . $leadId;
@@ -746,6 +751,14 @@ final class LeadService
     }
 
 
+
+    private function validateRunToken(string $quizCode, array $payload): bool
+    {
+        $token = is_scalar($payload['run_token'] ?? null) ? trim((string)$payload['run_token']) : '';
+        $runId = is_scalar($payload['run_id'] ?? null) ? trim((string)$payload['run_id']) : '';
+
+        return (new QuizRunTokenService())->validate($token, $quizCode, $runId);
+    }
 
     private function hasValidQuizAnswers(array $quiz, mixed $answers): bool
     {

@@ -224,7 +224,8 @@
             quiz_code: quizCode,
             quiz_section_id: quiz.id || '',
             event_type: eventType,
-            run_id: runId
+            run_id: runId,
+            run_token: String((state && state.runToken) || quiz.run_token || '')
         }, data || {});
 
         fetch(getAjaxUrl(root, 'kk:quiz.api.trackEvent'), {
@@ -571,7 +572,8 @@
     };
 
     const buildState = () => ({
-        runId: createRunId(),
+        runId: '',
+        runToken: '',
         stepIndex: 0,
         answers: {},
         scores: {},
@@ -621,6 +623,8 @@
                 answers: state.answers && typeof state.answers === 'object' ? state.answers : {},
                 scores: state.scores && typeof state.scores === 'object' ? state.scores : {},
                 step_index: Number(state.stepIndex || 0),
+                run_id: state.runId || '',
+                run_token: state.runToken || '',
                 timestamp: Date.now()
             }));
         } catch (error) {
@@ -660,6 +664,8 @@
             state.answers = saved.answers && typeof saved.answers === 'object' && !Array.isArray(saved.answers) ? saved.answers : {};
             state.scores = saved.scores && typeof saved.scores === 'object' && !Array.isArray(saved.scores) ? saved.scores : {};
             state.stepIndex = Math.max(0, Number(saved.step_index || 0));
+            state.runId = String(saved.run_id || state.runId || '');
+            state.runToken = String(saved.run_token || state.runToken || '');
             state.currentQuestionId = toId(saved.current_question_id);
             state.currentResultId = resultId;
             state.currentResultCode = resultCode;
@@ -1135,6 +1141,8 @@
                 fields: payloadFields,
                 answers: state.answers,
                 scores: state.scores,
+                run_id: state.runId || '',
+                run_token: state.runToken || '',
                 page_url: window.location.href,
                 referer: document.referrer,
                 utm: getUtm(),
@@ -2173,6 +2181,8 @@
         }
 
         const state = buildState();
+        state.runId = String(quiz.run_id || '') || createRunId();
+        state.runToken = String(quiz.run_token || '');
         root.__kkQuizData = quiz;
         root.__kkQuizState = state;
         hideAll(nodes);

@@ -6,6 +6,7 @@ namespace Kk\Quiz\Service;
 
 use Bitrix\Main\Type\DateTime;
 use Kk\Quiz\Analytics\LeadDeliveryLogTable;
+use Kk\Quiz\Security\OutboundUrlValidator;
 
 final class LeadDeliveryLogService
 {
@@ -19,6 +20,8 @@ final class LeadDeliveryLogService
         }
 
         try {
+            $logPayload = ModuleSettingsService::getBool('delivery_log_payload_enabled');
+            $requestUrl = $this->maskUrl($row['request_url'] ?? '');
             LeadDeliveryLogTable::add([
                 'DATE_CREATE' => new DateTime(),
                 'LEAD_ID' => $leadId,
@@ -28,9 +31,9 @@ final class LeadDeliveryLogService
                 'SKIPPED' => !empty($row['skipped']) ? 'Y' : 'N',
                 'STATUS' => $this->limit($row['status'] ?? '', 50),
                 'ERROR' => $this->limit($row['error'] ?? '', 1000),
-                'REQUEST_URL' => $this->limit($row['request_url'] ?? '', 500),
-                'REQUEST_BODY' => $this->limit($row['request_body'] ?? '', 10000),
-                'RESPONSE_BODY' => $this->limit($row['response_body'] ?? '', 10000),
+                'REQUEST_URL' => $this->limit($requestUrl, 500),
+                'REQUEST_BODY' => $logPayload ? $this->limit($this->sanitizePayload($row['request_body'] ?? ''), 10000) : '',
+                'RESPONSE_BODY' => $logPayload ? $this->limit($this->sanitizePayload($row['response_body'] ?? ''), 10000) : '',
                 'DURATION_MS' => max(0, (int)($row['duration_ms'] ?? 0)),
             ]);
         } catch (\Throwable) {
@@ -61,6 +64,32 @@ final class LeadDeliveryLogService
         } catch (\Throwable) {
             return [];
         }
+    }
+
+
+    private function maskUrl(mixed $value): string
+    {
+        $url = $this->limit($value, 2000);
+        if ($url === '') {
+            return '';
+        }
+
+        return (new OutboundUrlValidator())->maskUrl($url) ?: $this->sanitizePayload($url);
+    }
+
+    private function sanitizePayload(mixed $value): string
+    {
+        $value = $this->limit($value, 10000);
+        if ($value === '') {
+            return '';
+        }
+
+        $value = preg_replace('/([?&](?:token|key|auth|signature|code)=)[^&\s]+/iu', '$1***', $value) ?? $value;
+        $value = preg_replace('/("(?:token|access_token|refresh_token|client_secret|password|signature)"\s*:\s*")[^"]*(")/iu', '$1***$2', $value) ?? $value;
+        $value = preg_replace('/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/iu', '***@***', $value) ?? $value;
+        $value = preg_replace('/(?:\+?\d[\d\s().\-]{7,}\d)/u', '***phone***', $value) ?? $value;
+
+        return $value;
     }
 
     private function limit(mixed $value, int $limit): string

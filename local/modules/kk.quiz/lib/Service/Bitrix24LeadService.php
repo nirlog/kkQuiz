@@ -6,6 +6,7 @@ namespace Kk\Quiz\Service;
 
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
+use Kk\Quiz\Security\OutboundUrlValidator;
 
 final class Bitrix24LeadService
 {
@@ -19,7 +20,7 @@ final class Bitrix24LeadService
             return $this->buildResult(true, true, 0, 'skipped', '', 'BITRIX24_DISABLED', '', '', '', '', 0);
         }
 
-        $url = $this->normalizeUrl(ModuleSettingsService::get('bitrix24_webhook_url'));
+        $url = (new OutboundUrlValidator())->normalizePublicHttpUrl(ModuleSettingsService::get('bitrix24_webhook_url'), true);
         if ($url === '') {
             return $this->buildResult(false, false, 0, 'ERROR', '', 'BITRIX24_WEBHOOK_URL_EMPTY', '', '', '', '', 0);
         }
@@ -240,6 +241,8 @@ final class Bitrix24LeadService
 
     private function maskWebhookUrl(string $url): string
     {
+        $url = (new OutboundUrlValidator())->maskUrl($url) ?: $url;
+
         return preg_replace('#(/rest/\d+/)[^/]+/#i', '$1***/', $url) ?? $url;
     }
 
