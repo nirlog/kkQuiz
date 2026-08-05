@@ -2272,6 +2272,8 @@
         }
 
         const state = buildState();
+        state.runId = String(quiz.run_id || '') || createRunId();
+        state.runToken = String(quiz.run_token || '');
         root.__kkQuizData = quiz;
         root.__kkQuizState = state;
         hideAll(nodes);
