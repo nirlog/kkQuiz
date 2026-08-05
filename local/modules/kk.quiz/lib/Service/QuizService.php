@@ -19,6 +19,11 @@ final class QuizService
         $this->catalogProductService = $catalogProductService ?? new CatalogProductService();
     }
 
+    public function quizExists(string $code): bool
+    {
+        return $this->quizRepository->quizExistsByCode($code);
+    }
+
     public function getPublicQuiz(string $code): ?array
     {
         $quiz = $this->quizRepository->getQuizByCode($code);

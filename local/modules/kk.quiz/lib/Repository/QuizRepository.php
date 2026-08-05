@@ -29,6 +29,33 @@ final class QuizRepository
         return $this->buildQuiz($iblockId, $section);
     }
 
+    public function quizExistsByCode(string $code): bool
+    {
+        $code = trim($code);
+        if ($code === '' || !Loader::includeModule('iblock')) {
+            return false;
+        }
+
+        $iblockId = $this->getQuizIblockId();
+        if ($iblockId === null) {
+            return false;
+        }
+
+        $section = \CIBlockSection::GetList(
+            [],
+            [
+                'IBLOCK_ID' => $iblockId,
+                'ACTIVE' => 'Y',
+                '=CODE' => $code,
+            ],
+            false,
+            ['ID'],
+            ['nTopCount' => 1]
+        )->Fetch();
+
+        return is_array($section) && (int)($section['ID'] ?? 0) > 0;
+    }
+
     public function getQuizById(int $sectionId): ?array
     {
         if ($sectionId <= 0 || !Loader::includeModule('iblock')) {
@@ -734,7 +761,7 @@ final class QuizRepository
 
         $answers = [];
         foreach ($value as $answer) {
-            if (!is_array($answer) || (string)($answer['active'] ?? 'N') !== 'Y') {
+            if (!is_array($answer) || !$this->isAnswerActive($answer['active'] ?? 'N')) {
                 continue;
             }
 
@@ -757,6 +784,21 @@ final class QuizRepository
         usort($answers, static fn (array $left, array $right): int => ($left['sort'] <=> $right['sort']));
 
         return $answers;
+    }
+
+    private function isAnswerActive(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_int($value)) {
+            return $value === 1;
+        }
+
+        $value = strtoupper(trim((string)$value));
+
+        return in_array($value, ['Y', 'YES', '1', 'TRUE'], true);
     }
 
     private function normalizeUserFieldEnumList(mixed $value): array

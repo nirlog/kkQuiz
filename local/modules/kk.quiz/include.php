@@ -40,6 +40,8 @@ Loader::registerAutoLoadClasses(
         'Kk\\Quiz\\Service\\QuizEventMaintenanceService' => 'lib/Service/QuizEventMaintenanceService.php',
         'Kk\\Quiz\\Service\\ModuleSettingsService' => 'lib/Service/ModuleSettingsService.php',
         'Kk\\Quiz\\Service\\TelegramNotificationService' => 'lib/Service/TelegramNotificationService.php',
+        'Kk\\Quiz\\Security\\OutboundUrlValidator' => 'lib/Security/OutboundUrlValidator.php',
+        'Kk\\Quiz\\Security\\QuizRunTokenService' => 'lib/Security/QuizRunTokenService.php',
         'Kk\\Quiz\\Controller\\Api' => 'lib/Controller/Api.php',
     ]
 );

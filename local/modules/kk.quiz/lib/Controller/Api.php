@@ -13,6 +13,7 @@ use Kk\Quiz\Iblock\Installer;
 use Kk\Quiz\Service\LeadService;
 use Kk\Quiz\Service\ModuleSettingsService;
 use Kk\Quiz\Service\QuizService;
+use Kk\Quiz\Security\QuizRunTokenService;
 
 final class Api extends Controller
 {
@@ -23,6 +24,9 @@ final class Api extends Controller
                 'prefilters' => [new Csrf()],
             ],
             'getQuiz' => [
+                'prefilters' => [new Csrf()],
+            ],
+            'issueRunToken' => [
                 'prefilters' => [new Csrf()],
             ],
             'exportQuiz' => [
@@ -94,6 +98,47 @@ final class Api extends Controller
             'success' => true,
             'quiz' => $quiz,
         ];
+    }
+
+    public function issueRunTokenAction(): array
+    {
+        try {
+            $this->disableResponseCache();
+            $payload = $this->getPayloadFromRequest();
+            $quizCode = trim((string)($payload['quiz_code'] ?? $payload['quizCode'] ?? ''));
+            if ($quizCode === '') {
+                $quizCode = $this->normalizeQuizCodeFromRequest('');
+            }
+
+            if ($quizCode === '' || !preg_match('/^[a-zA-Z0-9_-]+$/', $quizCode)) {
+                return [
+                    'success' => false,
+                    'errors' => ['INVALID_QUIZ_CODE'],
+                ];
+            }
+
+            if (!(new QuizService())->quizExists($quizCode)) {
+                return [
+                    'success' => false,
+                    'errors' => ['QUIZ_NOT_FOUND'],
+                ];
+            }
+
+            $runId = is_scalar($payload['run_id'] ?? null) ? trim((string)$payload['run_id']) : '';
+            $token = (new QuizRunTokenService())->issue($quizCode, $runId);
+
+            return [
+                'success' => true,
+                'run_id' => $token['run_id'],
+                'run_token' => $token['run_token'],
+                'expires_in' => $token['expires_in'],
+            ];
+        } catch (\Throwable) {
+            return [
+                'success' => false,
+                'errors' => ['ISSUE_RUN_TOKEN_FAILED'],
+            ];
+        }
     }
 
     public function exportQuizAction(string $quizCode = ''): array
@@ -597,6 +642,16 @@ final class Api extends Controller
         }
     }
 
+
+    private function disableResponseCache(): void
+    {
+        try {
+            $response = \Bitrix\Main\Application::getInstance()->getContext()->getResponse();
+            $response->addHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+            $response->addHeader('Pragma', 'no-cache');
+        } catch (\Throwable) {
+        }
+    }
 
     private function isAdminAllowed(): bool
     {

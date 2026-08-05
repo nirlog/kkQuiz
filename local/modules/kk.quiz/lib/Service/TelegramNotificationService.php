@@ -6,6 +6,7 @@ namespace Kk\Quiz\Service;
 
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
+use Kk\Quiz\Security\OutboundUrlValidator;
 
 final class TelegramNotificationService
 {
@@ -198,7 +199,7 @@ final class TelegramNotificationService
             return null;
         }
 
-        if ($host === '' || $port <= 0 || $port > 65535) {
+        if ($host === '' || $port <= 0 || $port > 65535 || !(new OutboundUrlValidator())->isPublicHost($host)) {
             return null;
         }
 

@@ -160,6 +160,72 @@
         return '/bitrix/services/main/ajax.php?' + params.toString();
     };
 
+    const showTokenPreparationError = (container) => {
+        if (!container) {
+            return;
+        }
+
+        let message = container.querySelector('[data-kk-quiz-token-error]');
+        if (!message) {
+            message = create('div', 'kk-quiz__error');
+            message.setAttribute('data-kk-quiz-token-error', '');
+            container.appendChild(message);
+        }
+        message.textContent = 'Не удалось подготовить отправку формы. Обновите страницу и попробуйте ещё раз.';
+        setPanelActive(message, true);
+    };
+
+    const clearTokenPreparationError = (container) => {
+        if (!container) {
+            return;
+        }
+
+        const message = container.querySelector('[data-kk-quiz-token-error]');
+        if (message) {
+            message.remove();
+        }
+    };
+
+    const issueRunToken = (root, quiz, state) => {
+        if (!root || !quiz || !state) {
+            return Promise.resolve(false);
+        }
+
+        if (state.runToken) {
+            return Promise.resolve(true);
+        }
+
+        if (!state.runId) {
+            state.runId = createRunId();
+        }
+
+        const quizCode = getQuizCode(root, quiz);
+        if (quizCode === '') {
+            return Promise.resolve(false);
+        }
+
+        return fetch(getAjaxUrl(root, 'kk:quiz.api.issueRunToken'), {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ payload: { quiz_code: quizCode, run_id: state.runId } })
+        })
+            .then((response) => response.json())
+            .then((data) => {
+                const result = normalizeAjaxResponse(data);
+                if (!result || result.success !== true || !result.run_token) {
+                    return false;
+                }
+
+                state.runId = String(result.run_id || state.runId || '');
+                state.runToken = String(result.run_token || '');
+                persistQuizState(root, quiz, state);
+
+                return state.runToken !== '';
+            })
+            .catch(() => false);
+    };
+
     const createRunId = () => {
         if (window.crypto && crypto.randomUUID) {
             return crypto.randomUUID().replace(/-/g, '');
@@ -185,6 +251,7 @@
 
     const resetRunState = (state) => {
         state.runId = createRunId();
+        state.runToken = '';
         state.answers = {};
         state.scores = {};
         state.fields = {};
@@ -220,11 +287,16 @@
             return;
         }
 
+        if (eventType !== 'quiz_view' && !(state && state.runToken)) {
+            return;
+        }
+
         const payload = Object.assign({
             quiz_code: quizCode,
             quiz_section_id: quiz.id || '',
             event_type: eventType,
-            run_id: runId
+            run_id: runId,
+            run_token: String((state && state.runToken) || '')
         }, data || {});
 
         fetch(getAjaxUrl(root, 'kk:quiz.api.trackEvent'), {
@@ -572,6 +644,7 @@
 
     const buildState = () => ({
         runId: createRunId(),
+        runToken: '',
         stepIndex: 0,
         answers: {},
         scores: {},
@@ -621,6 +694,8 @@
                 answers: state.answers && typeof state.answers === 'object' ? state.answers : {},
                 scores: state.scores && typeof state.scores === 'object' ? state.scores : {},
                 step_index: Number(state.stepIndex || 0),
+                run_id: state.runId || '',
+                run_token: state.runToken || '',
                 timestamp: Date.now()
             }));
         } catch (error) {
@@ -660,6 +735,8 @@
             state.answers = saved.answers && typeof saved.answers === 'object' && !Array.isArray(saved.answers) ? saved.answers : {};
             state.scores = saved.scores && typeof saved.scores === 'object' && !Array.isArray(saved.scores) ? saved.scores : {};
             state.stepIndex = Math.max(0, Number(saved.step_index || 0));
+            state.runId = String(saved.run_id || state.runId || '');
+            state.runToken = String(saved.run_token || state.runToken || '');
             state.currentQuestionId = toId(saved.current_question_id);
             state.currentResultId = resultId;
             state.currentResultCode = resultCode;
@@ -741,7 +818,9 @@
         root.classList.add('kk-quiz--popup-open');
         updatePopupLock();
         sendQuizView(root);
-        sendQuizOpen(root);
+        if (root.__kkQuizData && root.__kkQuizState) {
+            issueRunToken(root, root.__kkQuizData, root.__kkQuizState).then((ready) => { if (ready) sendQuizOpen(root); });
+        }
 
         const focusTarget = root.querySelector('[data-kk-quiz-popup-close]')
             || root.querySelector('[data-kk-quiz-start-button]')
@@ -1127,6 +1206,18 @@
                 state.fields[field] = payloadFields[field];
             });
 
+            issueRunToken(nodes.root, quiz, state).then((ready) => {
+                if (!ready) {
+                    loadingTimers.forEach((timer) => window.clearTimeout(timer));
+                    submit.disabled = false;
+                    submit.textContent = submitDefaultText;
+                    submit.classList.remove('kk-quiz__button--loading');
+                    message.className = 'kk-quiz__error';
+                    message.textContent = 'Не удалось подготовить отправку формы. Обновите страницу и попробуйте ещё раз.';
+                    setPanelActive(message, true);
+                    return;
+                }
+
             const payload = {
                 quiz_code: quiz.code,
                 result_id: currentResult ? currentResult.id : null,
@@ -1135,6 +1226,8 @@
                 fields: payloadFields,
                 answers: state.answers,
                 scores: state.scores,
+                run_id: state.runId || '',
+                run_token: state.runToken || '',
                 page_url: window.location.href,
                 referer: document.referrer,
                 utm: getUtm(),
@@ -1176,6 +1269,11 @@
                     const errors = result && Array.isArray(result.errors) && result.errors.length > 0
                         ? result.errors
                         : ['Не удалось отправить заявку. Попробуйте позже.'];
+                    if (errors.includes('INVALID_RUN_TOKEN') || errors.includes('Некорректный токен прохождения квиза')) {
+                        state.runToken = '';
+                        clearPersistedQuizState(nodes.root, quiz);
+                        errors.push('Обновите страницу и попробуйте пройти квиз ещё раз.');
+                    }
                     message.className = 'kk-quiz__error';
                     message.innerHTML = '';
                     const list = document.createElement('ul');
@@ -1200,6 +1298,7 @@
                         submit.classList.remove('kk-quiz__button--loading');
                     }
                 });
+            });
         });
 
         nodes.form.appendChild(form);
@@ -2186,14 +2285,23 @@
         if (startButton) {
             startButton.addEventListener('click', () => {
                 sendQuizView(root);
-                sendQuizOpen(root);
+                startButton.disabled = true;
+                issueRunToken(root, quiz, state).then((ready) => {
+                    startButton.disabled = false;
+                    if (!ready) {
+                        showTokenPreparationError(nodes.start);
+                        return;
+                    }
+                    clearTokenPreparationError(nodes.start);
+                    sendQuizOpen(root);
 
-                const firstQuestionId = toId(quiz.first_question_id);
-                if (firstQuestionId) {
-                    showQuestion(nodes, quiz, state, firstQuestionId);
-                    return;
-                }
-                showFinalForm(nodes, quiz, state, null);
+                    const firstQuestionId = toId(quiz.first_question_id);
+                    if (firstQuestionId) {
+                        showQuestion(nodes, quiz, state, firstQuestionId);
+                        return;
+                    }
+                    showFinalForm(nodes, quiz, state, null);
+                });
             });
         }
 
